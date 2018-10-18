@@ -1,12 +1,46 @@
 from absl import app
 from args import FLAGS as FLAGS
+\
+import torch
 
 import os, json
 
+from datasets import loaders
+from datasets import cqa_triple
+
+from agents import aq
+
 def main(_):
-    with open(FLAGS.data_path+'/squad/train-v1.1.json') as fp:
-        data = json.load(fp)
-    print(data.keys())
+
+    use_cuda = torch.cuda.is_available()
+    kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
+    device = torch.device("cuda" if use_cuda else "cpu")
+
+    # # train_loader = torch.utils.data.DataLoader()
+    # train_squad = loaders.load_squad_triples(path=os.path.join(FLAGS.data_path,'squad/'), dev=False, test=False)
+    # vocab = loader.get_vocab("this is a test", vocab_size=3)
+    vocab = loaders.get_glove_vocab(path=FLAGS.data_path+'/', size=FLAGS.vocab_size)
+
+    # print(train_squad[0])
+    # trip = train_squad[0]
+    # ex = cqa_triple.CQATriple(vocab, trip[0], trip[2], trip[3], trip[1])
+    # ex = cqa_triple.CQATriple(vocab, "this is a text context funicular", "funicular", 23, "where is the funicular?")
+    #
+    # print(ex.ctxt_as_ids())
+    # print(ex.q_as_ids())
+    # print(ex.copy_vocab)
+
+
+    agent = aq.AQAgent(FLAGS, vocab)
+
+    try:
+        agent.train()
+
+    except KeyboardInterrupt:
+        agent.logger.info("You have entered CTRL+C.. Wait to finalize")
+    agent.finalize()
+
+
 
 if __name__ == '__main__':
   app.run(main)
