@@ -27,10 +27,10 @@ class SquadDataLoader:
         self.valid_iterations = (self.len_valid_data + self.config.batch_size - 1) // self.config.batch_size
 
 
-        self.train_loader = DataLoader(train, batch_size=config.batch_size, shuffle=True, num_workers=4, collate_fn=self.pad_sequences)
-        self.valid_loader = DataLoader(valid, batch_size=config.batch_size, shuffle=False, num_workers=4, collate_fn=self.pad_sequences)
+        self.train_loader = DataLoader(train, batch_size=config.batch_size, shuffle=True, num_workers=4, collate_fn=self.pad_and_order_sequences)
+        self.valid_loader = DataLoader(valid, batch_size=config.batch_size, shuffle=False, num_workers=4, collate_fn=self.pad_and_order_sequences)
 
-    def pad_sequences(self, batch):
+    def pad_and_order_sequences(self, batch):
         keys = batch[0].keys()
         max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
 
@@ -40,6 +40,6 @@ class SquadDataLoader:
 
         tensor_batch = {}
         for k in keys:
-            tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
+            tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze()
 
         return tensor_batch

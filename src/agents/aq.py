@@ -18,6 +18,7 @@ from agents.base import BaseAgent
 
 from models.rnn_aq import RnnAqModel
 from datasets.squad_loader import SquadDataLoader
+from datasets.loaders import load_glove, get_embeddings
 
 from tensorboardX import SummaryWriter
 
@@ -32,8 +33,13 @@ class AQAgent(BaseAgent):
         super().__init__(config)
         self.vocab = vocab
 
+
+        # load glove embeddings
+        all_glove = load_glove(config.data_path+'/', d=config.embedding_dim)
+        glove_init = get_embeddings(glove=all_glove, vocab=vocab, D=config.embedding_dim)
+
         # define models
-        self.model = RnnAqModel(config)
+        self.model = RnnAqModel(config, embeddings_init=glove_init)
 
         # define data_loader
         self.data_loader = SquadDataLoader(config=config, vocab=vocab)

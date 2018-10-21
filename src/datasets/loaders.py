@@ -12,6 +12,11 @@ SOS = '<Sent>'
 EOS = '</Sent>'
 PAD='<PAD>'
 OOV='<OOV>'
+PAD_ID = 0
+OOV_ID = 1
+SOS_ID = 2
+EOS_ID = 3
+
 
 def load_squad_dataset(path, dev=False, test=False, v2=False):
     expected_version = 'v2.0' if v2 else '1.1'
@@ -63,7 +68,7 @@ def load_multiline(path, limit_length=32, vocab_size=5000):
         raw_data = fp.readlines()
     lines = [re.sub(r'([\,\?\!\.]+)',r' \1 ', line).lower() for line in raw_data]
     # lines = re.split('[\n]+',raw_data.lower())
-    vocab = {PAD:0,OOV:1, SOS:2, EOS:3}
+    vocab = {PAD:PAD_ID,OOV:OOV_ID, SOS:SOS_ID, EOS:SOS_ID}
     word_count = defaultdict(float)
     ids=[]
     max_sent_len=0

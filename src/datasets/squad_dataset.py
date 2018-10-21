@@ -20,12 +20,12 @@ class SquadDataset(Dataset):
     def to_tensor(self,x):
         parsed_triple = CQATriple(self.vocab, x['c'], x['a'], x['a_pos'], x['q'])
 
-        sample = {'c': torch.IntTensor(parsed_triple.ctxt_as_ids()),
-                    'q': torch.IntTensor(parsed_triple.q_as_ids()),
-                    'a': torch.IntTensor(parsed_triple.ans_as_ids()),
-                    'a_pos': torch.IntTensor(parsed_triple.ctxt_as_bio()),
-                    'c_len': torch.IntTensor([len(parsed_triple._ctxt_doc)]),
-                    'a_len': torch.IntTensor([len(parsed_triple._ans_doc)]),
-                    'q_len': torch.IntTensor([len(parsed_triple._q_doc)])}
-        
+        sample = {'c': torch.LongTensor(parsed_triple.ctxt_as_ids()),
+                    'q': torch.LongTensor(parsed_triple.q_as_ids()),
+                    'a': torch.LongTensor(parsed_triple.ans_as_ids()),
+                    'a_pos': torch.LongTensor(parsed_triple.ctxt_as_bio()),
+                    'c_len': torch.LongTensor([len(parsed_triple._ctxt_doc)]),
+                    'a_len': torch.LongTensor([len(parsed_triple._ans_doc)]),
+                    'q_len': torch.LongTensor([len(parsed_triple._q_doc)])}
+
         return sample
