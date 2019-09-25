@@ -16,39 +16,40 @@ import torch.nn.functional as F
 
 from agents.base import BaseAgent
 
-from models.rnn_aq import RnnAqModel
+from models.aq_transformer import TransformerAqModel
 from datasets.squad_loader import SquadDataLoader
 from datasets.loaders import load_glove, get_embeddings
 
-from tensorboardX import SummaryWriter
+from utils.logging import add_to_log
 
 from utils.misc import print_cuda_statistics
+
+from utils.bpe_factory import BPE
 
 cudnn.benchmark = True
 
 
 class AQAgent(BaseAgent):
 
-    def __init__(self, config, vocab):
+    def __init__(self, config):
         super().__init__(config)
-        self.vocab = vocab
 
 
         # load glove embeddings
-        all_glove = load_glove(config.data_path+'/', d=config.embedding_dim)
-        glove_init = get_embeddings(glove=all_glove, vocab=vocab, D=config.embedding_dim)
+        # all_glove = load_glove(config.data_path+'/', d=config.embedding_dim)
+        # glove_init = get_embeddings(glove=all_glove, vocab=vocab, D=config.embedding_dim)
 
         # define models
-        self.model = RnnAqModel(config, embeddings_init=glove_init)
+        self.model = TransformerAqModel(config)
 
         # define data_loader
-        self.data_loader = SquadDataLoader(config=config, vocab=vocab)
+        self.data_loader = SquadDataLoader(config=config)
 
         # define loss
-        self.loss = nn.NLLLoss()
+        self.loss = nn.CrossEntropyLoss(ignore_index=10000)
 
         # define optimizer
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.learning_rate)
+        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
 
         # initialize counter
         self.current_epoch = 0
@@ -81,7 +82,7 @@ class AQAgent(BaseAgent):
         # Model Loading from the latest checkpoint if not found start from scratch.
         # self.load_checkpoint(self.config.checkpoint_file)
         # Summary Writer
-        self.summary_writer = None
+        # self.summary_writer = None
 
     def load_checkpoint(self, file_name):
         """
@@ -98,6 +99,15 @@ class AQAgent(BaseAgent):
         :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
         :return:
         """
+        pass
+
+
+    # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
+    def teacher_force(self):
+        pass
+
+
+    def sample(self):
         pass
 
 
@@ -118,16 +128,41 @@ class AQAgent(BaseAgent):
         """
 
         self.model.train()
+        global_idx = 0
         for batch_idx, batch in enumerate(self.data_loader.train_loader):
             batch= {k:v.to(self.device) for k,v in batch.items()}
+            curr_batch_size = batch['c'].size()[0]
+            max_output_len = batch['q'].size()[1]
+            global_idx += curr_batch_size
+
             self.optimizer.zero_grad()
-            output = self.model(batch)
-            loss = F.nll_loss(output, batch)
+            loss = 0
+
+            output = torch.LongTensor(curr_batch_size, batch['q'].size()[1]).zero_()
+            
+            for seq_ix in range(max_output_len):
+                logits = self.model(batch, output)  
+                
+                output = torch.argmax(logits, -1)
+            
+            
+            
+            # print(logits.shape)
+            q_gold_mask = torch.arange(max_output_len)[None, :] > batch['q_len'][:, None]
+
+            loss += self.loss(logits.permute(0,2,1), batch['q'])
+            # print(loss)
             loss.backward()
             self.optimizer.step()
             if batch_idx % self.config.log_interval == 0:
+                add_to_log('train/loss', loss, global_idx)
+                
+                print(batch['q'][0])
+                print(output.data[0])
+                print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
+                print(BPE.instance().decode_ids(output.data[0][:batch['q_len'][0]]))
                 self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    self.current_epoch, batch_idx * len(batch), len(self.data_loader.train_loader.dataset),
+                    self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
                            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
             self.current_iteration += 1
 

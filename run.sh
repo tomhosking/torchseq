@@ -1,1 +1,1 @@
-python src/main.py --data_path ./data $@
+python src/main.py --config ./configs/blah.json $@

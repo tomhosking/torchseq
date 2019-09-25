@@ -5,10 +5,10 @@ from datasets.cqa_triple import CQATriple
 import torch
 
 class SquadDataset(Dataset):
-    def __init__(self, path, vocab, dev=False, test=False):
+    def __init__(self, path,  dev=False, test=False):
         squad = load_squad_triples(path=path, dev=dev, test=test)
         self.samples =[{'c': x[0], 'q': x[1], 'a': x[2], 'a_pos': x[3]} for x in squad]
-        self.vocab = vocab
+        
 
     def __len__(self):
         return len(self.samples)
@@ -18,7 +18,7 @@ class SquadDataset(Dataset):
 
 
     def to_tensor(self,x):
-        parsed_triple = CQATriple(self.vocab, x['c'], x['a'], x['a_pos'], x['q'])
+        parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], x['q'])
 
         sample = {'c': torch.LongTensor(parsed_triple.ctxt_as_ids()),
                     'q': torch.LongTensor(parsed_triple.q_as_ids()),

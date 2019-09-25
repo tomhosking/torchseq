@@ -7,18 +7,17 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from datasets.squad_dataset import SquadDataset
-from datasets.loaders import PAD
+from utils.bpe_factory import BPE
 
 class SquadDataLoader:
-    def __init__(self, config, vocab):
+    def __init__(self, config):
         """
         :param config:
         """
         self.config = config
-        self.vocab = vocab
 
-        train = SquadDataset(os.path.join(config.data_path, 'squad/'), vocab=self.vocab, dev=False, test=False)
-        valid = SquadDataset(os.path.join(config.data_path, 'squad/'), vocab=self.vocab, dev=True, test=False)
+        train = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=False, test=False)
+        valid = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=True, test=False)
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)
@@ -36,7 +35,7 @@ class SquadDataLoader:
 
         for x in batch:
             for k in keys:
-                x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=self.vocab[PAD])
+                x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.instance().vs)
 
         tensor_batch = {}
         for k in keys:

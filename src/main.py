@@ -10,16 +10,31 @@ from datasets import cqa_triple
 
 from agents import aq
 
+from utils.config import Config
+
+from utils.bpe_factory import BPE
+
 def main(_):
 
     use_cuda = torch.cuda.is_available()
     kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     device = torch.device("cuda" if use_cuda else "cpu")
 
+    config = Config({
+        'log_interval': 10,
+        'cuda': True,
+        'seed': 0,
+        'lr': 1e-4,
+        'batch_size': 8,
+        'data_path': './data'
+    })
+
+
     # # train_loader = torch.utils.data.DataLoader()
     # train_squad = loaders.load_squad_triples(path=os.path.join(FLAGS.data_path,'squad/'), dev=False, test=False)
     # vocab = loader.get_vocab("this is a test", vocab_size=3)
-    vocab = loaders.get_glove_vocab(path=FLAGS.data_path+'/', size=FLAGS.vocab_size)
+    # vocab = loaders.get_glove_vocab(path=FLAGS.data_path+'/', size=FLAGS.vocab_size)
+    # vocab = BPE.instance().
 
     # print(train_squad[0])
     # trip = train_squad[0]
@@ -31,7 +46,7 @@ def main(_):
     # print(ex.copy_vocab)
 
 
-    agent = aq.AQAgent(FLAGS, vocab)
+    agent = aq.AQAgent(config)
 
     try:
         agent.train()
