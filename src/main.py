@@ -1,6 +1,6 @@
 from absl import app
 from args import FLAGS as FLAGS
-\
+
 import torch
 
 import os, json
@@ -25,8 +25,9 @@ def main(_):
         'cuda': True,
         'seed': 0,
         'lr': 1e-4,
-        'batch_size': 8,
-        'data_path': './data'
+        'batch_size': 64,
+        'data_path': './data',
+        'gpu_device': 0
     })
 
 

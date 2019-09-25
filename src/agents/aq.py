@@ -79,6 +79,8 @@ class AQAgent(BaseAgent):
             torch.manual_seed(self.manual_seed)
             self.logger.info("Program will run on *****CPU*****\n")
 
+        self.model.device = self.device
+
         # Model Loading from the latest checkpoint if not found start from scratch.
         # self.load_checkpoint(self.config.checkpoint_file)
         # Summary Writer
@@ -138,7 +140,7 @@ class AQAgent(BaseAgent):
             self.optimizer.zero_grad()
             loss = 0
 
-            output = torch.LongTensor(curr_batch_size, batch['q'].size()[1]).zero_()
+            output = torch.LongTensor(curr_batch_size, batch['q'].size()[1]).zero_().to(self.device)
             
             for seq_ix in range(max_output_len):
                 logits = self.model(batch, output)  
@@ -146,9 +148,8 @@ class AQAgent(BaseAgent):
                 output = torch.argmax(logits, -1)
             
             
-            
             # print(logits.shape)
-            q_gold_mask = torch.arange(max_output_len)[None, :] > batch['q_len'][:, None]
+            q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
 
             loss += self.loss(logits.permute(0,2,1), batch['q'])
             # print(loss)

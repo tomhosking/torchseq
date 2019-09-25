@@ -35,8 +35,8 @@ class TransformerAqModel(nn.Module):
 
         # !!!!!!!
         # Set to use question as input for testing
-        context_mask = torch.arange(max_ctxt_len)[None, :] > batch['q_len'][:, None]
-        q_gold_mask = torch.arange(max_q_len)[None, :] > batch['q_len'][:, None]
+        context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
+        q_gold_mask = (torch.arange(max_q_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
 
 
         
