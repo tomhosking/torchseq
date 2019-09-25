@@ -8,7 +8,7 @@ import os, json
 from datasets import loaders
 from datasets import cqa_triple
 
-from agents import aq
+from agents.aq_agent import AQAgent
 
 from utils.config import Config
 
@@ -27,7 +27,9 @@ def main(_):
         'lr': 1e-4,
         'batch_size': 64,
         'data_path': './data',
-        'gpu_device': 0
+        'gpu_device': 0,
+        'embedding_size': 200,
+        'vocab_size': 10000
     })
 
 
@@ -47,7 +49,7 @@ def main(_):
     # print(ex.copy_vocab)
 
 
-    agent = aq.AQAgent(config)
+    agent = AQAgent(config)
 
     try:
         agent.train()

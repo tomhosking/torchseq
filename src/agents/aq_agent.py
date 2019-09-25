@@ -46,7 +46,7 @@ class AQAgent(BaseAgent):
         self.data_loader = SquadDataLoader(config=config)
 
         # define loss
-        self.loss = nn.CrossEntropyLoss(ignore_index=10000)
+        self.loss = nn.CrossEntropyLoss(ignore_index=config.vocab_size)
 
         # define optimizer
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
@@ -120,7 +120,7 @@ class AQAgent(BaseAgent):
         """
         for epoch in range(1, 1 + 1):
             self.train_one_epoch()
-            self.validate()
+            # self.validate()
 
             self.current_epoch += 1
     def train_one_epoch(self):
@@ -176,7 +176,7 @@ class AQAgent(BaseAgent):
         test_loss = 0
         correct = 0
         with torch.no_grad():
-            for data, target in self.data_loader.test_loader:
+            for data, target in self.data_loader.valid_loader:
                 data, target = data.to(self.device), target.to(self.device)
                 output = self.model(data)
                 test_loss += F.nll_loss(output, target, size_average=False).item()  # sum up batch loss

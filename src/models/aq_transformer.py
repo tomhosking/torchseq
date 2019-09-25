@@ -14,14 +14,18 @@ class TransformerAqModel(nn.Module):
         
         # self.embeddings.weight = nn.Parameter(, requires_grad=False)
 
-        self.encoder_decoder = nn.Transformer(d_model=50, nhead=2)
+        self.encoder_decoder = nn.Transformer(d_model=config.embedding_size,
+                                                nhead=1,
+                                                num_encoder_layers=2,
+                                                num_decoder_layers=2,
+                                                dim_feedforward=256)
 
-        self.output_projection = nn.Linear(50, 10000+1)
+        self.output_projection = nn.Linear(config.embedding_size, config.vocab_size+1)
 
         # Init output projection layer with embedding matrix
         self.output_projection.weight.data = self.embeddings.weight.data
 
-        self.positional_embeddings = SinusoidalPositionalEmbedding(embedding_dim=50, padding_idx=-1, init_size=250)
+        self.positional_embeddings = SinusoidalPositionalEmbedding(embedding_dim=config.embedding_size, padding_idx=-1, init_size=250)
 
 
     def forward(self, batch, output):
