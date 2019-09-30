@@ -105,12 +105,57 @@ class AQAgent(BaseAgent):
 
 
     # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
-    def teacher_force(self):
-        pass
+    @staticmethod
+    def decode_teacher_force(model, batch):
+        curr_batch_size = batch['c'].size()[0]
+        max_output_len = batch['q'].size()[1]
 
+        # Create vector of SOS + placeholder for first prediction
+        output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
+        logits = None
 
-    def sample(self):
-        pass
+        for seq_ix in range(max_output_len-1):
+            new_logits = model(batch, output)
+            
+            new_output = torch.argmax(new_logits, -1)
+
+            # output = torch.cat([new_output, torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
+            output = batch['q'][:, :(seq_ix+2)]
+
+            if logits is None:
+                logits = new_logits
+            else:
+                logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
+
+            
+
+        return output, logits
+
+    @staticmethod
+    def decode_greedy(model, batch):
+        curr_batch_size = batch['c'].size()[0]
+        max_output_len = batch['q'].size()[1]
+
+        # Create vector of SOS + placeholder for first prediction
+        output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
+        logits = None
+
+        for seq_ix in range(max_output_len-1):
+            new_logits = model(batch, output)
+
+            new_output = torch.argmax(new_logits, -1)
+
+            output = torch.cat([new_output, torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
+
+            if logits is None:
+                logits = new_logits
+            else:
+                logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
+
+            
+
+        return output, logits
+
 
 
     def train(self):
@@ -118,6 +163,7 @@ class AQAgent(BaseAgent):
         Main training loop
         :return:
         """
+        self.global_idx = 0
         for epoch in range(1, 1 + 1):
             self.train_one_epoch()
             # self.validate()
@@ -130,38 +176,36 @@ class AQAgent(BaseAgent):
         """
 
         self.model.train()
-        global_idx = 0
+        
         for batch_idx, batch in enumerate(self.data_loader.train_loader):
             batch= {k:v.to(self.device) for k,v in batch.items()}
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
-            global_idx += curr_batch_size
+            self.global_idx += curr_batch_size
 
             self.optimizer.zero_grad()
             loss = 0
 
-            output = torch.LongTensor(curr_batch_size, batch['q'].size()[1]).zero_().to(self.device)
             
-            for seq_ix in range(max_output_len):
-                logits = self.model(batch, output)  
-                
-                output = torch.argmax(logits, -1)
+            output, logits = AQAgent.decode_teacher_force(self.model, batch)
             
             
             # print(logits.shape)
-            q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
+            # q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
 
             loss += self.loss(logits.permute(0,2,1), batch['q'])
             # print(loss)
             loss.backward()
             self.optimizer.step()
             if batch_idx % self.config.log_interval == 0:
-                add_to_log('train/loss', loss, global_idx)
+                add_to_log('train/loss', loss, self.global_idx)
+
+                greedy_output, _ = AQAgent.decode_greedy(self.model, batch)
                 
                 print(batch['q'][0])
-                print(output.data[0])
+                print(greedy_output.data[0])
                 print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                print(BPE.instance().decode_ids(output.data[0][:batch['q_len'][0]]))
+                print(BPE.instance().decode_ids(greedy_output.data[0][:batch['q_len'][0]]))
                 self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
                            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))

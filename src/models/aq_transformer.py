@@ -35,15 +35,27 @@ class TransformerAqModel(nn.Module):
         max_ctxt_len = torch.max(batch['q_len'])
         max_q_len = torch.max(batch['q_len'])
         curr_batch_size = batch['c'].size()[0]
+        
 
+        output_max_len = output.size()[-1]
+        tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('-inf'))
+        tgt_mask = torch.triu(tgt_mask, diagonal=1)
+
+        # print(tgt_mask)
+
+        # ie how many indices are non-pad
+        output_len = torch.sum(torch.ne(output, BPE.pad_id), dim=-1)
+        # print(output_len)
+
+        # print(tgt_mask.shape)
 
         # !!!!!!!
         # Set to use question as input for testing
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
-        q_gold_mask = (torch.arange(max_q_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
+        output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() > output_len[:, None].cpu()).to(self.device)[:, :output_max_len]
 
 
-        
+        # print(output_pad_mask.shape)
 
         # !!!!!!!
         # Set to use question as input for testing
@@ -63,9 +75,9 @@ class TransformerAqModel(nn.Module):
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
         output = self.encoder_decoder(src=ctxt_embedded.permute(1,0,2),
                                      tgt=output_embedded.permute(1,0,2),
-                                    #  tgt_mask=[],
+                                     tgt_mask=tgt_mask,
                                      src_key_padding_mask=context_mask,
-                                     tgt_key_padding_mask=q_gold_mask
+                                     tgt_key_padding_mask=output_pad_mask
                                      ).permute(1,0,2)
 
         
