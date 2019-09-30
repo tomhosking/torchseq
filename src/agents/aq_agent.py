@@ -202,18 +202,11 @@ class AQAgent(BaseAgent):
 
         self.model.train()
         
-        for batch_idx, batch in enumerate(self.data_loader.train_loader):
+        for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch))):
             batch= {k:v.to(self.device) for k,v in batch.items()}
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
             self.global_idx += curr_batch_size
-
-            if max_output_len > 75:
-                print(max_output_len)
-                for q_ix, q in enumerate(batch['q']):
-                    if batch['q_len'][q_ix] > 75:
-                        print(BPE.instance().decode_ids(q[:batch['q_len'][q_ix]]))
-                        print(q)
 
             self.optimizer.zero_grad()
             loss = 0
@@ -232,15 +225,15 @@ class AQAgent(BaseAgent):
             if batch_idx % self.config.log_interval == 0:
                 add_to_log('train/loss', loss, self.global_idx)
 
-                greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
+                # greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
                 
-                # print(batch['q'][0])
-                # print(greedy_output.data[0])
-                print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
-                self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                    self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
-                           100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
+                # # print(batch['q'][0])
+                # # print(greedy_output.data[0])
+                # print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
+                # print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+                # self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                #     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
+                #            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
 
                 torch.cuda.empty_cache()
             self.current_iteration += 1
@@ -259,7 +252,7 @@ class AQAgent(BaseAgent):
         q_golds = []
 
         with torch.no_grad():
-            for batch_idx, batch in enumerate(self.data_loader.valid_loader):
+            for batch_idx, batch in enumerate(tqdm(self.data_loader.valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch))):
                 batch= {k:v.to(self.device) for k,v in batch.items()}
                 curr_batch_size = batch['c'].size()[0]
                 max_output_len = batch['q'].size()[1]

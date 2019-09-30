@@ -6,6 +6,7 @@ from utils.bleu import compute_bleu
 
 from collections import Counter
 
+# TODO: use a better tokenisation scheme for actual results
 def tokenise(text):
     return text.split(' ')
 
