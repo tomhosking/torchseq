@@ -14,8 +14,8 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 
   - [ ]  get embedded version of context
   - [ ]  augment it (esp. with ans BIO)
-  - [ ]  positional encoding
-  - [ ]  encode
+  - [x]  positional encoding
+  - []  encode
   - [ ]  (do we need to do anything with this encoding?)
   - [ ]  decode
   - [ ]  check additional output/projection layers that are required
@@ -24,12 +24,16 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 
 ### Externally
   
-  - [ ]  start with a q autoencoder as test
+  - [x]  start with a q autoencoder as test
   - [ ]  sample (nucleus?)
-  - [ ]  handle teacher forcing
+  - [x]  handle teacher forcing
   - [ ]  calc loss carefully!!!
   - [ ]  additional losses? regularisation? penalty for including ans in q?
   - [ ]  log it all
   - [ ]  grad clipping
   - [ ]  checkpointing
   - [ ]  config! and run management
+
+### Bugs
+
+  - [ ] numbers not handled by BPEmb

@@ -52,7 +52,13 @@ def main(_):
     agent = AQAgent(config)
 
     try:
-        agent.train()
+        if FLAGS.load_chkpt is not None:
+            pass
+
+        if FLAGS.train:
+            agent.train()
+        if FLAGS.validate:
+            agent.validate()
 
     except KeyboardInterrupt:
         agent.logger.info("You have entered CTRL+C.. Wait to finalize")

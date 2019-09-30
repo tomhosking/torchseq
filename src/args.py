@@ -4,6 +4,12 @@ FLAGS = flags.FLAGS
 
 flags.DEFINE_string("config", None, "Path to config file")
 
+flags.DEFINE_bool("train", False, "Run training?")
+flags.DEFINE_bool("validate", False, "Eval on dev set?")
+flags.DEFINE_bool("test", False, "Eval on test set?")
+
+flags.DEFINE_string("load_chkpt", None, "Path to chkpt file")
+
 # Environment setup
 # flags.DEFINE_string("data_path", None, "Path to data sources")
 # flags.DEFINE_bool("cuda", False, "Use GPU?")

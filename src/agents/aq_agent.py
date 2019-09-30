@@ -52,9 +52,9 @@ class AQAgent(BaseAgent):
         self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
 
         # initialize counter
+        self.best_metric = None
         self.current_epoch = 0
         self.current_iteration = 0
-        self.best_metric = 0
 
         # set cuda flag
         self.is_cuda = torch.cuda.is_available()
@@ -92,16 +92,16 @@ class AQAgent(BaseAgent):
         :param file_name: name of the checkpoint file
         :return:
         """
-        pass
+        self.model.load_state_dict(torch.load('./models/' + file_name))
 
-    def save_checkpoint(self, file_name="checkpoint.pth.tar", is_best=0):
+    def save_checkpoint(self, file_name="checkpoint.pth.tar"):
         """
         Checkpoint saver
         :param file_name: name of the checkpoint file
         :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
         :return:
         """
-        pass
+        torch.save(self.model.state_dict(), './models/' + file_name)
 
 
     # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
@@ -138,16 +138,31 @@ class AQAgent(BaseAgent):
         logits = torch.FloatTensor(curr_batch_size, 1, self.config.vocab_size+1).fill_(float('-inf')).to(self.device)
         logits[:, :, BPE.instance().BOS] = float('inf')
 
-        for seq_ix in range(max_output_len):
+        output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
+        padding = torch.LongTensor(curr_batch_size).fill_(self.config.vocab_size).to(self.device)
+
+        seq_ix = 0
+        while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
             new_logits = model(batch, output)
 
             new_output = torch.argmax(new_logits, -1)
+
+            # Use pad for the output for elements that have completed
+            new_output[:, -1] = torch.where(output_done, padding, new_output[:, -1])
             
             output = torch.cat([output, new_output[:, -1].unsqueeze(-1)], dim=-1)
 
             logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
 
-        return output, logits
+            # print(output_done)
+            # print(output[:, -1])
+            # print(output[:, -1] == BPE.instance().EOS)
+            output_done = output_done | (output[:, -1] == BPE.instance().EOS)
+            seq_ix += 1
+        
+        output.where(output == BPE.pad_id, torch.LongTensor(output.shape).fill_(-1).to(self.device))
+
+        return output, logits, torch.sum(output != BPE.pad_id, dim=-1)
 
 
 
@@ -159,7 +174,7 @@ class AQAgent(BaseAgent):
         self.global_idx = 0
         for epoch in range(1, 1 + 1):
             self.train_one_epoch()
-            # self.validate()
+            self.validate(save=True)
 
             self.current_epoch += 1
     def train_one_epoch(self):
@@ -175,6 +190,13 @@ class AQAgent(BaseAgent):
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
             self.global_idx += curr_batch_size
+
+            if max_output_len > 75:
+                print(max_output_len)
+                for q_ix, q in enumerate(batch['q']):
+                    if batch['q_len'][q_ix] > 75:
+                        print(BPE.instance().decode_ids(q[:batch['q_len'][q_ix]]))
+                        print(q)
 
             self.optimizer.zero_grad()
             loss = 0
@@ -193,18 +215,20 @@ class AQAgent(BaseAgent):
             if batch_idx % self.config.log_interval == 0:
                 add_to_log('train/loss', loss, self.global_idx)
 
-                greedy_output, _ = self.decode_greedy(self.model, batch)
+                greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
                 
-                print(batch['q'][0])
-                print(greedy_output.data[0])
+                # print(batch['q'][0])
+                # print(greedy_output.data[0])
                 print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                print(BPE.instance().decode_ids(greedy_output.data[0][:batch['q_len'][0]]))
+                print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
                 self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
                            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
+
+                torch.cuda.empty_cache()
             self.current_iteration += 1
 
-    def validate(self):
+    def validate(self, save=False):
         """
         One cycle of model validation
         :return:
@@ -212,18 +236,33 @@ class AQAgent(BaseAgent):
         self.model.eval()
         test_loss = 0
         correct = 0
-        with torch.no_grad():
-            for data, target in self.data_loader.valid_loader:
-                data, target = data.to(self.device), target.to(self.device)
-                output = self.model(data)
-                test_loss += F.nll_loss(output, target, size_average=False).item()  # sum up batch loss
-                pred = output.max(1, keepdim=True)[1]  # get the index of the max log-probability
-                correct += pred.eq(target.view_as(pred)).sum().item()
+        for batch_idx, batch in enumerate(self.data_loader.valid_loader):
+            batch= {k:v.to(self.device) for k,v in batch.items()}
+            curr_batch_size = batch['c'].size()[0]
+            max_output_len = batch['q'].size()[1]
 
-        test_loss /= len(self.data_loader.test_loader.dataset)
+            # loss = 0
+
+            
+            output, logits, output_lens = self.decode_greedy(self.model, batch)
+
+            test_loss += self.loss(logits.permute(0,2,1), batch['q'])
+
+            if batch_idx == 0:
+                print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
+                print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+
+        test_loss /= len(self.data_loader.valid_loader.dataset)
         self.logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(self.data_loader.test_loader.dataset),
-            100. * correct / len(self.data_loader.test_loader.dataset)))
+            test_loss, correct, len(self.data_loader.valid_loader.dataset),
+            100. * correct / len(self.data_loader.valid_loader.dataset)))
+
+        if self.best_metric is None or test_loss < self.best_metric:
+            self.best_metric = test_loss
+
+            self.logger.info('New best score! Saving...')
+            self.save_checkpoint()
+
     def finalize(self):
         """
         Finalizes all the operations of the 2 Main classes of the process, the operator and the data loader

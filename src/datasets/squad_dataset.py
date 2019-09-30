@@ -7,7 +7,11 @@ import torch
 class SquadDataset(Dataset):
     def __init__(self, path,  dev=False, test=False):
         squad = load_squad_triples(path=path, dev=dev, test=test)
-        self.samples =[{'c': x[0], 'q': x[1], 'a': x[2], 'a_pos': x[3]} for x in squad]
+        # print(len(squad))
+        self.samples =[{'c': x[0], 'q': x[1], 'a': x[2], 'a_pos': x[3]} for x in squad if (len(x[1]) < 200 and len(x[0]) < 3500) or test is True]
+        # print(len(self.samples))
+
+
         
 
     def __len__(self):
