@@ -53,12 +53,12 @@ def main(_):
 
     try:
         if FLAGS.load_chkpt is not None:
-            pass
+            agent.load_checkpoint(FLAGS.load_chkpt)
 
         if FLAGS.train:
             agent.train()
         if FLAGS.validate:
-            agent.validate()
+            agent.validate(save=False)
 
     except KeyboardInterrupt:
         agent.logger.info("You have entered CTRL+C.. Wait to finalize")

@@ -23,6 +23,7 @@ from datasets.loaders import load_glove, get_embeddings
 from utils.logging import add_to_log
 
 from utils.misc import print_cuda_statistics
+from utils.metrics import bleu_corpus
 
 from utils.bpe_factory import BPE
 
@@ -92,7 +93,14 @@ class AQAgent(BaseAgent):
         :param file_name: name of the checkpoint file
         :return:
         """
-        self.model.load_state_dict(torch.load('./models/' + file_name))
+        self.logger.info('Loading from checkpoint ' + file_name)
+        checkpoint = torch.load('./models/' + file_name)
+        self.model.load_state_dict(checkpoint['model_state_dict'])
+        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+        self.current_epoch = checkpoint['epoch']
+        self.loss = checkpoint['loss']
+        self.best_metric = checkpoint['best_metric']
+        
 
     def save_checkpoint(self, file_name="checkpoint.pth.tar"):
         """
@@ -101,7 +109,16 @@ class AQAgent(BaseAgent):
         :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
         :return:
         """
-        torch.save(self.model.state_dict(), './models/' + file_name)
+
+        torch.save(
+            {
+            'epoch': self.current_epoch,
+            'model_state_dict': self.model.state_dict(),
+            'optimizer_state_dict': self.optimizer.state_dict(),
+            'loss': self.loss,
+            'best_metric': self.best_metric
+            },
+            './models/' + file_name)
 
 
     # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
@@ -111,20 +128,17 @@ class AQAgent(BaseAgent):
         max_output_len = batch['q'].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
-        # output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1).to(self.device)
+        
         
         logits = torch.FloatTensor(curr_batch_size, 1, self.config.vocab_size+1).fill_(float('-1e6')).to(self.device)
         logits[:, :, BPE.instance().BOS] = float('1e6')
 
-        for seq_ix in range(max_output_len-1):
-            output = batch['q'][:, :(seq_ix+1)].to(self.device)
-            new_logits = model(batch, output)
-            
-            # new_output = torch.argmax(new_logits, -1)
+        # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
+        # ..and then just do a single pass through the whole model using the gold output as input
+        output = batch['q'][:, :max_output_len-1].to(self.device)
+        pred_logits = model(batch, output)
 
-            # output = torch.cat([output, ].unsqueeze(-1)], dim=-1)
-            
-            logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
+        logits = torch.cat([logits, pred_logits], dim=1)
 
         return output, logits
 
@@ -171,12 +185,15 @@ class AQAgent(BaseAgent):
         Main training loop
         :return:
         """
-        self.global_idx = 0
+        self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
         for epoch in range(1, 1 + 1):
             self.train_one_epoch()
-            self.validate(save=True)
 
             self.current_epoch += 1
+            self.validate(save=True)
+
+
+
     def train_one_epoch(self):
         """
         One epoch of training
@@ -233,29 +250,44 @@ class AQAgent(BaseAgent):
         One cycle of model validation
         :return:
         """
+        print('## Validating')
         self.model.eval()
         test_loss = 0
         correct = 0
-        for batch_idx, batch in enumerate(self.data_loader.valid_loader):
-            batch= {k:v.to(self.device) for k,v in batch.items()}
-            curr_batch_size = batch['c'].size()[0]
-            max_output_len = batch['q'].size()[1]
 
-            # loss = 0
+        q_preds = []
+        q_golds = []
 
-            
-            output, logits, output_lens = self.decode_greedy(self.model, batch)
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(self.data_loader.valid_loader):
+                batch= {k:v.to(self.device) for k,v in batch.items()}
+                curr_batch_size = batch['c'].size()[0]
+                max_output_len = batch['q'].size()[1]
 
-            test_loss += self.loss(logits.permute(0,2,1), batch['q'])
+                # loss = 0
 
-            if batch_idx == 0:
-                print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+                _, logits = self.decode_teacher_force(self.model, batch)
+                
+                greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
 
-        test_loss /= len(self.data_loader.valid_loader.dataset)
-        self.logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
-            test_loss, correct, len(self.data_loader.valid_loader.dataset),
-            100. * correct / len(self.data_loader.valid_loader.dataset)))
+                test_loss += self.loss(logits.permute(0,2,1), batch['q'])
+
+                for ix, q_pred in enumerate(greedy_output.data):
+                    q_preds.append(BPE.instance().decode_ids(q_pred[:output_lens[ix]]))
+                for ix, q_gold in enumerate(batch['q']):
+                    q_golds.append(BPE.instance().decode_ids(q_gold[:batch['q_len'][ix]]))
+                
+
+                if batch_idx == 0:
+                    print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
+                    print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+
+            test_loss /= len(self.data_loader.valid_loader.dataset)
+            self.logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+                test_loss, correct, len(self.data_loader.valid_loader.dataset),
+                100. * correct / len(self.data_loader.valid_loader.dataset)))
+
+        print('BLEU: ', bleu_corpus(q_golds, q_preds))
 
         if self.best_metric is None or test_loss < self.best_metric:
             self.best_metric = test_loss
