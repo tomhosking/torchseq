@@ -14,18 +14,18 @@ class TransformerAqModel(nn.Module):
         
         # self.embeddings.weight = nn.Parameter(, requires_grad=False)
 
-        self.encoder_decoder = nn.Transformer(d_model=config.embedding_size,
+        self.encoder_decoder = nn.Transformer(d_model=config.embedding_dim,
                                                 nhead=1,
                                                 num_encoder_layers=2,
                                                 num_decoder_layers=2,
                                                 dim_feedforward=256)
 
-        self.output_projection = nn.Linear(config.embedding_size, config.vocab_size+1)
+        self.output_projection = nn.Linear(config.embedding_dim, config.vocab_size+1)
 
         # Init output projection layer with embedding matrix
         self.output_projection.weight.data = self.embeddings.weight.data
 
-        self.positional_embeddings = SinusoidalPositionalEmbedding(embedding_dim=config.embedding_size, padding_idx=-1, init_size=250)
+        self.positional_embeddings = SinusoidalPositionalEmbedding(embedding_dim=config.embedding_dim, padding_idx=-1, init_size=250)
 
 
     def forward(self, batch, output):
@@ -38,7 +38,7 @@ class TransformerAqModel(nn.Module):
         
 
         output_max_len = output.size()[-1]
-        tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('-inf'))
+        tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('-inf')).to(self.device)
         tgt_mask = torch.triu(tgt_mask, diagonal=1)
 
         # print(tgt_mask)

@@ -25,10 +25,10 @@ def main(_):
         'cuda': True,
         'seed': 0,
         'lr': 1e-4,
-        'batch_size': 4,
+        'batch_size': 24,
         'data_path': './data',
         'gpu_device': 0,
-        'embedding_size': 50,
+        'embedding_dim': 200,
         'vocab_size': 10000
     })
 

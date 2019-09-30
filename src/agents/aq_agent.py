@@ -105,54 +105,47 @@ class AQAgent(BaseAgent):
 
 
     # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
-    @staticmethod
-    def decode_teacher_force(model, batch):
+    
+    def decode_teacher_force(self, model, batch):
         curr_batch_size = batch['c'].size()[0]
         max_output_len = batch['q'].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
-        output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
-        logits = None
+        # output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1).to(self.device)
+        
+        logits = torch.FloatTensor(curr_batch_size, 1, self.config.vocab_size+1).fill_(float('-1e6')).to(self.device)
+        logits[:, :, BPE.instance().BOS] = float('1e6')
 
         for seq_ix in range(max_output_len-1):
+            output = batch['q'][:, :(seq_ix+1)].to(self.device)
             new_logits = model(batch, output)
             
-            new_output = torch.argmax(new_logits, -1)
+            # new_output = torch.argmax(new_logits, -1)
 
-            # output = torch.cat([new_output, torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
-            output = batch['q'][:, :(seq_ix+2)]
-
-            if logits is None:
-                logits = new_logits
-            else:
-                logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
-
+            # output = torch.cat([output, ].unsqueeze(-1)], dim=-1)
             
+            logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
 
         return output, logits
 
-    @staticmethod
-    def decode_greedy(model, batch):
+    
+    def decode_greedy(self, model, batch):
         curr_batch_size = batch['c'].size()[0]
         max_output_len = batch['q'].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
-        output = torch.cat([torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS), torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
-        logits = None
+        output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS).to(self.device)
+        logits = torch.FloatTensor(curr_batch_size, 1, self.config.vocab_size+1).fill_(float('-inf')).to(self.device)
+        logits[:, :, BPE.instance().BOS] = float('inf')
 
-        for seq_ix in range(max_output_len-1):
+        for seq_ix in range(max_output_len):
             new_logits = model(batch, output)
 
             new_output = torch.argmax(new_logits, -1)
-
-            output = torch.cat([new_output, torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS)], dim=-1)
-
-            if logits is None:
-                logits = new_logits
-            else:
-                logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
-
             
+            output = torch.cat([output, new_output[:, -1].unsqueeze(-1)], dim=-1)
+
+            logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
 
         return output, logits
 
@@ -187,7 +180,7 @@ class AQAgent(BaseAgent):
             loss = 0
 
             
-            output, logits = AQAgent.decode_teacher_force(self.model, batch)
+            output, logits = self.decode_teacher_force(self.model, batch)
             
             
             # print(logits.shape)
@@ -200,7 +193,7 @@ class AQAgent(BaseAgent):
             if batch_idx % self.config.log_interval == 0:
                 add_to_log('train/loss', loss, self.global_idx)
 
-                greedy_output, _ = AQAgent.decode_greedy(self.model, batch)
+                greedy_output, _ = self.decode_greedy(self.model, batch)
                 
                 print(batch['q'][0])
                 print(greedy_output.data[0])

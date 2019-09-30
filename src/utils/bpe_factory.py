@@ -11,7 +11,7 @@ class BPE:
     def instance():
         if BPE._instance is None:
             # TODO: dim is hardcoded!
-            BPE._instance = BPEmb(lang="en", dim=50, vs=10000, preprocess=False, add_pad_emb=True)
+            BPE._instance = BPEmb(lang="en", dim=200, vs=10000, preprocess=False, add_pad_emb=True)
         return BPE._instance
 
     @staticmethod
@@ -19,5 +19,8 @@ class BPE:
         spt = SentencePieceText()
         spt.ParseFromString(BPE.instance().spm.EncodeAsSerializedProto(text.lower()))
 
-        return [{'id': piece.id, 'text': piece.piece, 'begin': piece.begin, 'end': piece.end} for piece in spt.pieces]
+        bos = [{'id': BPE.instance().BOS, 'text': BPE.instance().BOS_str, 'begin': 0, 'end': 0}]
+        eos = [{'id': BPE.instance().EOS, 'text': BPE.instance().EOS_str, 'begin': len(text), 'end': len(text)}]
+
+        return bos + [{'id': piece.id, 'text': piece.piece, 'begin': piece.begin, 'end': piece.end} for piece in spt.pieces] + eos
 
