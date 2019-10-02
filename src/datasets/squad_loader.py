@@ -27,7 +27,7 @@ class SquadDataLoader:
 
 
         self.train_loader = DataLoader(train, batch_size=config.batch_size, shuffle=True, num_workers=4, collate_fn=self.pad_and_order_sequences)
-        self.valid_loader = DataLoader(valid, batch_size=config.batch_size, shuffle=False, num_workers=4, collate_fn=self.pad_and_order_sequences)
+        self.valid_loader = DataLoader(valid, batch_size=config.eval_batch_size, shuffle=False, num_workers=4, collate_fn=self.pad_and_order_sequences)
 
     def pad_and_order_sequences(self, batch):
         keys = batch[0].keys()
@@ -35,7 +35,10 @@ class SquadDataLoader:
 
         for x in batch:
             for k in keys:
-                x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.instance().vs)
+                if k == 'a_pos':
+                    x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=0)
+                else:
+                    x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.pad_id)
 
         tensor_batch = {}
         for k in keys:

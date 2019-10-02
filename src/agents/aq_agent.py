@@ -50,7 +50,12 @@ class AQAgent(BaseAgent):
         self.loss = nn.CrossEntropyLoss(ignore_index=config.vocab_size)
 
         # define optimizer
-        self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
+        if config.opt == 'adam':
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
+        elif config.opt == 'sgd':
+            self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.lr)
+        else:
+            raise Exception("Unrecognised optimiser: " + config.opt)
 
         # initialize counter
         self.best_metric = None
@@ -186,7 +191,7 @@ class AQAgent(BaseAgent):
         :return:
         """
         self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
-        for epoch in range(1, 1 + 1):
+        for epoch in range(self.config.num_epochs):
             self.train_one_epoch()
 
             self.current_epoch += 1
@@ -221,6 +226,7 @@ class AQAgent(BaseAgent):
             loss += self.loss(logits.permute(0,2,1), batch['q'])
             # print(loss)
             loss.backward()
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_gradient)
             self.optimizer.step()
             if batch_idx % self.config.log_interval == 0:
                 add_to_log('train/loss', loss, self.global_idx)
@@ -279,8 +285,12 @@ class AQAgent(BaseAgent):
             self.logger.info('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
                 test_loss, correct, len(self.data_loader.valid_loader.dataset),
                 100. * correct / len(self.data_loader.valid_loader.dataset)))
+        dev_bleu = bleu_corpus(q_golds, q_preds)
 
-        print('BLEU: ', bleu_corpus(q_golds, q_preds))
+        add_to_log('dev/loss', test_loss, self.global_idx)
+        add_to_log('dev/bleu', dev_bleu, self.global_idx)
+        
+        print('BLEU: ', dev_bleu)
 
         if self.best_metric is None or test_loss < self.best_metric:
             self.best_metric = test_loss

@@ -26,7 +26,7 @@ class SinusoidalPositionalEmbedding(nn.Module):
             embedding_dim,
             padding_idx,
         )
-        self.register_buffer('_float_tensor', torch.FloatTensor(1))
+        self.register_buffer('_float_tensor', torch.FloatTensor(init_size, embedding_dim))
 
     @staticmethod
     def get_embedding(num_embeddings, embedding_dim, padding_idx=None):
@@ -50,15 +50,18 @@ class SinusoidalPositionalEmbedding(nn.Module):
         """Input is expected to be of size [bsz x seqlen]."""
         bsz, seq_len = torch.onnx.operators.shape_as_tensor(input)
         max_pos = self.padding_idx + 1 + seq_len
+        
         if self.weights is None or max_pos > self.weights.size(0):
             # recompute/expand embeddings if needed
+            print('Resizing weights')
             self.weights = SinusoidalPositionalEmbedding.get_embedding(
                 max_pos,
                 self.embedding_dim,
                 self.padding_idx,
             )
-        self.weights = self.weights.to(self._float_tensor)
 
+        self.weights = self.weights.to(self._float_tensor)
+        
         if incremental_state is not None:
             # positions is the same for every token when decoding a single step
             pos = timestep.view(-1)[0] + 1 if timestep is not None else seq_len

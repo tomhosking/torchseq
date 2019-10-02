@@ -12,14 +12,14 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 
 ### Model
 
-  - [ ]  get embedded version of context
+  - [*]  get embedded version of context
   - [ ]  augment it (esp. with ans BIO)
   - [x]  positional encoding
-  - []  encode
+  - [*]  encode
   - [ ]  (do we need to do anything with this encoding?)
-  - [ ]  decode
-  - [ ]  check additional output/projection layers that are required
-  - [ ]  check alignment of in/out seqs
+  - [*]  decode
+  - [*]  check additional output/projection layers that are required
+  - [*]  check alignment of in/out seqs
   - [ ]  (copy mech?)
 
 ### Externally
@@ -29,9 +29,9 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
   - [x]  handle teacher forcing
   - [ ]  calc loss carefully!!!
   - [ ]  additional losses? regularisation? penalty for including ans in q?
-  - [ ]  log it all
-  - [ ]  grad clipping
-  - [ ]  checkpointing
+  - [*]  log it all
+  - [*]  grad clipping
+  - [*]  checkpointing
   - [ ]  config! and run management
 
 ### Bugs

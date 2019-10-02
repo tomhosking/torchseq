@@ -25,28 +25,22 @@ def main(_):
         'cuda': True,
         'seed': 0,
         'lr': 1e-4,
-        'batch_size': 24,
+        'batch_size': 32,
+        'eval_batch_size': 16,
         'data_path': './data',
         'gpu_device': 0,
-        'embedding_dim': 200,
-        'vocab_size': 10000
+        'embedding_dim': 300,
+        'vocab_size': 10000,
+        'clip_gradient': 5,
+        'num_epochs': 30,
+        'opt': 'adam',
+        'encdec': {
+            'num_encoder_layers': 6,
+            'num_decoder_layers': 6,
+            'num_heads': 12,
+            'dim_feedforward': 1024
+        }
     })
-
-
-    # # train_loader = torch.utils.data.DataLoader()
-    # train_squad = loaders.load_squad_triples(path=os.path.join(FLAGS.data_path,'squad/'), dev=False, test=False)
-    # vocab = loader.get_vocab("this is a test", vocab_size=3)
-    # vocab = loaders.get_glove_vocab(path=FLAGS.data_path+'/', size=FLAGS.vocab_size)
-    # vocab = BPE.instance().
-
-    # print(train_squad[0])
-    # trip = train_squad[0]
-    # ex = cqa_triple.CQATriple(vocab, trip[0], trip[2], trip[3], trip[1])
-    # ex = cqa_triple.CQATriple(vocab, "this is a text context funicular", "funicular", 23, "where is the funicular?")
-    #
-    # print(ex.ctxt_as_ids())
-    # print(ex.q_as_ids())
-    # print(ex.copy_vocab)
 
 
     agent = AQAgent(config)
