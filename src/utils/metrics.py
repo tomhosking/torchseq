@@ -2,21 +2,24 @@ import string, re
 
 from utils.bleu import compute_bleu
 
-
+from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
 
 from collections import Counter
 
-# TODO: use a better tokenisation scheme for actual results
-def tokenise(text):
-    return text.split(' ')
+
+def tokenize(text):
+    # return text.split(' ')
+    sents = sent_tokenize(text)
+    tokens = [tok.lower() for sent in sents for tok in TreebankWordTokenizer().tokenize(sent)]
+    return tokens
 
 # takes a single untokenised string as input
 def bleu(gold, prediction, order=4):
-    return compute_bleu([[tokenise(gold)]], [tokenise(prediction)], smooth=False, max_order=order)[0]
+    return compute_bleu([[tokenize(gold)]], [tokenize(prediction)], smooth=False, max_order=order)[0]
 
 # takes a list of untokenized strings as inputs
 def bleu_corpus(golds, preds, order=4):
-    return compute_bleu([[tokenise(gold)] for gold in golds], [tokenise(pred) for pred in preds], smooth=False, max_order=order)[0]
+    return compute_bleu([[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order)[0]
 
 def f1(gold, prediction):
     prediction_tokens = prediction.split()

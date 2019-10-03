@@ -21,24 +21,27 @@ def main(_):
     device = torch.device("cuda" if use_cuda else "cpu")
 
     config = Config({
+        'name': 'default',
         'log_interval': 10,
         'cuda': True,
         'seed': 0,
         'lr': 1e-4,
         'batch_size': 32,
-        'eval_batch_size': 16,
+        'eval_batch_size': 8,
         'data_path': './data',
         'gpu_device': 0,
         'embedding_dim': 300,
-        'vocab_size': 10000,
+        'bio_embedding_dim': 12,
+        'vocab_size': 3000,
         'clip_gradient': 5,
         'num_epochs': 30,
         'opt': 'adam',
+        'dropout': 0.3,
         'encdec': {
-            'num_encoder_layers': 6,
-            'num_decoder_layers': 6,
+            'num_encoder_layers': 2,
+            'num_decoder_layers': 2,
             'num_heads': 12,
-            'dim_feedforward': 1024
+            'dim_feedforward': 2048
         }
     })
 
