@@ -5,12 +5,13 @@ from utils.sentencepiece_pb2 import SentencePieceText
 class BPE:
     _instance = None
 
-    pad_id = 3000
+    pad_id = None
 
     @staticmethod
     def instance():
         if BPE._instance is None:
-            # TODO: dim is hardcoded!
+            if BPE.pad_id is None:
+                raise Exception('The vocab size hasnt been set for BPE!')
             BPE._instance = BPEmb(lang="en", dim=300, vs=BPE.pad_id, preprocess=False, add_pad_emb=True)
         return BPE._instance
 

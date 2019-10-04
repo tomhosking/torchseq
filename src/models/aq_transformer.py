@@ -10,8 +10,9 @@ class TransformerAqModel(nn.Module):
         super().__init__()
         self.config = config
 
-        self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.instance().emb.vectors), freeze=True).cpu() # TODO: this should come from a config
-        self.bio_embeddings = nn.Embedding(3, config.bio_embedding_dim).cpu()
+        self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.instance().emb.vectors), freeze=False).cpu() # TODO: this should come from a config
+        # self.bio_embeddings = nn.Embedding(3, config.bio_embedding_dim).cpu()
+        self.bio_embeddings = nn.Embedding.from_pretrained(torch.eye(config.bio_embedding_dim), freeze=False).cpu()
         
         # self.embeddings.weight = nn.Parameter(, requires_grad=False)
 
@@ -34,7 +35,7 @@ class TransformerAqModel(nn.Module):
 
     def forward(self, batch, output):
 
-        # print([BPE.instance().words[x] + str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
+        # print(BPE.instance().decode_ids(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().words[x]  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
         
 
         max_ctxt_len = torch.max(batch['c_len'])

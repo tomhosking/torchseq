@@ -27,23 +27,25 @@ def main(_):
         'seed': 0,
         'lr': 1e-4,
         'batch_size': 32,
-        'eval_batch_size': 8,
+        'eval_batch_size': 16,
         'data_path': './data',
         'gpu_device': 0,
         'embedding_dim': 300,
         'bio_embedding_dim': 12,
-        'vocab_size': 3000,
+        'vocab_size': 10000,
         'clip_gradient': 5,
         'num_epochs': 30,
         'opt': 'adam',
         'dropout': 0.3,
         'encdec': {
-            'num_encoder_layers': 2,
-            'num_decoder_layers': 2,
+            'num_encoder_layers': 4,
+            'num_decoder_layers': 4,
             'num_heads': 12,
-            'dim_feedforward': 2048
+            'dim_feedforward': 512
         }
     })
+
+    BPE.pad_id = config.vocab_size
 
 
     agent = AQAgent(config)

@@ -188,13 +188,13 @@ class AQAgent(BaseAgent):
         max_output_len = batch['q'].size()[1]
 
         # TODO: move to config
-        beam_width = 16 # number of total hypotheses to maintain
-        beam_expansion = 8 # number of new predictions to add to each hypothesis each step
+        beam_width = 8 # number of total hypotheses to maintain
+        beam_expansion = 2 # number of new predictions to add to each hypothesis each step
 
 
         # Create vector of SOS + placeholder for first prediction
         output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.instance().BOS).to(self.device)
-        scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(1).to(self.device)
+        scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(0).to(self.device)
         
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
@@ -309,7 +309,8 @@ class AQAgent(BaseAgent):
             self.train_one_epoch()
 
             self.current_epoch += 1
-            self.validate(save=True)
+            if (epoch+1) % 5 == 0:
+                self.validate(save=True)
 
     @staticmethod
     def get_lr(step):
