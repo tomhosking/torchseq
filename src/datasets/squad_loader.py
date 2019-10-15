@@ -26,7 +26,7 @@ class SquadDataLoader:
         self.valid_iterations = (self.len_valid_data + self.config.batch_size - 1) // self.config.batch_size
 
 
-        self.train_loader = DataLoader(train, batch_size=config.batch_size, shuffle=True, num_workers=6, collate_fn=self.pad_and_order_sequences)
+        self.train_loader = DataLoader(train, batch_size=config.batch_size, shuffle=True, num_workers=8, collate_fn=self.pad_and_order_sequences)
         self.valid_loader = DataLoader(valid, batch_size=config.eval_batch_size, shuffle=False, num_workers=6, collate_fn=self.pad_and_order_sequences)
 
     def pad_and_order_sequences(self, batch):

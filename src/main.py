@@ -14,6 +14,8 @@ from utils.config import Config
 
 from utils.bpe_factory import BPE
 
+from datetime import datetime
+
 def main(_):
 
     use_cuda = torch.cuda.is_available()
@@ -21,34 +23,42 @@ def main(_):
     device = torch.device("cuda" if use_cuda else "cpu")
 
     config = Config({
-        'name': 'default',
+        'name': 'default_1024FF_15H_300E-fix_2x2_nums_fixout_masked',
         'log_interval': 10,
         'cuda': True,
         'seed': 0,
         'lr': 1e-4,
-        'batch_size': 32,
+        'batch_size': 64,
         'eval_batch_size': 16,
         'data_path': './data',
         'gpu_device': 0,
         'embedding_dim': 300,
-        'bio_embedding_dim': 12,
-        'vocab_size': 10000,
+        'bio_embedding_dim': 8,
+        'vocab_size': 25000,
         'clip_gradient': 5,
-        'num_epochs': 30,
+        'num_epochs': 60,
         'opt': 'adam',
-        'dropout': 0.3,
+        'dropout': 0.2,
+        'label_smoothing': 0.1,
+        'freeze_embeddings': True,
+        'freeze_projection': True,
+        'directional_masks': True,
         'encdec': {
-            'num_encoder_layers': 4,
-            'num_decoder_layers': 4,
-            'num_heads': 12,
-            'dim_feedforward': 512
+            'num_encoder_layers': 2,
+            'num_decoder_layers': 2,
+            'num_heads': 15,
+            'dim_feedforward': 1024
         }
     })
 
+    # This is not a good way of passing this value in
     BPE.pad_id = config.vocab_size
+    BPE.embedding_dim = config.embedding_dim
+
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name
 
 
-    agent = AQAgent(config)
+    agent = AQAgent(config, run_id)
 
     try:
         if FLAGS.load_chkpt is not None:

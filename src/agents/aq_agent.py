@@ -6,6 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import shutil
 import random
+import json
 
 import torch
 from torch import nn
@@ -17,6 +18,7 @@ import torch.nn.functional as F
 from agents.base import BaseAgent
 
 from models.aq_transformer import TransformerAqModel
+from models.cross_entropy import CrossEntropyLossWithLS
 from datasets.squad_loader import SquadDataLoader
 from datasets.loaders import load_glove, get_embeddings
 
@@ -27,14 +29,22 @@ from utils.metrics import bleu_corpus
 
 from utils.bpe_factory import BPE
 
+import os
+
 cudnn.benchmark = True
 
 
 class AQAgent(BaseAgent):
 
-    def __init__(self, config):
+    def __init__(self, config, run_id):
         super().__init__(config)
 
+        self.run_id = run_id
+
+
+        os.makedirs('./runs/' + run_id + '/model/')
+        with open('./runs/' + run_id +'/config.json', 'w') as f:
+            json.dump(config.data, f)
 
         # load glove embeddings
         # all_glove = load_glove(config.data_path+'/', d=config.embedding_dim)
@@ -47,11 +57,12 @@ class AQAgent(BaseAgent):
         self.data_loader = SquadDataLoader(config=config)
 
         # define loss
-        self.loss = nn.CrossEntropyLoss(ignore_index=config.vocab_size)
+        self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
+        # self.loss = CrossEntropyLossWithLS(ignore_index=config.vocab_size, smooth_eps=config.label_smoothing, )
 
         # define optimizer
         if config.opt == 'adam':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr)
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr, betas=(0.9, 0.98), eps=1e-9)
         elif config.opt == 'sgd':
             self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.lr)
         else:
@@ -99,7 +110,7 @@ class AQAgent(BaseAgent):
         :return:
         """
         self.logger.info('Loading from checkpoint ' + file_name)
-        checkpoint = torch.load('./models/' + file_name)
+        checkpoint = torch.load(file_name)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         self.current_epoch = checkpoint['epoch']
@@ -123,7 +134,7 @@ class AQAgent(BaseAgent):
             'loss': self.loss,
             'best_metric': self.best_metric
             },
-            './models/' + file_name)
+            './runs/' + self.run_id + '/model/' + file_name)
 
 
     # TODO: These should be used to actually generate output from the model, and return a loss (and the output)
@@ -166,6 +177,9 @@ class AQAgent(BaseAgent):
 
             new_output = torch.argmax(new_logits, -1)
 
+            new_scores = torch.max(new_logits, -1).values
+            # print(new_scores)
+
             # Use pad for the output for elements that have completed
             new_output[:, -1] = torch.where(output_done, padding, new_output[:, -1])
             
@@ -178,6 +192,7 @@ class AQAgent(BaseAgent):
             # print(output[:, -1] == BPE.instance().EOS)
             output_done = output_done | (output[:, -1] == BPE.instance().EOS)
             seq_ix += 1
+        # exit()
         
         # output.where(output == BPE.pad_id, torch.LongTensor(output.shape).fill_(-1).to(self.device))
 
@@ -189,7 +204,7 @@ class AQAgent(BaseAgent):
 
         # TODO: move to config
         beam_width = 8 # number of total hypotheses to maintain
-        beam_expansion = 2 # number of new predictions to add to each hypothesis each step
+        beam_expansion = 3 # number of new predictions to add to each hypothesis each step
 
 
         # Create vector of SOS + placeholder for first prediction
@@ -309,13 +324,14 @@ class AQAgent(BaseAgent):
             self.train_one_epoch()
 
             self.current_epoch += 1
-            if (epoch+1) % 5 == 0:
+            if (epoch+1) % 5 == 0 or True:
                 self.validate(save=True)
 
     @staticmethod
     def get_lr(step):
+        return 1e-5
         step = max(step, 1)
-        return pow(300, -0.5) * min(pow(step, -0.5), step * pow(4000, -1.5))
+        return pow(300, -0.5) * min(pow(step, -0.5), step * pow(5000, -1.5))
 
     def train_one_epoch(self):
         """
@@ -340,24 +356,27 @@ class AQAgent(BaseAgent):
             
             # print(logits.shape)
             # q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
-
-            loss += self.loss(logits.permute(0,2,1), batch['q'])
+            this_loss = self.loss(logits.permute(0,2,1), batch['q'])
+            
+            loss += torch.mean(torch.sum(this_loss, dim=1)/batch['q_len'].to(this_loss), dim=0)
             # print(loss)
             lr = AQAgent.get_lr(self.current_iteration)
-            add_to_log('train/lr', lr, self.current_iteration)
+            add_to_log('train/lr', lr, self.current_iteration, self.run_id)
             loss.lr = lr
             loss.backward()
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_gradient)
             self.optimizer.step()
             if batch_idx % self.config.log_interval == 0:
-                add_to_log('train/loss', loss, self.current_iteration)
-
-                # greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
+                add_to_log('train/loss', loss, self.current_iteration, self.run_id)
                 
                 # # print(batch['q'][0])
                 # # print(greedy_output.data[0])
-                # print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                # print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+                if batch_idx % (self.config.log_interval*20) == 0:
+
+                    with torch.no_grad():
+                        greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
+                    print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
+                    print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
                 # self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 #     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
                 #            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
@@ -389,8 +408,8 @@ class AQAgent(BaseAgent):
 
                 _, logits = self.decode_teacher_force(self.model, batch)
                 
-                greedy_output, _, greedy_output_lens = self.decode_greedy(self.model, batch)
-                beam_output, _, output_lens = self.decode_beam(self.model, batch)
+                # dev_output, _, dev_output_lens = self.decode_greedy(self.model, batch)
+                beam_output, _, beam_lens = self.decode_beam(self.model, batch)
 
                 # if batch_idx == 0:
                 #     print('OUTPUT OF BEAM')
@@ -398,30 +417,34 @@ class AQAgent(BaseAgent):
                 #         print(BPE.instance().decode_ids(beam_output.data[0,i][:output_lens[0,i]]))
                 #     exit()
 
-                top1_output = beam_output[:, 0, :]
-                top1_lens = output_lens[:, 0]
+                dev_output = beam_output[:, 0, :]
+                dev_output_lens = beam_lens[:, 0]
 
-                test_loss += self.loss(logits.permute(0,2,1), batch['q'])
+                this_loss = self.loss(logits.permute(0,2,1), batch['q'])
+            
+                test_loss += torch.mean(torch.sum(this_loss, dim=1)/batch['q_len'].to(this_loss), dim=0)
                 num_batches += 1
 
-                for ix, q_pred in enumerate(top1_output.data):
-                    q_preds.append(BPE.instance().decode_ids(q_pred[:top1_lens[ix]]))
+                for ix, q_pred in enumerate(dev_output.data):
+                    q_preds.append(BPE.instance().decode_ids(q_pred[:dev_output_lens[ix]]))
                 for ix, q_gold in enumerate(batch['q']):
                     q_golds.append(BPE.instance().decode_ids(q_gold[:batch['q_len'][ix]]))
                 
 
-                if batch_idx % 30 == 0:
-                    print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                    print(BPE.instance().decode_ids(top1_output.data[0][:top1_lens[0]]))
-                    print(BPE.instance().decode_ids(greedy_output.data[0][:greedy_output_lens[0]]))
+                if batch_idx % 200 == 0:
+                    # print(batch['c'][0][:10])
+                    print(BPE.instance().decode_ids(batch['c'][0][:batch['c_len'][0]]))
+                    print(q_golds[-2:])
+                    print(q_preds[-2:])
+                    # print(BPE.instance().decode_ids(greedy_output.data[0][:greedy_output_lens[0]]))
 
             test_loss /= num_batches
             self.logger.info('Dev set: Average loss: {:.4f}'.format(test_loss))
 
         dev_bleu = 100*bleu_corpus(q_golds, q_preds)
 
-        add_to_log('dev/loss', test_loss, self.current_iteration)
-        add_to_log('dev/bleu', dev_bleu, self.current_iteration)
+        add_to_log('dev/loss', test_loss, self.current_iteration, self.run_id)
+        add_to_log('dev/bleu', dev_bleu, self.current_iteration, self.run_id)
         
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 
