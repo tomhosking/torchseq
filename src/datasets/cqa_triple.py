@@ -13,10 +13,10 @@ class CQATriple:
 
         # How many sentences either side of the answer should we keep?
         # TODO: move to config (how to pass config into this constructor?)
-        SENT_WINDOW_SIZE = 1
+        SENT_WINDOW_SIZE = 0
 
         # Max num tokens either size of the answer
-        TOKEN_WINDOW_SIZE = 400
+        TOKEN_WINDOW_SIZE = 300
         
         self.context_text = context
         self.is_training = question is not None
