@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 
 class MultiHeadedPooling(nn.Module):
-    def __init__(self, head_count, model_dim, dropout=0.1, use_final_linear=True, model_dim_out=None):
+    def __init__(self, head_count, model_dim, dropout=0.1, use_bilinear=False, use_final_linear=True, model_dim_out=None):
         assert model_dim % head_count == 0
         self.dim_per_head = model_dim // head_count
         self.model_dim = model_dim
@@ -12,6 +12,7 @@ class MultiHeadedPooling(nn.Module):
         self.head_count = head_count
         self.linear_keys = nn.Linear(model_dim,
                                      head_count)
+        self.bilinear_keys = nn.Bilinear(model_dim, model_dim, head_count) if use_bilinear else None
         self.linear_values = nn.Linear(model_dim,
                                        head_count * self.dim_per_head)
         self.softmax = nn.Softmax(dim=-1)
@@ -20,7 +21,7 @@ class MultiHeadedPooling(nn.Module):
             self.final_linear = nn.Linear(model_dim, model_dim_out)
         self.use_final_linear = use_final_linear
 
-    def forward(self, key, value, mask=None):
+    def forward(self, key, value, query=None, mask=None):
         batch_size = key.size(0)
         dim_per_head = self.dim_per_head
         head_count = self.head_count
@@ -35,7 +36,7 @@ class MultiHeadedPooling(nn.Module):
             return x.transpose(1, 2).contiguous() \
                 .view(batch_size, -1, head_count * dim)
 
-        scores = self.linear_keys(key)
+        scores = self.linear_keys(key) if query is None else self.bilinear_keys(key, query)
         value = self.linear_values(value)
 
 

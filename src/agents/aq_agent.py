@@ -269,8 +269,12 @@ class AQAgent(BaseAgent):
 
                 if batch_idx % 200 == 0:
                     # print(batch['c'][0][:10])
+                    # for ix in range(batch['c_len'][-2]):
+                    #     print(" ".join([BPE.instance().pieces[batch['c'][-2][ix]] +'//' + str(batch['a_pos'][-2][ix])]))
                     print(BPE.instance().decode_ids(batch['c'][-2][:batch['c_len'][-2]]))
+                    print(BPE.instance().decode_ids(batch['a'][-2][:batch['a_len'][-2]]))
                     print(BPE.instance().decode_ids(batch['c'][-1][:batch['c_len'][-1]]))
+                    print(BPE.instance().decode_ids(batch['a'][-1][:batch['a_len'][-1]]))
                     print(q_golds[-2:])
                     print(q_preds[-2:])
                     # print(BPE.instance().decode_ids(greedy_output.data[0][:greedy_output_lens[0]]))

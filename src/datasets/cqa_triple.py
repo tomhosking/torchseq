@@ -17,13 +17,17 @@ class CQATriple:
 
         # Max num tokens either size of the answer
         TOKEN_WINDOW_SIZE = 300
+
+        def normalise(text):
+            return text.replace(chr(8211), '-')
         
-        self.context_text = context
+        self.context_text = normalise(context)
         self.is_training = question is not None
-        self.question_text = question
-        self.answer_text = answer
+        self.question_text = normalise(question)
+        self.answer_text = normalise(answer)
         self.a_char_pos_uncrop = a_pos
-        self.a_char_end_uncrop = a_pos + len(answer)
+        self.a_char_end_uncrop = a_pos + len(self.answer_text)
+        
 
         ctxt_sents = sent_tokenize(self.context_text)
         ctxt_char_offsets = []
@@ -45,16 +49,25 @@ class CQATriple:
             # print(sent_ix, offset)
             
             for ix,tok in enumerate(sent_toks):
+                # if self.answer_text == 'Catholics':
+                #     print(tok)
                 # print(tok['text'], tok['begin']+offset, tok['end']+offset, self.a_char_pos_uncrop)
-                if self.a_char_pos_uncrop >= tok['begin']+offset and self.a_char_pos_uncrop < tok['end']+offset:
+                if self.a_char_pos_uncrop >= tok['begin']+offset and self.a_char_pos_uncrop <= tok['end']+offset:
                     self.a_tok_pos_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
+                    # if self.answer_text == 'Catholics':
+                    #     print(ix, tok, tok['begin'], offset, self.a_char_pos_uncrop)
+                        
+                    #     exit()
 
-                if self.a_char_end_uncrop > tok['begin']+offset and self.a_char_end_uncrop <= tok['end']+offset:
+                if self.a_char_end_uncrop >= tok['begin']+offset and self.a_char_end_uncrop <= tok['end']+offset:
                     self.a_tok_end_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
                     # print(tok, ix, sent_ix, [len(sent) for sent in ctxt_sent_toks[:sent_ix]])
                     # exit()
                     break
         # exit()
+
+        
+
         if self.a_tok_pos_uncrop is None:
             raise Exception('Couldnt find the answer token position')
 

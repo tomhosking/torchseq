@@ -48,14 +48,17 @@ class TransformerAqModel(nn.Module):
         decoder_norm = nn.LayerNorm(config.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
-        self.output_projection = nn.Linear(config.embedding_dim, config.vocab_size+1, bias=False)
+        self.encoder_projection = nn.Linear((config.embedding_dim+config.bio_embedding_dim)*3, config.embedding_dim)
+
+        self.output_projection = nn.Linear(config.embedding_dim, config.vocab_size+1, bias=False).cpu()
         # self.input_projection = nn.Linear(config.embedding_dim+config.bio_embedding_dim, config.embedding_dim)
 
         # Init output projection layer with embedding matrix
         self.output_projection.weight.data[:, :config.embedding_dim] = self.embeddings.weight.data
         self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        self.pooling = MultiHeadedPooling(config.encdec.num_heads, config.embedding_dim+config.bio_embedding_dim, dropout=config.dropout, model_dim_out=config.embedding_dim)
+        self.ans_pooling = MultiHeadedPooling(config.encdec.num_heads, config.embedding_dim+config.bio_embedding_dim, dropout=config.dropout, model_dim_out=config.embedding_dim, use_final_linear=False)
+        self.ctxt_pooling = MultiHeadedPooling(config.encdec.num_heads, config.embedding_dim+config.bio_embedding_dim, dropout=config.dropout, model_dim_out=config.embedding_dim, use_final_linear=False, use_bilinear=True)
 
         # self.positional_embeddings = SinusoidalPositionalEmbedding(embedding_dim=config.embedding_dim, padding_idx=-1, init_size=400)
         self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim+config.bio_embedding_dim)
@@ -92,7 +95,12 @@ class TransformerAqModel(nn.Module):
 
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1,0,2))
 
-            memory = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2)
+            encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+            ans_mask = batch['a_pos'] == 0
+            ans_pooled = self.ans_pooling(encoding, encoding, mask=ans_mask).unsqueeze(1)
+            memory_pooled = self.ctxt_pooling(key=ans_pooled, value=encoding).unsqueeze(1)
+            memory_full = torch.cat([ctxt_embedded.permute(1,0,2), encoding, memory_pooled.expand(-1, max_ctxt_len, -1)], dim=-1)
+            memory = self.encoder_projection(memory_full)
             
 
         output_max_len = output.size()[-1]
@@ -136,7 +144,7 @@ class TransformerAqModel(nn.Module):
 
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
 
-        memory_pooled = self.pooling(memory, memory).unsqueeze(1)
+        
         
         
         output_embedded = self.positional_embeddings_dec(output_embedded.permute(1,0,2))
@@ -153,7 +161,7 @@ class TransformerAqModel(nn.Module):
 
         output = self.decoder(
                                 output_embedded,
-                                memory_pooled.permute(1,0,2),
+                                memory.permute(1,0,2),
                                 tgt_mask=tgt_mask,
                                 tgt_key_padding_mask=output_pad_mask
                             ).permute(1,0,2)
