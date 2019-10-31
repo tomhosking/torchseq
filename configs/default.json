@@ -1,5 +1,5 @@
 {
-    "name": "default_2048FF_4H_300E-unfix_3x3_nums_unfixout_dirmask_0sent_lr1e-4_gelu_pooled_onehotbio_vs10k",
+    "name": "craw_cenc_cencpool",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -13,7 +13,7 @@
         "lr": 1e-4,
         "batch_size": 64,
         "clip_gradient": 5,
-        "num_epochs": 60,
+        "num_epochs": 70,
         "opt": "adam"
     },
     "eval": {
@@ -21,9 +21,9 @@
 
     },
     "beam_search": {
-        "beam_width": 8,
+        "beam_width": 12,
         "beam_expansion": 4,
-        "length_alpha": 0.05
+        "length_alpha": 0.5
     },
     "prepro": {
         "vocab_size": 10000

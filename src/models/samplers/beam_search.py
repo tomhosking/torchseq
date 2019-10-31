@@ -90,12 +90,12 @@ class BeamSearchSampler(nn.Module):
 
                 expanded_beam_scores = expanded_beam_scores.view(curr_batch_size, beam_width*beam_expansion, curr_seq_len)
                 
-                expanded_beam_scores = expanded_beam_scores/length_penalty.unsqueeze(-1)
+                expanded_beam_scores = expanded_beam_scores
 
                 # print(expanded_beam_ixs.shape)
                 # print(expanded_beam_scores)
 
-                beam_scores = torch.sum(expanded_beam_scores, dim=-1).to(scores)
+                beam_scores = torch.sum(expanded_beam_scores, dim=-1).to(scores)/length_penalty
 
                 # print(beam_scores.shape)
 

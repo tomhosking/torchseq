@@ -220,7 +220,7 @@ class AQAgent(BaseAgent):
                 torch.cuda.empty_cache()
             self.current_iteration += 1
 
-    def validate(self, save=False):
+    def validate(self, save=False, force_save_output=False):
         """
         One cycle of model validation
         :return:
@@ -295,6 +295,7 @@ class AQAgent(BaseAgent):
             self.logger.info('New best score! Saving...')
             self.save_checkpoint()
 
-            # TODO: refactor this out somewhere
+        # TODO: refactor this out somewhere
+        if self.best_metric is None or test_loss < self.best_metric or force_save_output:
             with open('./runs/' + self.run_id +'/output.txt', 'w') as f:
                 f.writelines(q_preds)

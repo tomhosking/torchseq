@@ -47,7 +47,9 @@ def main(_):
     if FLAGS.train:
         agent.train()
     if FLAGS.validate:
-        agent.validate(save=False)
+        agent.validate(save=False, force_save_output=True)
+
+    
 
 
 

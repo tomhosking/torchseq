@@ -7,6 +7,16 @@ from datasets.loaders import OOV, SOS, EOS, PAD
 from utils.bpe_factory import BPE
 
 
+# This fn converts character positions to byte positions - why? Because SentencePiece works in terms of byte offsets, and SQuAD contains some full width characters!
+def get_byte_offsets(text, character_offset):
+    needs_conversion = len(text) != len(text.encode('utf8'))
+    if needs_conversion:
+        begin_offset = len(text[:character_offset].encode('utf8'))
+    else:
+        begin_offset = character_offset
+    return begin_offset
+
+
 # Convert a text context-question-answer triple to a cropped tokenised encoding
 class CQATriple:
     def __init__(self, context, answer, a_pos, question = None):
@@ -19,21 +29,32 @@ class CQATriple:
         TOKEN_WINDOW_SIZE = 300
 
         def normalise(text):
+            return text
             return text.replace(chr(8211), '-')
         
         self.context_text = normalise(context)
         self.is_training = question is not None
         self.question_text = normalise(question)
         self.answer_text = normalise(answer)
-        self.a_char_pos_uncrop = a_pos
-        self.a_char_end_uncrop = a_pos + len(self.answer_text)
+        self.a_char_pos_uncrop = get_byte_offsets(context, a_pos)
+        self.a_char_end_uncrop = self.a_char_pos_uncrop + len(answer.encode('utf8'))
+
+        # print(self.a_char_pos_uncrop, a_pos, "->", self.a_char_end_uncrop, a_pos +len(answer))
+
+        # if self.a_char_pos_uncrop - a_pos < -10:
+        #     print(a_pos)
+        #     print(context)
         
 
         ctxt_sents = sent_tokenize(self.context_text)
         ctxt_char_offsets = []
+        offset = 0
         for i,sent in enumerate(ctxt_sents):
-            sent_char_offset = self.context_text.find(sent, ctxt_char_offsets[i-1][1]-1) if i>0 else 0
-            ctxt_char_offsets.append( (sent_char_offset, sent_char_offset+len(sent)) )
+            sent_char_offset = self.context_text.find(sent, offset) if i>0 else 0 #ctxt_char_offsets[i-1][1]-1
+            offset = sent_char_offset
+            sent_char_offset = get_byte_offsets(self.context_text, sent_char_offset)
+            ctxt_char_offsets.append( (sent_char_offset, sent_char_offset+len(sent.encode('utf8'))) )
+        
 
         # self._ctxt_doc_uncrop = BPE.tokenise(self.context_text)
         ctxt_sent_toks = [BPE.tokenise(sent) for sent in ctxt_sents]
@@ -55,7 +76,7 @@ class CQATriple:
                 if self.a_char_pos_uncrop >= tok['begin']+offset and self.a_char_pos_uncrop <= tok['end']+offset:
                     self.a_tok_pos_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
                     # if self.answer_text == 'Catholics':
-                    #     print(ix, tok, tok['begin'], offset, self.a_char_pos_uncrop)
+                    # print(ix, tok, tok['begin'], offset, self.a_char_pos_uncrop)
                         
                     #     exit()
 
@@ -69,6 +90,10 @@ class CQATriple:
         
 
         if self.a_tok_pos_uncrop is None:
+            print(context)
+            print(a_pos, self.a_char_pos_uncrop)
+            print(ctxt_sent_toks[-1][-1])
+            print(ctxt_char_offsets)
             raise Exception('Couldnt find the answer token position')
 
         # Find the sentence that contains the answer
