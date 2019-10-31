@@ -1,33 +1,57 @@
 {
-    "name": "default_2048FF_4H_300E-fix_3x3_nums_fixout_dirmask_0sent_lr1e-4_gelu_pooled_onehotbio_vs10k",
-    "use_preprocessed_data": true,
-    "log_interval": 10,
-    "cuda": true,
-    "lr": 1e-4,
-    "batch_size": 64,
-    "eval_batch_size": 16,
-    "data_path": "./data",
-    "gpu_device": 0,
-    "embedding_dim": 300,
-    "bio_embedding_dim": 8,
-    "vocab_size": 10000,
-    "clip_gradient": 5,
-    "num_epochs": 60,
-    "opt": "adam",
+    "name": "default_2048FF_4H_300E-unfix_3x3_nums_unfixout_dirmask_0sent_lr1e-4_gelu_pooled_onehotbio_vs10k",
+    "env": {
+        "cuda": true,
+        "data_path": "./data",
+        "gpu_device": 0
+
+    },
+    "training": {
+        "use_preprocessed_data": true,
+        "log_interval": 10,
+        "lr_schedule": false,
+        "lr": 1e-4,
+        "batch_size": 64,
+        "clip_gradient": 5,
+        "num_epochs": 60,
+        "opt": "adam"
+    },
+    "eval": {
+        "eval_batch_size": 16
+
+    },
+    "beam_search": {
+        "beam_width": 8,
+        "beam_expansion": 4,
+        "length_alpha": 0.05
+    },
+    "prepro": {
+        "vocab_size": 10000
+    },
+
     "dropout": 0.2,
+
+    "embedding_dim": 300,
+    "onehot_bio" : true,
+    "bio_embedding_dim": 8,
     "freeze_embeddings": true,
     "freeze_projection": true,
     "directional_masks": true,
-    "length_alpha": 0.05,
+
+    "encoder_outputs": {
+        "c_raw": true,
+        "a_raw": false,
+        "c_enc": true,
+        "c_enc_pool": true,
+        "a_enc": false,
+        "a_enc_pool": false,
+        "c_enc_anspool": false
+    },
     "encdec": {
         "num_encoder_layers": 3,
         "num_decoder_layers": 3,
         "num_heads": 4,
         "dim_feedforward": 2048,
         "activation": "gelu"
-    },
-    "beam_search": {
-        "beam_width": 8,
-        "beam_expansion": 8
     }
 }

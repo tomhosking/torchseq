@@ -17,25 +17,25 @@ class SquadDataLoader:
         """
         self.config = config
 
-        train = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=False, test=False)
-        valid = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=True, test=False)
+        train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=False, test=False)
+        valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=True, test=False)
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)
 
-        self.train_iterations = (self.len_train_data + self.config.batch_size - 1) // self.config.batch_size
-        self.valid_iterations = (self.len_valid_data + self.config.batch_size - 1) // self.config.batch_size
+        self.train_iterations = (self.len_train_data + self.config.training.batch_size - 1) // self.config.training.batch_size
+        self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
 
 
         self.train_loader = DataLoader(train,
-                                        batch_size=config.batch_size, 
+                                        batch_size=config.training.batch_size, 
                                         shuffle=True, 
                                         num_workers=8, 
                                         collate_fn=self.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)
 
         self.valid_loader = DataLoader(valid, 
-                                        batch_size=config.eval_batch_size, 
+                                        batch_size=config.eval.eval_batch_size, 
                                         shuffle=False, 
                                         num_workers=6,
                                         collate_fn=self.pad_and_order_sequences, 

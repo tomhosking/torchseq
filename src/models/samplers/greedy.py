@@ -16,11 +16,11 @@ class GreedySampler(nn.Module):
 
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS).to(self.device)
-        logits = torch.FloatTensor(curr_batch_size, 1, self.config.vocab_size+1).fill_(float('-inf')).to(self.device)
+        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size+1).fill_(float('-inf')).to(self.device)
         logits[:, :, BPE.instance().BOS] = float('inf')
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size).fill_(self.config.vocab_size).to(self.device)
+        padding = torch.LongTensor(curr_batch_size).fill_(self.config.prepro.vocab_size).to(self.device)
 
         seq_ix = 0
         memory = None

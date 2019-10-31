@@ -4,10 +4,10 @@ import torch
 
 class PreprocessorAgent():
     def __init__(self, config):
-        self.train = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=False, test=False)
-        self.valid = SquadDataset(os.path.join(config.data_path, 'squad/'), dev=True, test=False)
+        self.train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=False, test=False)
+        self.valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=True, test=False)
 
-        self.output_path = os.path.join(config.data_path, 'processed/')
+        self.output_path = os.path.join(config.env.data_path, 'processed/')
         
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)

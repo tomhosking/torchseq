@@ -1,6 +1,3 @@
-"""
-Mnist Main agent, as mentioned in the tutorial
-"""
 import numpy as np
 
 from tqdm import tqdm
@@ -53,29 +50,29 @@ class AQAgent(BaseAgent):
             json.dump(config.data, f)
 
         # load glove embeddings
-        # all_glove = load_glove(config.data_path+'/', d=config.embedding_dim)
+        # all_glove = load_glove(config.env.data_path+'/', d=config.embedding_dim)
         # glove_init = get_embeddings(glove=all_glove, vocab=vocab, D=config.embedding_dim)
 
         # define models
         self.model = TransformerAqModel(config)
 
         # define data_loader
-        if self.config.use_preprocessed_data:
+        if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
             self.data_loader = SquadDataLoader(config=config)
 
         # define loss
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
-        # self.loss = CrossEntropyLossWithLS(ignore_index=config.vocab_size, smooth_eps=config.label_smoothing, )
+        # self.loss = CrossEntropyLossWithLS(ignore_index=config.prepro.vocab_size, smooth_eps=config.label_smoothing, )
 
         # define optimizer
-        if config.opt == 'adam':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.lr, betas=(0.9, 0.98), eps=1e-9)
-        elif config.opt == 'sgd':
-            self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.lr)
+        if config.training.opt == 'adam':
+            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.training.lr, betas=(0.9, 0.98), eps=1e-9)
+        elif config.training.opt == 'sgd':
+            self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
         else:
-            raise Exception("Unrecognised optimiser: " + config.opt)
+            raise Exception("Unrecognised optimiser: " + config.training.opt)
 
         # initialize counter
         self.best_metric = None
@@ -84,17 +81,17 @@ class AQAgent(BaseAgent):
 
         # set cuda flag
         self.is_cuda = torch.cuda.is_available()
-        if self.is_cuda and not self.config.cuda:
+        if self.is_cuda and not self.config.env.cuda:
             self.logger.info("WARNING: You have a CUDA device, so you should probably enable CUDA")
 
-        self.cuda = self.is_cuda & self.config.cuda
+        self.cuda = self.is_cuda & self.config.env.cuda
 
         # set the manual seed for torch
         # self.manual_seed = self.config.seed
         if self.cuda:
             # torch.cuda.manual_seed(self.manual_seed)
             self.device = torch.device("cuda")
-            torch.cuda.set_device(self.config.gpu_device)
+            torch.cuda.set_device(self.config.env.gpu_device)
             self.model = self.model.to(self.device)
             self.loss = self.loss.to(self.device)
 
@@ -151,7 +148,7 @@ class AQAgent(BaseAgent):
         :return:
         """
         self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
-        for epoch in range(self.config.num_epochs):
+        for epoch in range(self.config.training.num_epochs):
             self.train_one_epoch()
 
             self.current_epoch += 1
@@ -160,9 +157,12 @@ class AQAgent(BaseAgent):
 
     
     def get_lr(self, step):
-        return self.config.lr
-        step = max(step, 1)
-        return pow(300, -0.5) * min(pow(step, -0.5), step * pow(5000, -1.5))
+        if self.config.training.lr_schedule:
+            step = max(step, 1)
+            return pow(300, -0.5) * min(pow(step, -0.5), step * pow(5000, -1.5))
+        else:
+            return self.config.training.lr
+        
 
     def train_one_epoch(self):
         """
@@ -200,14 +200,14 @@ class AQAgent(BaseAgent):
                     if p.requires_grad and 'embeddings' in n:
                         print('{}: {}'.format(n,torch.sum(p.grad)))
             # exit()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.clip_gradient)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
             self.optimizer.step()
-            if batch_idx % self.config.log_interval == 0:
+            if batch_idx % self.config.training.log_interval == 0:
                 add_to_log('train/loss', loss, self.current_iteration, self.run_id)
                 
                 # # print(batch['q'][0])
                 # # print(greedy_output.data[0])
-                if batch_idx % (self.config.log_interval*20) == 0:
+                if batch_idx % (self.config.training.log_interval*20) == 0:
 
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
@@ -294,3 +294,7 @@ class AQAgent(BaseAgent):
 
             self.logger.info('New best score! Saving...')
             self.save_checkpoint()
+
+            # TODO: refactor this out somewhere
+            with open('./runs/' + self.run_id +'/output.txt', 'w') as f:
+                f.writelines(q_preds)

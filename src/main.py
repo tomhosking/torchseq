@@ -29,7 +29,7 @@ def main(_):
     set_seed(FLAGS.seed)
 
     # This is not a good way of passing this value in
-    BPE.pad_id = config.vocab_size
+    BPE.pad_id = config.prepro.vocab_size
     BPE.embedding_dim = config.embedding_dim
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name

@@ -24,8 +24,8 @@ class BeamSearchSampler(nn.Module):
         
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.config.vocab_size).to(self.device)
-        pad_probs = torch.FloatTensor(curr_batch_size, beam_width, self.config.vocab_size+1).fill_(float('-inf')).to(self.device)
+        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.config.prepro.vocab_size).to(self.device)
+        pad_probs = torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size+1).fill_(float('-inf')).to(self.device)
         pad_probs[:,:,BPE.pad_id] = float('0')
 
         
@@ -39,7 +39,7 @@ class BeamSearchSampler(nn.Module):
         while torch.sum(output_done) < curr_batch_size*beam_width and seq_ix < max_output_len:
             
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size*beam_width, -1), memory)
-            new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.vocab_size+1)
+            new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size+1)
             output_done = (output_seq[:,:,-1] == BPE.pad_id) | (output_seq[:,:,-1] == BPE.instance().EOS)
             # print(output_done.shape)
             # print(output_done.unsqueeze(-1).shape)
@@ -84,13 +84,13 @@ class BeamSearchSampler(nn.Module):
 
                 hypothesis_len = torch.sum(expanded_beam_ixs != BPE.pad_id, dim=-1)
                 # Length penalty needs to be applied to *overall* score, not score for this token
-                len_alpha = self.config.length_alpha
+                len_alpha = self.config.beam_search.length_alpha
                 length_penalty = torch.pow((5+hypothesis_len).float(), len_alpha)/pow(5.0+1.0, len_alpha)
                 
 
                 expanded_beam_scores = expanded_beam_scores.view(curr_batch_size, beam_width*beam_expansion, curr_seq_len)
                 
-                # expanded_beam_scores = expanded_beam_scores/length_penalty.unsqueeze(-1)
+                expanded_beam_scores = expanded_beam_scores/length_penalty.unsqueeze(-1)
 
                 # print(expanded_beam_ixs.shape)
                 # print(expanded_beam_scores)

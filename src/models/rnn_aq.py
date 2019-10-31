@@ -8,7 +8,7 @@ class RnnAqModel(nn.Module):
         super().__init__()
         self.config = config
 
-        self.embeddings = nn.Embedding(config.vocab_size+4, config.embedding_dim,
+        self.embeddings = nn.Embedding(config.prepro.vocab_size+4, config.embedding_dim,
             padding_idx=PAD_ID).cpu() # TODO: this should come from a config
         if embeddings_init is not None:
             self.embeddings.weight = nn.Parameter(torch.from_numpy(embeddings_init))
@@ -31,7 +31,7 @@ class RnnAqModel(nn.Module):
         curr_batch_size = batch['c'].size()[0]
 
         # force the context to fall within the embeddable space, then embed it
-        context_coerced = torch.where(batch['c'] >= self.config.vocab_size+4, torch.LongTensor([OOV_ID]), batch['c'])
+        context_coerced = torch.where(batch['c'] >= self.config.prepro.vocab_size+4, torch.LongTensor([OOV_ID]), batch['c'])
         context_embedded = self.embeddings(context_coerced)
 
         ans_pos_embedded = torch.FloatTensor(curr_batch_size, max_ctxt_len, 3).zero_().scatter_(2, batch['a_pos'].unsqueeze(-1), 1)
