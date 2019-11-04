@@ -23,6 +23,8 @@ def main(_):
     # kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     device = torch.device("cuda" if use_cuda else "cpu")
 
+    print('** Running with config={:} **'.format(FLAGS.config))
+
     with open(FLAGS.config) as f:
         config = Config(json.load(f))
 
@@ -40,7 +42,7 @@ def main(_):
         preprocessor.run()
         return
 
-    agent = AQAgent(config, run_id)
+    agent = AQAgent(config, run_id, silent=FLAGS.silent)
     if FLAGS.load_chkpt is not None:
         agent.load_checkpoint(FLAGS.load_chkpt)
 

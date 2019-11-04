@@ -39,10 +39,11 @@ cudnn.benchmark = True
 
 class AQAgent(BaseAgent):
 
-    def __init__(self, config, run_id):
+    def __init__(self, config, run_id, silent=False):
         super().__init__(config)
 
         self.run_id = run_id
+        self.silent = silent
 
 
         os.makedirs('./runs/' + run_id + '/model/')
@@ -76,6 +77,7 @@ class AQAgent(BaseAgent):
 
         # initialize counter
         self.best_metric = None
+        self.all_metrics_at_best = {}
         self.current_epoch = 0
         self.current_iteration = 0
 
@@ -155,6 +157,9 @@ class AQAgent(BaseAgent):
             if (epoch+1) % 5 == 0 or True:
                 self.validate(save=True)
 
+        self.logger.info('## Training completed {:} epochs'.format(self.current_epoch+1))
+        self.logger.info('## Best metrics: {:}'.format(self.all_metrics_at_best))
+
     
     def get_lr(self, step):
         if self.config.training.lr_schedule:
@@ -171,8 +176,10 @@ class AQAgent(BaseAgent):
         """
 
         self.model.train()
+
+        self.logger.info('## Training epoch {:}'.format(self.current_epoch))
         
-        for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch))):
+        for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch), disable=self.silent)):
             batch= {k:v.to(self.device) for k,v in batch.items()}
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
@@ -191,23 +198,23 @@ class AQAgent(BaseAgent):
             
             loss += torch.mean(torch.sum(this_loss, dim=1)/batch['q_len'].to(this_loss), dim=0)
             # print(loss)
+            
+            loss.backward()
+            
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
+            
             lr = self.get_lr(self.current_iteration)
             add_to_log('train/lr', lr, self.current_iteration, self.run_id)
-            loss.lr = lr
-            loss.backward()
-            if batch_idx  == 0:
-                for n,p in self.model.named_parameters():
-                    if p.requires_grad and 'embeddings' in n:
-                        print('{}: {}'.format(n,torch.sum(p.grad)))
-            # exit()
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = lr
             self.optimizer.step()
+            
             if batch_idx % self.config.training.log_interval == 0:
                 add_to_log('train/loss', loss, self.current_iteration, self.run_id)
                 
                 # # print(batch['q'][0])
                 # # print(greedy_output.data[0])
-                if batch_idx % (self.config.training.log_interval*20) == 0:
+                if batch_idx % (self.config.training.log_interval*20) == 0 and not self.silent:
 
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
@@ -225,7 +232,7 @@ class AQAgent(BaseAgent):
         One cycle of model validation
         :return:
         """
-        print('## Validating')
+        self.logger.info('## Validating after {:} epochs'.format(self.current_epoch))
         self.model.eval()
         test_loss = 0
         correct = 0
@@ -235,7 +242,7 @@ class AQAgent(BaseAgent):
 
         with torch.no_grad():
             num_batches = 0
-            for batch_idx, batch in enumerate(tqdm(self.data_loader.valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch))):
+            for batch_idx, batch in enumerate(tqdm(self.data_loader.valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch), disable=self.silent)):
                 batch= {k:v.to(self.device) for k,v in batch.items()}
                 curr_batch_size = batch['c'].size()[0]
                 max_output_len = batch['q'].size()[1]
@@ -267,7 +274,7 @@ class AQAgent(BaseAgent):
                     q_golds.append(BPE.instance().decode_ids(q_gold[:batch['q_len'][ix]]))
                 
 
-                if batch_idx % 200 == 0:
+                if batch_idx % 200 == 0 and not self.silent:
                     # print(batch['c'][0][:10])
                     # for ix in range(batch['c_len'][-2]):
                     #     print(" ".join([BPE.instance().pieces[batch['c'][-2][ix]] +'//' + str(batch['a_pos'][-2][ix])]))
@@ -289,13 +296,17 @@ class AQAgent(BaseAgent):
         
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 
-        if self.best_metric is None or test_loss < self.best_metric:
-            self.best_metric = test_loss
-
-            self.logger.info('New best score! Saving...')
-            self.save_checkpoint()
-
         # TODO: refactor this out somewhere
         if self.best_metric is None or test_loss < self.best_metric or force_save_output:
             with open('./runs/' + self.run_id +'/output.txt', 'w') as f:
-                f.writelines(q_preds)
+                f.write("\n".join(q_preds))
+
+        if self.best_metric is None or test_loss < self.best_metric:
+            self.best_metric = test_loss
+            self.all_metrics_at_best = {
+                'bleu': dev_bleu,
+                'nll': test_loss
+            }
+
+            self.logger.info('New best score! Saving...')
+            self.save_checkpoint()

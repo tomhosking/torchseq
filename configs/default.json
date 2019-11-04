@@ -1,5 +1,5 @@
 {
-    "name": "craw_cenc_cencpool",
+    "name": "default",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -42,16 +42,16 @@
         "c_raw": true,
         "a_raw": false,
         "c_enc": true,
-        "c_enc_pool": true,
+        "c_enc_pool": false,
         "a_enc": false,
         "a_enc_pool": false,
         "c_enc_anspool": false
     },
     "encdec": {
-        "num_encoder_layers": 3,
-        "num_decoder_layers": 3,
+        "num_encoder_layers": 4,
+        "num_decoder_layers": 4,
         "num_heads": 4,
         "dim_feedforward": 2048,
-        "activation": "gelu"
+        "activation": "relu"
     }
 }

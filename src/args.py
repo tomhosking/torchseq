@@ -8,6 +8,7 @@ flags.DEFINE_bool("train", False, "Run training?")
 flags.DEFINE_bool("validate", False, "Eval on dev set?")
 flags.DEFINE_bool("test", False, "Eval on test set?")
 flags.DEFINE_bool("preprocess", False, "Run preprocessing on data")
+flags.DEFINE_bool("silent", False, "Hide verbose output (useful when running on scheduler)")
 
 flags.DEFINE_string("load_chkpt", None, "Path to chkpt file")
 

@@ -3,7 +3,10 @@
 /runs
 /models
 /data
+/configs
 
 .ipynb_checkpoints/
 .DS_Store
 *.ipynb
+
+*.sh
