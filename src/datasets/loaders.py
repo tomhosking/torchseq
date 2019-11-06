@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 
 # from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
-import spacy
+# import spacy
 
 import numpy as np
 
