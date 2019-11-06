@@ -3,3 +3,4 @@ tensorboard
 torch
 tqdm
 bpemb
+nltk

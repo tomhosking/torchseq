@@ -10,3 +10,5 @@
 *.ipynb
 
 *.sh
+
+/aqenv

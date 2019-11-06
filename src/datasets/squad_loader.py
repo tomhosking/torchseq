@@ -17,8 +17,8 @@ class SquadDataLoader:
         """
         self.config = config
 
-        train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=False, test=False)
-        valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=True, test=False)
+        train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=False, test=False)
+        valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=True, test=False)
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)

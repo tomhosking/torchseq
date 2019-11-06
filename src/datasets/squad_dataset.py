@@ -5,7 +5,8 @@ from datasets.cqa_triple import CQATriple
 import torch
 
 class SquadDataset(Dataset):
-    def __init__(self, path,  dev=False, test=False):
+    def __init__(self, path, config, dev=False, test=False):
+        self.config = config
         squad = load_squad_triples(path=path, dev=dev, test=test)
         # print(len(squad))
         self.samples =[{'c': x[0], 'q': x[1], 'a': x[2], 'a_pos': x[3]} for x in squad if (len(x[1]) < 200 and len(x[0]) < 3500 and x[1] != "I couldn't could up with another question. But i need to fill this space because I can't submit the hit. ") or test is True]

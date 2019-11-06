@@ -9,6 +9,10 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 
 ## Todo
 
+  - [ ] BERT for encoder
+  - [ ] MSMarco
+  - [ ] Other datasets?
+
 
 ### Model
 
@@ -27,9 +31,9 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
   - [x]  checkpointing
   - [x]  config! and run management
   - [ ] load config from chkpt
-  - [ ] log output somewhere
+  - [x] log output somewhere
 
 ### Bugs
 
   - [ ] numbers not handled by BPEmb
-  - [ ] double width chars
+  - [ x double width chars

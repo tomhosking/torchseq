@@ -14,6 +14,7 @@ flags.DEFINE_string("load_chkpt", None, "Path to chkpt file")
 
 # Environment setup
 flags.DEFINE_string("data_path", "./data/", "Path to data sources")
+flags.DEFINE_string("output_path", "./runs/", "Path to output folder")
 flags.DEFINE_bool("cuda", True, "Use GPU?")
 
 flags.DEFINE_integer("seed", 123, "Random seed value")
