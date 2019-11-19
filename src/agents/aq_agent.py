@@ -156,7 +156,9 @@ class AQAgent(BaseAgent):
             self.train_one_epoch()
 
             self.current_epoch += 1
-            if (epoch+1) % 5 == 0 or True:
+            valid_warmup_epochs = 25
+            # valid_warmup_epochs = self.config.training.warmup_epochs
+            if self.current_epoch > valid_warmup_epochs:
                 self.validate(save=True)
 
         self.logger.info('## Training completed {:} epochs'.format(self.current_epoch+1))

@@ -10,8 +10,12 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 ## Todo
 
   - [ ] BERT for encoder
+  - [ ] Better tokenisation/embeddings
+  - [ ] Better fusing - can we use a bidaf style approach? or just concat a la BERT?
   - [ ] MSMarco
-  - [ ] Other datasets?
+  - [ ] Other datasets? ELI5? Natural questions?
+  - [ ] Expand dataset with para stuff
+  - [ ] Keep thinking about transfer learning...
 
 
 ### Model
@@ -36,4 +40,4 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 ### Bugs
 
   - [ ] numbers not handled by BPEmb
-  - [ x double width chars
+  - [x] double width chars

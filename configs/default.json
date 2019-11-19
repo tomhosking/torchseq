@@ -1,5 +1,5 @@
 {
-    "name": "lrsched",
+    "name": "default",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -14,7 +14,8 @@
         "batch_size": 64,
         "clip_gradient": 5,
         "num_epochs": 70,
-        "opt": "adam"
+        "opt": "adam",
+        "warmup_epochs": 20
     },
     "eval": {
         "eval_batch_size": 16
@@ -32,10 +33,10 @@
     "dropout": 0.2,
 
     "embedding_dim": 300,
-    "onehot_bio" : true,
+    "onehot_bio" : false,
     "bio_embedding_dim": 8,
-    "freeze_embeddings": true,
-    "freeze_projection": true,
+    "freeze_embeddings": false,
+    "freeze_projection": false,
     "directional_masks": true,
 
     "encoder_outputs": {
