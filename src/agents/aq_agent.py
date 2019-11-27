@@ -20,6 +20,7 @@ from agents.base import BaseAgent
 from models.aq_transformer import TransformerAqModel
 
 from datasets.squad_loader import SquadDataLoader
+from datasets.newsqa_loader import NewsqaDataLoader
 from datasets.preprocessed_loader import PreprocessedDataLoader
 from datasets.loaders import load_glove, get_embeddings
 
@@ -63,7 +64,12 @@ class AQAgent(BaseAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            self.data_loader = SquadDataLoader(config=config)
+            if self.config.training.dataset == 'squad':
+                self.data_loader = SquadDataLoader(config=config)
+            elif self.config.training.dataset == 'newsqa':
+                self.data_loader = NewsqaDataLoader(config=config)
+            else:
+                raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
         # define loss
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')

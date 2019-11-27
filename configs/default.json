@@ -7,7 +7,8 @@
 
     },
     "training": {
-        "use_preprocessed_data": true,
+        "dataset": "newsqa",
+        "use_preprocessed_data": false,
         "log_interval": 10,
         "lr_schedule": true,
         "lr": 1e-4,

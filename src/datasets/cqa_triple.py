@@ -51,8 +51,10 @@ class CQATriple:
         offset = 0
         for i,sent in enumerate(ctxt_sents):
             sent_char_offset = self.context_text.find(sent, offset) if i>0 else 0 #ctxt_char_offsets[i-1][1]-1
-            offset = sent_char_offset
+            
+            offset = sent_char_offset + len(sent)
             sent_char_offset = get_byte_offsets(self.context_text, sent_char_offset)
+            
             ctxt_char_offsets.append( (sent_char_offset, sent_char_offset+len(sent.encode('utf8'))) )
         
 
@@ -92,7 +94,7 @@ class CQATriple:
         if self.a_tok_pos_uncrop is None:
             print(context)
             print(a_pos, self.a_char_pos_uncrop)
-            print(ctxt_sent_toks[-1][-1])
+            print(self.answer_text)
             print(ctxt_char_offsets)
             raise Exception('Couldnt find the answer token position')
 

@@ -36,6 +36,8 @@ def main(_):
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name
 
+    print("** Run ID is {:} **".format(run_id))
+
     
     if FLAGS.preprocess:
         preprocessor = PreprocessorAgent(config)

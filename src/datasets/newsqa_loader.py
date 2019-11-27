@@ -6,24 +6,26 @@ import os
 import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from datasets.squad_dataset import SquadDataset
+from datasets.newsqa_dataset import NewsqaDataset
 from utils.bpe_factory import BPE
 from utils.seed import init_worker
 
-class SquadDataLoader:
+class NewsqaDataLoader:
     def __init__(self, config):
         """
         :param config:
         """
         self.config = config
 
-        train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=False, test=False)
-        valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=True, test=False)
+        train = NewsqaDataset(os.path.join(config.env.data_path, 'newsqa/'), config=config, dev=False, test=False)
+        valid = NewsqaDataset(os.path.join(config.env.data_path, 'newsqa/'), config=config, dev=True, test=False)
+
+        
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)
 
-        print("Loaded {:} training and {:} validation examples from {:}".format(self.len_train_data, self.len_valid_data, os.path.join(config.env.data_path, 'squad/')))
+        print("Loaded {:} training and {:} validation examples from {:}".format(self.len_train_data, self.len_valid_data, os.path.join(config.env.data_path, 'newsqa/')))
 
         self.train_iterations = (self.len_train_data + self.config.training.batch_size - 1) // self.config.training.batch_size
         self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size

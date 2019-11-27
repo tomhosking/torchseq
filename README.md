@@ -16,6 +16,7 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
   - [ ] Other datasets? ELI5? Natural questions?
   - [ ] Expand dataset with para stuff
   - [ ] Keep thinking about transfer learning...
+  - [ ] Cache internal key,value pairs from old timesteps (See Wolf et al 2019)
 
 
 ### Model
