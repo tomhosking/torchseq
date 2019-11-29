@@ -1,5 +1,5 @@
 {
-    "name": "default",
+    "name": "default_1sent",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -7,7 +7,7 @@
 
     },
     "training": {
-        "dataset": "newsqa",
+        "dataset": "squad",
         "use_preprocessed_data": false,
         "log_interval": 10,
         "lr_schedule": true,
@@ -28,7 +28,9 @@
         "length_alpha": 0.5
     },
     "prepro": {
-        "vocab_size": 10000
+        "vocab_size": 10000,
+        "sent_window": 1,
+        "tok_window": 400
     },
 
     "dropout": 0.2,

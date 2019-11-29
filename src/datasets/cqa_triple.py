@@ -19,14 +19,14 @@ def get_byte_offsets(text, character_offset):
 
 # Convert a text context-question-answer triple to a cropped tokenised encoding
 class CQATriple:
-    def __init__(self, context, answer, a_pos, question = None):
+    def __init__(self, context, answer, a_pos, question = None, sent_window=0, tok_window=300):
 
         # How many sentences either side of the answer should we keep?
         # TODO: move to config (how to pass config into this constructor?)
-        SENT_WINDOW_SIZE = 0
+        SENT_WINDOW_SIZE = sent_window
 
         # Max num tokens either size of the answer
-        TOKEN_WINDOW_SIZE = 300
+        TOKEN_WINDOW_SIZE = tok_window
 
         def normalise(text):
             return text

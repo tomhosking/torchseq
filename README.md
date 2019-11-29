@@ -12,7 +12,8 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
   - [ ] BERT for encoder
   - [ ] Better tokenisation/embeddings
   - [ ] Better fusing - can we use a bidaf style approach? or just concat a la BERT?
-  - [ ] MSMarco
+  - [ ] MSMarco - check how badly formed it is first?
+  - [x] NewsQA
   - [ ] Other datasets? ELI5? Natural questions?
   - [ ] Expand dataset with para stuff
   - [ ] Keep thinking about transfer learning...

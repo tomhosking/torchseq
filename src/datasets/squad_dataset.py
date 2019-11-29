@@ -23,7 +23,7 @@ class SquadDataset(Dataset):
 
 
     def to_tensor(self,x):
-        parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], x['q'])
+        parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], x['q'], sent_window=self.config.prepro.sent_window, tok_window=self.config.prepro.tok_window)
 
         sample = {'c': torch.LongTensor(parsed_triple.ctxt_as_ids()),
                     'q': torch.LongTensor(parsed_triple.q_as_ids()),
