@@ -9,6 +9,8 @@ from models.positional_embeddings import PositionalEncoding
 
 from models.pooling import MultiHeadedPooling
 
+from transformers import BertModel
+
 
 def generate_square_subsequent_mask(sz):
     r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
@@ -24,13 +26,29 @@ class TransformerAqModel(nn.Module):
         self.config = config
 
         # Embedding layers
-        self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.instance().emb.vectors), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
+        # self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.embeddings), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
+        self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu() # TODO: this should come from a config
+        self.embeddings.weight.data = BPE.instance().embeddings
+        self.embeddings.weight.requires_grad = not config.freeze_embeddings
+
+        self.embedding_projection = nn.Linear(config.raw_embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), bias=False)
+        self.dec_embedding_projection = nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
         
         self.bio_embeddings = nn.Embedding.from_pretrained(torch.eye(config.bio_embedding_dim), freeze=True).cpu() if config.onehot_bio else nn.Embedding(3, config.bio_embedding_dim).cpu()
 
         # Encoder/decoders
-        encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim+config.bio_embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
-        encoder_norm = nn.LayerNorm(config.embedding_dim+config.bio_embedding_dim)
+        if config.encdec.bert_encoder:
+            with torch.no_grad():
+                self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+            # self.encoder = DistilBertModel.from_pretrained('distilbert-base-uncased')
+
+        self.freeze_bert = True
+
+        for param in self.bert_encoder.parameters():
+            param.requires_grad = False
+        
+        encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
+        encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
         self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
         decoder_layer = nn.TransformerDecoderLayer(config.embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
@@ -39,13 +57,13 @@ class TransformerAqModel(nn.Module):
 
         # Encoder combination
         num_encoder_outputs = sum([1 if v else 0 for k,v in config.encoder_outputs.data.items()])
-        self.encoder_projection = nn.Linear((config.embedding_dim+config.bio_embedding_dim)*num_encoder_outputs, config.embedding_dim)
+        self.encoder_projection = nn.Linear((config.embedding_dim+ (0 if config.encdec.bert_encoder else config.bio_embedding_dim))*num_encoder_outputs, config.embedding_dim)
 
         
-        self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size+1, bias=False).cpu()
+        self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
         
         # Init output projection layer with embedding matrix
-        self.output_projection.weight.data[:, :config.embedding_dim] = self.embeddings.weight.data
+        # self.output_projection.weight.data[:, :config.embedding_dim] = self.embeddings.weight.data
         self.output_projection.weight.requires_grad = not config.freeze_projection
 
         # Pooling layers
@@ -53,7 +71,7 @@ class TransformerAqModel(nn.Module):
         self.ctxt_pooling = MultiHeadedPooling(config.encdec.num_heads, config.embedding_dim+config.bio_embedding_dim, dropout=config.dropout, model_dim_out=config.embedding_dim, use_final_linear=False, use_bilinear=True)
 
         # Position encoding
-        self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim+config.bio_embedding_dim)
+        self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim+ (0 if config.encdec.bert_encoder else config.bio_embedding_dim))
         self.positional_embeddings_dec = PositionalEncoding(config.embedding_dim)
 
         
@@ -62,8 +80,9 @@ class TransformerAqModel(nn.Module):
 
     def forward(self, batch, output, memory=None):
 
-        # print(BPE.instance().decode_ids(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().words[x]  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-        
+        # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
+        # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
+        # exit()
         # Get some sizes
         max_ctxt_len = torch.max(batch['c_len'])
         max_q_len = torch.max(batch['q_len'])
@@ -74,7 +93,7 @@ class TransformerAqModel(nn.Module):
         if memory is None:
             src_mask = torch.FloatTensor(max_ctxt_len, max_ctxt_len).fill_(float('-inf') if self.config.directional_masks else 0.0).to(self.device)
             src_mask = torch.triu(src_mask, diagonal=1)
-            
+            # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
             context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch['c_len'][:, None].cpu()).to(self.device)
 
@@ -83,11 +102,39 @@ class TransformerAqModel(nn.Module):
             ctxt_ans_embedded = self.bio_embeddings(batch['a_pos']).to(self.device)
 
             # Build the context
-            ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(self.config.embedding_dim)
+            if self.config.encdec.bert_encoder:
+                ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
+            else:
+                ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(self.config.embedding_dim)
+
+                if self.config.raw_embedding_dim != self.config.embedding_dim:
+                    ctxt_embedded = self.embedding_projection(ctxt_embedded)
+
+                
+            
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1,0,2))
             
             # Fwd pass through encoder
-            encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+            if self.config.encdec.bert_encoder:
+                # print(batch['c'].shape)
+                # print(batch['a_pos'].shape)
+                # print(context_mask.shape)
+                # exit()
+
+                if self.freeze_bert:
+                    self.bert_encoder.eval()
+                    with torch.no_grad():
+                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask, token_type_ids=batch['a_pos'].to(self.device))[0]
+                else:
+                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask, token_type_ids=batch['a_pos'].to(self.device))[0]
+
+                if self.config.encdec.num_decoder_layers > 0:
+                    encoding = self.encoder(bert_encoding.permute(1,0,2), mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+                else:
+                    encoding = bert_encoding
+                # print(encoding.shape)
+            else:
+                encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
 
             # Construct the encoder output by combining a few diff sources
             memory_elements = []
@@ -120,8 +167,12 @@ class TransformerAqModel(nn.Module):
                 
             
             memory_full = torch.cat(memory_elements, dim=-1) #, encoding, ctxt_embedded.permute(1,0,2), memory_pooled.expand(-1, max_ctxt_len, -1)
-            memory = self.encoder_projection(memory_full)
             
+            if len(memory_elements) > 1:
+                memory = self.encoder_projection(memory_full)
+            else:
+                memory = memory_full
+
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('-inf')).to(self.device)
@@ -137,6 +188,9 @@ class TransformerAqModel(nn.Module):
 
         # Embed the output so far, then do a decoder fwd pass
         output_embedded = self.embeddings(output).to(self.device) * math.sqrt(self.config.embedding_dim)
+
+        if self.config.raw_embedding_dim != self.config.embedding_dim:
+            output_embedded = self.dec_embedding_projection(output_embedded)
         
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
         output_embedded = self.positional_embeddings_dec(output_embedded.permute(1,0,2))

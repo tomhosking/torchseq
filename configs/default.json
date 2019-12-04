@@ -1,5 +1,5 @@
 {
-    "name": "default_1sent",
+    "name": "bert_fixedenc_0x5_lr1e-3_accum64",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -11,15 +11,17 @@
         "use_preprocessed_data": false,
         "log_interval": 10,
         "lr_schedule": true,
-        "lr": 1e-4,
-        "batch_size": 64,
+        "lr": 1e-2,
+        "batch_size": 32,
+        "optim_batch_size": 128,
         "clip_gradient": 5,
-        "num_epochs": 70,
+        "num_epochs": 50,
         "opt": "adam",
-        "warmup_epochs": 20
+        "warmup_epochs": 5,
+        "suppression_loss_weight": 0.1
     },
     "eval": {
-        "eval_batch_size": 16
+        "eval_batch_size": 4
 
     },
     "beam_search": {
@@ -28,22 +30,24 @@
         "length_alpha": 0.5
     },
     "prepro": {
-        "vocab_size": 10000,
-        "sent_window": 1,
-        "tok_window": 400
+        "vocab_size": 30522,
+        "sent_window": 0,
+        "tok_window": 200,
+        "concat_ctxt_ans": false
     },
 
-    "dropout": 0.2,
+    "dropout": 0.1,
 
-    "embedding_dim": 300,
+    "raw_embedding_dim": 768,
+    "embedding_dim": 768,
     "onehot_bio" : false,
     "bio_embedding_dim": 8,
-    "freeze_embeddings": false,
+    "freeze_embeddings": true,
     "freeze_projection": false,
     "directional_masks": true,
 
     "encoder_outputs": {
-        "c_raw": true,
+        "c_raw": false,
         "a_raw": false,
         "c_enc": true,
         "c_enc_pool": false,
@@ -52,10 +56,13 @@
         "c_enc_anspool": false
     },
     "encdec": {
-        "num_encoder_layers": 5,
+        "num_encoder_layers": 0,
         "num_decoder_layers": 5,
         "num_heads": 4,
         "dim_feedforward": 2048,
-        "activation": "relu"
+        "activation": "relu",
+        "bert_encoder": true,
+        "bert_model": "bert-base-uncased",
+        "bert_warmup_epochs": 50
     }
 }

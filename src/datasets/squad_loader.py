@@ -32,7 +32,7 @@ class SquadDataLoader:
         self.train_loader = DataLoader(train,
                                         batch_size=config.training.batch_size, 
                                         shuffle=True, 
-                                        num_workers=8, 
+                                        num_workers=1, 
                                         collate_fn=self.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)
 

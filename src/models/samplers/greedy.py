@@ -15,12 +15,12 @@ class GreedySampler(nn.Module):
         max_output_len = batch['q'].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
-        output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.instance().BOS).to(self.device)
-        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size+1).fill_(float('-inf')).to(self.device)
-        logits[:, :, BPE.instance().BOS] = float('inf')
+        output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.bos_id).to(self.device)
+        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-inf')).to(self.device)
+        logits[:, :, BPE.bos_id] = float('inf')
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size).fill_(self.config.prepro.vocab_size).to(self.device)
+        padding = torch.LongTensor(curr_batch_size).fill_(BPE.instance().pad_token_id).to(self.device)
 
         seq_ix = 0
         memory = None
@@ -41,8 +41,8 @@ class GreedySampler(nn.Module):
 
             # print(output_done)
             # print(output[:, -1])
-            # print(output[:, -1] == BPE.instance().EOS)
-            output_done = output_done | (output[:, -1] == BPE.instance().EOS)
+            # print(output[:, -1] == BPE.eos_id)
+            output_done = output_done | (output[:, -1] == BPE.eos_id)
             seq_ix += 1
         # exit()
         

@@ -1,6 +1,7 @@
 *.pyc
 
 /runs
+/runs_bak
 /models
 /data
 /configs

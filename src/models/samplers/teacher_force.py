@@ -16,8 +16,8 @@ class TeacherForcedSampler(nn.Module):
         # Create vector of SOS + placeholder for first prediction
         
         
-        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size+1).fill_(float('-1e18')).to(self.device)
-        logits[:, :, BPE.instance().BOS] = float('1e18')
+        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-1e18')).to(self.device)
+        logits[:, :, BPE.bos_id] = float('1e18')
 
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input

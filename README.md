@@ -10,7 +10,7 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 ## Todo
 
   - [ ] BERT for encoder
-  - [ ] Better tokenisation/embeddings
+  - [x] Better tokenisation/embeddings
   - [ ] Better fusing - can we use a bidaf style approach? or just concat a la BERT?
   - [ ] MSMarco - check how badly formed it is first?
   - [x] NewsQA
@@ -41,5 +41,5 @@ From your venv, install requirements with `pip install -r requirements.txt`, the
 
 ### Bugs
 
-  - [ ] numbers not handled by BPEmb
+  - [x] numbers not handled by BPEmb
   - [x] double width chars

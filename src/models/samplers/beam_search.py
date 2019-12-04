@@ -19,13 +19,13 @@ class BeamSearchSampler(nn.Module):
 
 
         # Create vector of SOS + placeholder for first prediction
-        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.instance().BOS).to(self.device)
+        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.bos_id).to(self.device)
         scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(0).to(self.device)
         
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.config.prepro.vocab_size).to(self.device)
-        pad_probs = torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size+1).fill_(float('-inf')).to(self.device)
+        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(BPE.pad_id).to(self.device)
+        pad_probs = torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size).fill_(float('-inf')).to(self.device)
         pad_probs[:,:,BPE.pad_id] = float('0')
 
         
@@ -39,8 +39,8 @@ class BeamSearchSampler(nn.Module):
         while torch.sum(output_done) < curr_batch_size*beam_width and seq_ix < max_output_len:
             
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size*beam_width, -1), memory)
-            new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size+1)
-            output_done = (output_seq[:,:,-1] == BPE.pad_id) | (output_seq[:,:,-1] == BPE.instance().EOS)
+            new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
+            output_done = (output_seq[:,:,-1] == BPE.pad_id) | (output_seq[:,:,-1] == BPE.eos_id)
             # print(output_done.shape)
             # print(output_done.unsqueeze(-1).shape)
             # print(pad_probs.shape)
@@ -114,7 +114,7 @@ class BeamSearchSampler(nn.Module):
                 # how to get token_ix and curr prob from the top beam?
 
                 # Use pad for the output for elements that have completed
-                output_done = (new_output[:, :, -2] == BPE.instance().EOS) | (new_output[:, :, -2] == BPE.pad_id)
+                output_done = (new_output[:, :, -2] == BPE.eos_id) | (new_output[:, :, -2] == BPE.pad_id)
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
                 
                 # output_seq = torch.cat([output_seq, new_output], dim=-1)

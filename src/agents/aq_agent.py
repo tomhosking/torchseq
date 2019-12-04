@@ -35,6 +35,8 @@ from models.samplers.greedy import GreedySampler
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.teacher_force import TeacherForcedSampler
 
+from models.suppression_loss import SuppressionLoss
+
 import os
 
 cudnn.benchmark = True
@@ -75,6 +77,8 @@ class AQAgent(BaseAgent):
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
         # self.loss = CrossEntropyLossWithLS(ignore_index=config.prepro.vocab_size, smooth_eps=config.label_smoothing, )
 
+        self.suppression_loss = SuppressionLoss(self.config)
+
         # define optimizer
         if config.training.opt == 'adam':
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.training.lr, betas=(0.9, 0.98), eps=1e-9)
@@ -104,6 +108,7 @@ class AQAgent(BaseAgent):
             torch.cuda.set_device(self.config.env.gpu_device)
             self.model = self.model.to(self.device)
             self.loss = self.loss.to(self.device)
+            self.suppression_loss = self.suppression_loss.to(self.device)
 
             self.logger.info("Program will run on *****GPU-CUDA***** ")
             # print_cuda_statistics()
@@ -159,9 +164,12 @@ class AQAgent(BaseAgent):
         """
         self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
         for epoch in range(self.config.training.num_epochs):
+            self.model.freeze_bert = self.current_epoch >= self.config.encdec.bert_warmup_epochs
             self.train_one_epoch()
 
             self.current_epoch += 1
+
+            
             
             if self.current_epoch > self.config.training.warmup_epochs:
                 self.validate(save=True)
@@ -173,7 +181,8 @@ class AQAgent(BaseAgent):
     def get_lr(self, step):
         if self.config.training.lr_schedule:
             step = max(step, 1)
-            return pow(300, -0.5) * min(pow(step, -0.5), step * pow(5000, -1.5))
+            warmup_steps = 10000
+            return self.config.training.lr * min(pow(step, -0.5), step * pow(warmup_steps, -1.5))
         else:
             return self.config.training.lr
         
@@ -188,13 +197,16 @@ class AQAgent(BaseAgent):
 
         self.logger.info('## Training epoch {:}'.format(self.current_epoch))
         
+        self.optimizer.zero_grad()
+        steps_accum = 0
+        
         for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch), disable=self.silent)):
             batch= {k:v.to(self.device) for k,v in batch.items()}
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
             self.global_idx += curr_batch_size
 
-            self.optimizer.zero_grad()
+            
             loss = 0
 
             
@@ -204,11 +216,18 @@ class AQAgent(BaseAgent):
             # print(logits.shape)
             # q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
             this_loss = self.loss(logits.permute(0,2,1), batch['q'])
+
+            
+
+            if self.config.training.suppression_loss_weight > 0:
+                this_loss +=  self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch['a'])
             
             loss += torch.mean(torch.sum(this_loss, dim=1)/batch['q_len'].to(this_loss), dim=0)
-            # print(loss)
+            
             
             loss.backward()
+
+            steps_accum += curr_batch_size
             
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
             
@@ -216,7 +235,13 @@ class AQAgent(BaseAgent):
             add_to_log('train/lr', lr, self.current_iteration, self.run_id)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
-            self.optimizer.step()
+
+            # Gradient accumulation
+            if steps_accum >= self.config.training.optim_batch_size:
+                self.optimizer.step()
+                self.optimizer.zero_grad()
+                steps_accum = 0
+                self.current_iteration += 1
             
             if batch_idx % self.config.training.log_interval == 0:
                 add_to_log('train/loss', loss, self.current_iteration, self.run_id)
@@ -227,14 +252,14 @@ class AQAgent(BaseAgent):
 
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch)
-                    print(BPE.instance().decode_ids(batch['q'][0][:batch['q_len'][0]]))
-                    print(BPE.instance().decode_ids(greedy_output.data[0][:output_lens[0]]))
+                    
+                    print(BPE.decode(batch['q'][0][:batch['q_len'][0]]))
+                    print(BPE.decode(greedy_output.data[0][:output_lens[0]]))
                 # self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
                 #     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
                 #            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
 
                 torch.cuda.empty_cache()
-            self.current_iteration += 1
 
     def validate(self, save=False, force_save_output=False):
         """
@@ -266,7 +291,7 @@ class AQAgent(BaseAgent):
                 # if batch_idx == 0:
                 #     print('OUTPUT OF BEAM')
                 #     for i in range(beam_output.shape[1]):
-                #         print(BPE.instance().decode_ids(beam_output.data[0,i][:output_lens[0,i]]))
+                #         print(BPE.decode(beam_output.data[0,i][:output_lens[0,i]]))
                 #     exit()
 
                 dev_output = beam_output[:, 0, :]
@@ -278,22 +303,22 @@ class AQAgent(BaseAgent):
                 num_batches += 1
 
                 for ix, q_pred in enumerate(dev_output.data):
-                    q_preds.append(BPE.instance().decode_ids(q_pred[:dev_output_lens[ix]]))
+                    q_preds.append(BPE.decode(q_pred[:dev_output_lens[ix]]))
                 for ix, q_gold in enumerate(batch['q']):
-                    q_golds.append(BPE.instance().decode_ids(q_gold[:batch['q_len'][ix]]))
+                    q_golds.append(BPE.decode(q_gold[:batch['q_len'][ix]]))
                 
 
                 if batch_idx % 200 == 0 and not self.silent:
                     # print(batch['c'][0][:10])
                     # for ix in range(batch['c_len'][-2]):
                     #     print(" ".join([BPE.instance().pieces[batch['c'][-2][ix]] +'//' + str(batch['a_pos'][-2][ix])]))
-                    print(BPE.instance().decode_ids(batch['c'][-2][:batch['c_len'][-2]]))
-                    print(BPE.instance().decode_ids(batch['a'][-2][:batch['a_len'][-2]]))
-                    print(BPE.instance().decode_ids(batch['c'][-1][:batch['c_len'][-1]]))
-                    print(BPE.instance().decode_ids(batch['a'][-1][:batch['a_len'][-1]]))
+                    print(BPE.decode(batch['c'][-2][:batch['c_len'][-2]]))
+                    print(BPE.decode(batch['a'][-2][:batch['a_len'][-2]]))
+                    print(BPE.decode(batch['c'][-1][:batch['c_len'][-1]]))
+                    print(BPE.decode(batch['a'][-1][:batch['a_len'][-1]]))
                     print(q_golds[-2:])
                     print(q_preds[-2:])
-                    # print(BPE.instance().decode_ids(greedy_output.data[0][:greedy_output_lens[0]]))
+                    # print(BPE.decode(greedy_output.data[0][:greedy_output_lens[0]]))
 
             test_loss /= num_batches
             self.logger.info('Dev set: Average loss: {:.4f}'.format(test_loss))
