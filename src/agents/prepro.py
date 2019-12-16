@@ -1,11 +1,14 @@
 import os, json
 from datasets.squad_dataset import SquadDataset
 import torch
+from agents.base import BaseAgent
 
-class PreprocessorAgent():
+class PreprocessorAgent(BaseAgent):
     def __init__(self, config):
-        self.train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=False, test=False)
-        self.valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), dev=True, test=False)
+        super().__init__(config)
+        
+        self.train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config,  dev=False, test=False)
+        self.valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config, dev=True, test=False)
 
         self.output_path = os.path.join(config.env.data_path, 'processed/')
         

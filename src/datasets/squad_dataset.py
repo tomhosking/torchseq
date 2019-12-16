@@ -25,13 +25,16 @@ class SquadDataset(Dataset):
 
 
     def to_tensor(self,x):
-        parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], x['q'], sent_window=self.config.prepro.sent_window, tok_window=self.config.prepro.tok_window)
+        parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], x['q'],
+            sent_window=self.config.prepro.sent_window,
+            tok_window=self.config.prepro.tok_window,
+            o_tag=2 if self.config.prepro.bio_tagging else 1)
 
         if self.config.prepro.concat_ctxt_ans:
-            sample = {'c': torch.LongTensor(parsed_triple.ans_as_ids() + [0] + parsed_triple.ctxt_as_ids()),
+            sample = {'c':  torch.LongTensor(parsed_triple.ctxt_as_ids() + [102] +  parsed_triple.ans_as_ids()),
                     'q': torch.LongTensor(parsed_triple.q_as_ids()),
                     'a': torch.LongTensor(parsed_triple.ans_as_ids()),
-                    'a_pos': torch.LongTensor([0 for i in range(len(parsed_triple._ans_doc))] + [0] + [1 for i in range(len(parsed_triple._ctxt_doc))]),
+                    'a_pos': torch.LongTensor([0 for i in range(len(parsed_triple._ctxt_doc))] + [0] + [1 for i in range(len(parsed_triple._ans_doc))]),
                     'c_len': torch.LongTensor([len(parsed_triple._ctxt_doc) + len(parsed_triple._ans_doc) + 1]),
                     'a_len': torch.LongTensor([len(parsed_triple._ans_doc)]),
                     'q_len': torch.LongTensor([len(parsed_triple._q_doc)])}

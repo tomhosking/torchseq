@@ -5,6 +5,7 @@
 /models
 /data
 /configs
+/scripts
 
 .ipynb_checkpoints/
 .DS_Store

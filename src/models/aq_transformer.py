@@ -31,8 +31,10 @@ class TransformerAqModel(nn.Module):
         self.embeddings.weight.data = BPE.instance().embeddings
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
-        self.embedding_projection = nn.Linear(config.raw_embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), bias=False)
-        self.dec_embedding_projection = nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+        self.embedding_projection = nn.utils.weight_norm(nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False))
+        self.bert_embedding_projection = nn.utils.weight_norm(nn.Linear(config.embedding_dim*1+config.bio_embedding_dim, config.embedding_dim, bias=False))
+        # self.dec_embedding_projection = nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+
         
         self.bio_embeddings = nn.Embedding.from_pretrained(torch.eye(config.bio_embedding_dim), freeze=True).cpu() if config.onehot_bio else nn.Embedding(3, config.bio_embedding_dim).cpu()
 
@@ -42,10 +44,10 @@ class TransformerAqModel(nn.Module):
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
             # self.encoder = DistilBertModel.from_pretrained('distilbert-base-uncased')
 
-        self.freeze_bert = True
+            self.freeze_bert = True
 
-        for param in self.bert_encoder.parameters():
-            param.requires_grad = False
+            for param in self.bert_encoder.parameters():
+                param.requires_grad = False
         
         encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
         encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
@@ -56,14 +58,23 @@ class TransformerAqModel(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
         # Encoder combination
-        num_encoder_outputs = sum([1 if v else 0 for k,v in config.encoder_outputs.data.items()])
-        self.encoder_projection = nn.Linear((config.embedding_dim+ (0 if config.encdec.bert_encoder else config.bio_embedding_dim))*num_encoder_outputs, config.embedding_dim)
+        num_encoder_outputs = sum([1 if v else 0 for k,v in config.encoder_outputs.data.items() if k != 'c_ans_labels'])
+        memory_dim = (config.embedding_dim+ (0 if config.encdec.bert_encoder else config.bio_embedding_dim))*num_encoder_outputs
+        memory_dim += self.config.bio_embedding_dim if self.config.encoder_outputs.c_ans_labels else 0
+        self.encoder_projection = nn.utils.weight_norm(nn.Linear(memory_dim, config.embedding_dim, bias=False))
 
         
         self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+
+        # Force the various projections to be unit norm so they can't block information flow
+        # with torch.no_grad():
+        #     self.embedding_projection.weight.div_(torch.norm(self.embedding_projection.weight, dim=1, keepdim=True))
+        #     self.bert_embedding_projection.weight.div_(torch.norm(self.bert_embedding_projection.weight, dim=1, keepdim=True))
+        #     self.encoder_projection.weight.div_(torch.norm(self.encoder_projection.weight, dim=1, keepdim=True))
         
         # Init output projection layer with embedding matrix
-        # self.output_projection.weight.data[:, :config.embedding_dim] = self.embeddings.weight.data
+        if config.embedding_dim == config.raw_embedding_dim:
+            self.output_projection.weight.data = self.embeddings.weight.data
         self.output_projection.weight.requires_grad = not config.freeze_projection
 
         # Pooling layers
@@ -79,6 +90,12 @@ class TransformerAqModel(nn.Module):
 
 
     def forward(self, batch, output, memory=None):
+
+        # Re-normalise the projections...
+        with torch.no_grad():
+            self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
+            self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
+            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
         # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
@@ -105,10 +122,10 @@ class TransformerAqModel(nn.Module):
             if self.config.encdec.bert_encoder:
                 ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
             else:
-                ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(self.config.embedding_dim)
-
                 if self.config.raw_embedding_dim != self.config.embedding_dim:
-                    ctxt_embedded = self.embedding_projection(ctxt_embedded)
+                    ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
+
+                ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(self.config.embedding_dim)
 
                 
             
@@ -124,12 +141,14 @@ class TransformerAqModel(nn.Module):
                 if self.freeze_bert:
                     self.bert_encoder.eval()
                     with torch.no_grad():
-                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask, token_type_ids=batch['a_pos'].to(self.device))[0]
+                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
-                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask, token_type_ids=batch['a_pos'].to(self.device))[0]
+                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
-                if self.config.encdec.num_decoder_layers > 0:
-                    encoding = self.encoder(bert_encoding.permute(1,0,2), mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+                if self.config.encdec.num_encoder_layers > 0:
+                    bert_encoding_augmented = torch.cat([bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)
+                    bert_encoding_augmented = self.bert_embedding_projection(bert_encoding_augmented)
+                    encoding = self.encoder(bert_encoding_augmented.permute(1,0,2), mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
                 else:
                     encoding = bert_encoding
                 # print(encoding.shape)
@@ -154,10 +173,15 @@ class TransformerAqModel(nn.Module):
 
             if self.config.encoder_outputs.a_enc:
                 memory_elements.append(encoding.masked_fill(ans_mask, 0))
+            
+            if self.config.encoder_outputs.c_ans_labels:
+                memory_elements.append(ctxt_ans_embedded)
 
             if self.config.encoder_outputs.a_enc_pool:
                 ans_pooled = self.ans_pooling(encoding, encoding, mask=ans_mask).unsqueeze(1)
                 memory_elements.append(ans_pooled.expand(-1, max_ctxt_len, -1))
+
+            
 
             # This one needs work...
             if self.config.encoder_outputs.c_enc_anspool:
@@ -190,7 +214,7 @@ class TransformerAqModel(nn.Module):
         output_embedded = self.embeddings(output).to(self.device) * math.sqrt(self.config.embedding_dim)
 
         if self.config.raw_embedding_dim != self.config.embedding_dim:
-            output_embedded = self.dec_embedding_projection(output_embedded)
+            output_embedded = self.embedding_projection(output_embedded)
         
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
         output_embedded = self.positional_embeddings_dec(output_embedded.permute(1,0,2))

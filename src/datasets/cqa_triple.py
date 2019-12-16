@@ -22,7 +22,9 @@ def get_byte_offsets(text, character_offset):
 
 # Convert a text context-question-answer triple to a cropped tokenised encoding
 class CQATriple:
-    def __init__(self, context, answer, a_pos, question = None, sent_window=0, tok_window=300):
+    def __init__(self, context, answer, a_pos, question = None, sent_window=0, tok_window=300, o_tag=1):
+
+        self.o_tag = o_tag
 
 
         # How many sentences either side of the answer should we keep?
@@ -255,5 +257,5 @@ class CQATriple:
         return id_list
 
     def ctxt_as_bio(self):
-        id_list = [1 if ix == self.a_tok_pos else 1 if ix > self.a_tok_pos and ix <= self.a_tok_end else 0 for ix in range(len(self._ctxt_doc))]
+        id_list = [1 if ix == self.a_tok_pos else self.o_tag if ix > self.a_tok_pos and ix <= self.a_tok_end else 0 for ix in range(len(self._ctxt_doc))]
         return id_list

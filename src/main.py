@@ -41,7 +41,9 @@ def main(_):
     
     if FLAGS.preprocess:
         preprocessor = PreprocessorAgent(config)
+        preprocessor.logger.info('Preprocessing...')
         preprocessor.run()
+        preprocessor.logger.info('...done!')
         return
 
     agent = AQAgent(config, run_id, silent=FLAGS.silent)
@@ -49,9 +51,13 @@ def main(_):
         agent.load_checkpoint(FLAGS.load_chkpt)
 
     if FLAGS.train:
+        agent.logger.info('Starting training...')
         agent.train()
+        agent.logger.info('...training done!')
     if FLAGS.validate:
+        agent.logger.info('Starting validation...')
         agent.validate(save=False, force_save_output=True)
+        agent.logger.info('...validation done!')
 
     
 

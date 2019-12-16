@@ -51,8 +51,8 @@ class AQAgent(BaseAgent):
         self.silent = silent
 
 
-        os.makedirs(FLAGS.output_path + run_id + '/model/')
-        with open(FLAGS.output_path + run_id +'/config.json', 'w') as f:
+        os.makedirs(os.path.join(FLAGS.output_path, config.tag, run_id, 'model'))
+        with open(os.path.join(FLAGS.output_path, config.tag, run_id, 'config.json'), 'w') as f:
             json.dump(config.data, f)
 
         # load glove embeddings
@@ -155,7 +155,7 @@ class AQAgent(BaseAgent):
             'loss': self.loss,
             'best_metric': self.best_metric
             },
-            FLAGS.output_path + '/' + self.run_id + '/model/' + file_name)
+            os.path.join(FLAGS.output_path, config.tag, run_id, 'model', file_name))
 
     def train(self):
         """
@@ -332,14 +332,14 @@ class AQAgent(BaseAgent):
 
         # TODO: refactor this out somewhere
         if self.best_metric is None or test_loss < self.best_metric or force_save_output:
-            with open(FLAGS.output_path + self.run_id +'/output.txt', 'w') as f:
+            with open(os.path.join(FLAGS.output_path, config.tag, run_id,'output.txt'), 'w') as f:
                 f.write("\n".join(q_preds))
 
         if self.best_metric is None or test_loss < self.best_metric:
             self.best_metric = test_loss
             self.all_metrics_at_best = {
                 'bleu': dev_bleu,
-                'nll': test_loss
+                'nll': test_loss.item()
             }
 
             self.logger.info('New best score! Saving...')

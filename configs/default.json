@@ -1,5 +1,6 @@
 {
-    "name": "bert_fixedenc_0x5_lr1e-3_accum64",
+    "name": "embed_5x5_sched_craw+cenc_learnembed",
+    "tag": "testing",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -8,60 +9,62 @@
     },
     "training": {
         "dataset": "squad",
-        "use_preprocessed_data": false,
+        "use_preprocessed_data": true,
         "log_interval": 10,
         "lr_schedule": true,
-        "lr": 1e-2,
-        "batch_size": 32,
-        "optim_batch_size": 128,
+        "lr": 5e-3,
+        "batch_size": 16,
+        "optim_batch_size": 64,
         "clip_gradient": 5,
         "num_epochs": 50,
         "opt": "adam",
         "warmup_epochs": 5,
-        "suppression_loss_weight": 0.1
+        "suppression_loss_weight": 0.01
     },
     "eval": {
-        "eval_batch_size": 4
+        "eval_batch_size": 6
 
     },
     "beam_search": {
-        "beam_width": 12,
-        "beam_expansion": 4,
+        "beam_width": 8,
+        "beam_expansion": 6,
         "length_alpha": 0.5
     },
     "prepro": {
         "vocab_size": 30522,
         "sent_window": 0,
-        "tok_window": 200,
-        "concat_ctxt_ans": false
+        "tok_window": 300,
+        "concat_ctxt_ans": false,
+        "bio_tagging": true
     },
 
-    "dropout": 0.1,
+    "dropout": 0.2,
 
     "raw_embedding_dim": 768,
     "embedding_dim": 768,
     "onehot_bio" : false,
     "bio_embedding_dim": 8,
-    "freeze_embeddings": true,
+    "freeze_embeddings": false,
     "freeze_projection": false,
     "directional_masks": true,
 
     "encoder_outputs": {
-        "c_raw": false,
+        "c_raw": true,
         "a_raw": false,
         "c_enc": true,
         "c_enc_pool": false,
         "a_enc": false,
         "a_enc_pool": false,
-        "c_enc_anspool": false
+        "c_enc_anspool": false,
+        "c_ans_labels": false
     },
     "encdec": {
-        "num_encoder_layers": 0,
+        "num_encoder_layers": 5,
         "num_decoder_layers": 5,
         "num_heads": 4,
         "dim_feedforward": 2048,
         "activation": "relu",
-        "bert_encoder": true,
+        "bert_encoder": false,
         "bert_model": "bert-base-uncased",
         "bert_warmup_epochs": 50
     }
