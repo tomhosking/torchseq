@@ -51,8 +51,8 @@ class AQAgent(BaseAgent):
         self.silent = silent
 
 
-        os.makedirs(os.path.join(FLAGS.output_path, config.tag, run_id, 'model'))
-        with open(os.path.join(FLAGS.output_path, config.tag, run_id, 'config.json'), 'w') as f:
+        os.makedirs(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model'))
+        with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'config.json'), 'w') as f:
             json.dump(config.data, f)
 
         # load glove embeddings
@@ -155,7 +155,7 @@ class AQAgent(BaseAgent):
             'loss': self.loss,
             'best_metric': self.best_metric
             },
-            os.path.join(FLAGS.output_path, config.tag, run_id, 'model', file_name))
+            os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model', file_name))
 
     def train(self):
         """
@@ -232,7 +232,7 @@ class AQAgent(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
             
             lr = self.get_lr(self.current_iteration)
-            add_to_log('train/lr', lr, self.current_iteration, self.run_id)
+            add_to_log('train/lr', lr, self.current_iteration, self.config.tag +'/' + self.run_id)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
@@ -244,7 +244,7 @@ class AQAgent(BaseAgent):
                 self.current_iteration += 1
             
             if batch_idx % self.config.training.log_interval == 0:
-                add_to_log('train/loss', loss, self.current_iteration, self.run_id)
+                add_to_log('train/loss', loss, self.current_iteration, self.config.tag +'/' + self.run_id)
                 
                 # # print(batch['q'][0])
                 # # print(greedy_output.data[0])
@@ -325,14 +325,14 @@ class AQAgent(BaseAgent):
 
         dev_bleu = 100*bleu_corpus(q_golds, q_preds)
 
-        add_to_log('dev/loss', test_loss, self.current_iteration, self.run_id)
-        add_to_log('dev/bleu', dev_bleu, self.current_iteration, self.run_id)
+        add_to_log('dev/loss', test_loss, self.current_iteration, self.config.tag +'/' + self.run_id)
+        add_to_log('dev/bleu', dev_bleu, self.current_iteration, self.config.tag +'/' + self.run_id)
         
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 
         # TODO: refactor this out somewhere
         if self.best_metric is None or test_loss < self.best_metric or force_save_output:
-            with open(os.path.join(FLAGS.output_path, config.tag, run_id,'output.txt'), 'w') as f:
+            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'output.txt'), 'w') as f:
                 f.write("\n".join(q_preds))
 
         if self.best_metric is None or test_loss < self.best_metric:
@@ -341,6 +341,9 @@ class AQAgent(BaseAgent):
                 'bleu': dev_bleu,
                 'nll': test_loss.item()
             }
+            
+            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'metrics.json'), 'w') as f:
+                json.dump(self.all_metrics_at_best, f)
 
             self.logger.info('New best score! Saving...')
             self.save_checkpoint()

@@ -100,10 +100,11 @@ class TransformerAqModel(nn.Module):
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
         # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
         # exit()
+
         # Get some sizes
         max_ctxt_len = torch.max(batch['c_len'])
-        max_q_len = torch.max(batch['q_len'])
-        curr_batch_size = batch['c'].size()[0]
+        # max_q_len = torch.max(batch['q_len'])
+        # curr_batch_size = batch['c'].size()[0]
         output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
@@ -133,10 +134,6 @@ class TransformerAqModel(nn.Module):
             
             # Fwd pass through encoder
             if self.config.encdec.bert_encoder:
-                # print(batch['c'].shape)
-                # print(batch['a_pos'].shape)
-                # print(context_mask.shape)
-                # exit()
 
                 if self.freeze_bert:
                     self.bert_encoder.eval()
