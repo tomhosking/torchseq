@@ -2,6 +2,6 @@ absl-py
 tensorboard
 torch
 tqdm
-bpemb
+# bpemb
 nltk
 transformers
