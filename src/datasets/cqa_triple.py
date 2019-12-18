@@ -145,9 +145,11 @@ class CQATriple:
             # print(sent_ix, offset)
             
             for ix,tok in enumerate(sent_toks):
-                # if 'breathy-voiced release of obstruents' in self.answer_text:
+                # if 'is usually translated into english as "virtuous behavior"' in self.context_text.lower():
                 #     print(tok)
                 #     print(tok['text'], tok['begin']+offset, tok['end']+offset, offset, self.a_char_pos_uncrop, self.a_char_end_uncrop)
+                #     if tok['begin']+offset > 100:
+                #         exit()
                 if self.a_char_pos_uncrop >= tok['begin']+offset: # and self.a_char_pos_uncrop <= tok['end']+offset
                     self.a_tok_pos_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
                     # if self.answer_text == 'Catholics':

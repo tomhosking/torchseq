@@ -48,7 +48,9 @@ def main(_):
 
     agent = AQAgent(config, run_id, silent=FLAGS.silent)
     if FLAGS.load_chkpt is not None:
+        agent.logger.info('Loading from checkpoint...')
         agent.load_checkpoint(FLAGS.load_chkpt)
+        agent.logger.info('...loaded!')
 
     if FLAGS.train:
         agent.logger.info('Starting training...')

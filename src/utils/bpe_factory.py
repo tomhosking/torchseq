@@ -92,7 +92,7 @@ class BPE:
             
 
             if new_offset < 0:
-                print('Couldnt find token: {:}'.format(needle), offset)
+                print('Couldnt find token: {:} (pos: {:})'.format(needle, offset))
                 print(text)
                 print(clean_text)
                 exit()
@@ -118,8 +118,10 @@ class BPE:
             # print(tok, offset, offset + len(needle))
             offset = offset + len(needle) - 1
 
-        # if 'Morningside Park' in text:
-        #     # print(offsets)
+        # if 'is usually translated into english as "virtuous behavior"' in text.lower():
+        #     print(text)
+        #     print(clean_text)
+        #     print(offsets)
         #     print(len(text), len(clean_text))
         #     print(pieces)
         #     exit()
@@ -157,19 +159,28 @@ def get_byte_offsets(text, character_offset):
 def _run_strip_accents(text):
     # nfkd_form = unicodedata.normalize('NFKD', text)
     # return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    text = unicodedata.normalize("NFD", text)
+    
     output = []
     offsets=[]
     delta=0
     for i, char in enumerate(text):
-        cat = unicodedata.category(char)
-        if cat == "Mn":
-            # output.append('_')
-            delta -= 1
-            offsets.append((i, i+delta))
+        char = unicodedata.normalize("NFD", char) # Normalise a char at a time as otherwise it's not a length preserving process!!
+        if len(char) > 1:# and unicodedata.category(char[1]) == 'Mn':
+#             print(char, char[0], [unicodedata.category(c) for c in char])
+#             char = char[0]
+            if unicodedata.category(char[1]) == 'Mn':
+                output.append(char[0])
+            else:
+                output.append(char)
         else:
-            output.append(char)
-            offsets.append((i, i+delta))
+            cat = unicodedata.category(char)
+            # print(char, cat)
+            if cat == "Mn":
+                # output.append('_')
+                delta -= 1
+            else:
+                output.append(char)
+        offsets.append((i, i+delta))
     return "".join(output), offsets
 
 
@@ -227,7 +238,7 @@ def normalise(text):
     
 
     # Combine offsets
-    # if 'breathy-voiced release of obstruents' in text:
+    # if 'is usually translated into english as "virtuous behavior"' in text.lower():
     #     print(offsets1)
     #     print(offsets2)
     #     exit()
