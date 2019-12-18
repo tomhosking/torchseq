@@ -12,10 +12,10 @@ import torch
 from torch import nn
 from torch.backends import cudnn
 from torch.autograd import Variable
-import torch.optim as optim
+
 import torch.nn.functional as F
 
-from agents.base import BaseAgent
+from agents.model_agent import ModelAgent
 
 from models.aq_transformer import TransformerAqModel
 
@@ -31,33 +31,19 @@ from utils.metrics import bleu_corpus
 
 from utils.bpe_factory import BPE
 
-from models.samplers.greedy import GreedySampler
-from models.samplers.beam_search import BeamSearchSampler
-from models.samplers.teacher_force import TeacherForcedSampler
-
 from models.suppression_loss import SuppressionLoss
+
+from models.lr_schedule import get_lr
 
 import os
 
 cudnn.benchmark = True
 
 
-class AQAgent(BaseAgent):
+class AQAgent(ModelAgent):
 
     def __init__(self, config, run_id, silent=False):
-        super().__init__(config)
-
-        self.run_id = run_id
-        self.silent = silent
-
-
-        os.makedirs(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model'))
-        with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'config.json'), 'w') as f:
-            json.dump(config.data, f)
-
-        # load glove embeddings
-        # all_glove = load_glove(config.env.data_path+'/', d=config.embedding_dim)
-        # glove_init = get_embeddings(glove=all_glove, vocab=vocab, D=config.embedding_dim)
+        super().__init__(config, run_id, silent)
 
         # define models
         self.model = TransformerAqModel(config)
@@ -75,87 +61,20 @@ class AQAgent(BaseAgent):
 
         # define loss
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
-        # self.loss = CrossEntropyLossWithLS(ignore_index=config.prepro.vocab_size, smooth_eps=config.label_smoothing, )
+        # self.loss = CrossEntropyLossWithLS(ignore_index=BPE.pad_id, smooth_eps=self.config.training.label_smoothing, )
 
         self.suppression_loss = SuppressionLoss(self.config)
 
         # define optimizer
-        if config.training.opt == 'adam':
-            self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.training.lr, betas=(0.9, 0.98), eps=1e-9)
-        elif config.training.opt == 'sgd':
-            self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
-        else:
-            raise Exception("Unrecognised optimiser: " + config.training.opt)
+        self.create_optimizer()
 
-        # initialize counter
-        self.best_metric = None
-        self.all_metrics_at_best = {}
-        self.current_epoch = 0
-        self.current_iteration = 0
-
-        # set cuda flag
-        self.is_cuda = torch.cuda.is_available()
-        if self.is_cuda and not self.config.env.cuda:
-            self.logger.info("WARNING: You have a CUDA device, so you should probably enable CUDA")
-
-        self.cuda = self.is_cuda & self.config.env.cuda
-
-        # set the manual seed for torch
-        # self.manual_seed = self.config.seed
-        if self.cuda:
-            # torch.cuda.manual_seed(self.manual_seed)
-            self.device = torch.device("cuda")
-            torch.cuda.set_device(self.config.env.gpu_device)
-            self.model = self.model.to(self.device)
-            self.loss = self.loss.to(self.device)
-            self.suppression_loss = self.suppression_loss.to(self.device)
-
-            self.logger.info("Program will run on *****GPU-CUDA***** ")
-            # print_cuda_statistics()
-        else:
-            self.device = torch.device("cpu")
-            # torch.manual_seed(self.manual_seed)
-            self.logger.info("Program will run on *****CPU*****\n")
+        self.set_device()
 
         self.model.device = self.device
 
-        self.decode_greedy = GreedySampler(config, self.device)
-        self.decode_beam = BeamSearchSampler(config, self.device)
-        self.decode_teacher_force = TeacherForcedSampler(config, self.device)
+        self.create_samplers()
 
 
-    def load_checkpoint(self, file_name):
-        """
-        Latest checkpoint loader
-        :param file_name: name of the checkpoint file
-        :return:
-        """
-        self.logger.info('Loading from checkpoint ' + file_name)
-        checkpoint = torch.load(file_name)
-        self.model.load_state_dict(checkpoint['model_state_dict'])
-        self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.current_epoch = checkpoint['epoch']
-        self.loss = checkpoint['loss']
-        self.best_metric = checkpoint['best_metric']
-        
-
-    def save_checkpoint(self, file_name="checkpoint.pth.tar"):
-        """
-        Checkpoint saver
-        :param file_name: name of the checkpoint file
-        :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
-        :return:
-        """
-
-        torch.save(
-            {
-            'epoch': self.current_epoch,
-            'model_state_dict': self.model.state_dict(),
-            'optimizer_state_dict': self.optimizer.state_dict(),
-            'loss': self.loss,
-            'best_metric': self.best_metric
-            },
-            os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model', file_name))
 
     def train(self):
         """
@@ -169,23 +88,12 @@ class AQAgent(BaseAgent):
 
             self.current_epoch += 1
 
-            
-            
             if self.current_epoch > self.config.training.warmup_epochs:
                 self.validate(save=True)
 
         self.logger.info('## Training completed {:} epochs'.format(self.current_epoch+1))
         self.logger.info('## Best metrics: {:}'.format(self.all_metrics_at_best))
 
-    
-    def get_lr(self, step):
-        if self.config.training.lr_schedule:
-            step = max(step, 1)
-            warmup_steps = 10000
-            return self.config.training.lr * min(pow(step, -0.5), step * pow(warmup_steps, -1.5))
-        else:
-            return self.config.training.lr
-        
 
     def train_one_epoch(self):
         """
@@ -205,19 +113,12 @@ class AQAgent(BaseAgent):
             curr_batch_size = batch['c'].size()[0]
             max_output_len = batch['q'].size()[1]
             self.global_idx += curr_batch_size
-
             
             loss = 0
-
             
             output, logits = self.decode_teacher_force(self.model, batch)
-            
-            
-            # print(logits.shape)
-            # q_gold_mask = (torch.arange(max_output_len)[None, :].cpu() > batch['q_len'][:, None].cpu()).to(self.device)
-            this_loss = self.loss(logits.permute(0,2,1), batch['q'])
 
-            
+            this_loss = self.loss(logits.permute(0,2,1), batch['q'])
 
             if self.config.training.suppression_loss_weight > 0:
                 this_loss +=  self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch['a'])
@@ -231,7 +132,8 @@ class AQAgent(BaseAgent):
             
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
             
-            lr = self.get_lr(self.current_iteration)
+            lr = get_lr(self.config.training.lr, self.current_iteration, self.config.training.lr_schedule)
+
             add_to_log('train/lr', lr, self.current_iteration, self.config.tag +'/' + self.run_id)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
@@ -255,13 +157,10 @@ class AQAgent(BaseAgent):
                     
                     print(BPE.decode(batch['q'][0][:batch['q_len'][0]]))
                     print(BPE.decode(greedy_output.data[0][:output_lens[0]]))
-                # self.logger.info('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                #     self.current_epoch, batch_idx * curr_batch_size, len(self.data_loader.train_loader.dataset),
-                #            100. * batch_idx / len(self.data_loader.train_loader), loss.item()))
 
                 torch.cuda.empty_cache()
 
-    def validate(self, save=False, force_save_output=False):
+    def validate(self, save=False, force_save_output=False, use_test=False):
         """
         One cycle of model validation
         :return:
@@ -274,14 +173,20 @@ class AQAgent(BaseAgent):
         q_preds = []
         q_golds = []
 
+        if use_test:
+            print('***** USING TEST SET ******')
+            valid_loader = self.data_loader.test_loader
+        else:
+            valid_loader = self.data_loader.valid_loader
+
         with torch.no_grad():
             num_batches = 0
-            for batch_idx, batch in enumerate(tqdm(self.data_loader.valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch), disable=self.silent)):
+            for batch_idx, batch in enumerate(tqdm(valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch), disable=self.silent)):
                 batch= {k:v.to(self.device) for k,v in batch.items()}
                 curr_batch_size = batch['c'].size()[0]
                 max_output_len = batch['q'].size()[1]
 
-                # loss = 0
+                
 
                 _, logits = self.decode_teacher_force(self.model, batch)
                 
@@ -335,15 +240,17 @@ class AQAgent(BaseAgent):
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'output.txt'), 'w') as f:
                 f.write("\n".join(q_preds))
 
-        if self.best_metric is None or test_loss < self.best_metric:
-            self.best_metric = test_loss
+            
             self.all_metrics_at_best = {
                 'bleu': dev_bleu,
                 'nll': test_loss.item()
             }
-            
+
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'metrics.json'), 'w') as f:
                 json.dump(self.all_metrics_at_best, f)
+
+        if self.best_metric is None or test_loss < self.best_metric:
+            self.best_metric = test_loss
 
             self.logger.info('New best score! Saving...')
             self.save_checkpoint()

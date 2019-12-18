@@ -1,7 +1,7 @@
-"""
-The Base Agent class, where all other agents inherit from, that contains definitions for all the necessary functions
-"""
+
 import logging
+
+import torch 
 
 
 class BaseAgent:
@@ -12,6 +12,31 @@ class BaseAgent:
     def __init__(self, config):
         self.config = config
         self.logger = logging.getLogger("Agent")
+
+    def set_device(self):
+        # set cuda flag
+        self.is_cuda = torch.cuda.is_available()
+        if self.is_cuda and not self.config.env.cuda:
+            self.logger.info("WARNING: You have a CUDA device, so you should probably enable CUDA")
+
+        self.cuda = self.is_cuda & self.config.env.cuda
+
+        # set the manual seed for torch
+        # self.manual_seed = self.config.seed
+        if self.cuda:
+            # torch.cuda.manual_seed(self.manual_seed)
+            self.device = torch.device("cuda")
+            torch.cuda.set_device(self.config.env.gpu_device)
+            self.model = self.model.to(self.device)
+            self.loss = self.loss.to(self.device)
+            self.suppression_loss = self.suppression_loss.to(self.device)
+
+            self.logger.info("Program will run on *****GPU-CUDA***** ")
+            # print_cuda_statistics()
+        else:
+            self.device = torch.device("cpu")
+            # torch.manual_seed(self.manual_seed)
+            self.logger.info("Program will run on *****CPU*****\n")
 
     def load_checkpoint(self, file_name):
         """

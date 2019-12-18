@@ -12,14 +12,6 @@ from models.pooling import MultiHeadedPooling
 from transformers import BertModel
 
 
-def generate_square_subsequent_mask(sz):
-    r"""Generate a square mask for the sequence. The masked positions are filled with float('-inf').
-        Unmasked positions are filled with float(0.0).
-    """
-    mask = (torch.triu(torch.ones(sz, sz)) == 1).transpose(0, 1)
-    mask = mask.float().masked_fill(mask == 0, float('-inf')).masked_fill(mask == 1, float(0.0))
-    return mask
-
 class TransformerAqModel(nn.Module):
     def __init__(self, config):
         super().__init__()
@@ -27,27 +19,29 @@ class TransformerAqModel(nn.Module):
 
         # Embedding layers
         # self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.embeddings), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
-        self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu() # TODO: this should come from a config
+        self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
         self.embeddings.weight.data = BPE.instance().embeddings
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False))
         self.bert_embedding_projection = nn.utils.weight_norm(nn.Linear(config.embedding_dim*1+config.bio_embedding_dim, config.embedding_dim, bias=False))
-        # self.dec_embedding_projection = nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
-
+        
         
         self.bio_embeddings = nn.Embedding.from_pretrained(torch.eye(config.bio_embedding_dim), freeze=True).cpu() if config.onehot_bio else nn.Embedding(3, config.bio_embedding_dim).cpu()
 
         # Encoder/decoders
         if config.encdec.bert_encoder:
-            with torch.no_grad():
+            if not self.config.encdec.bert_finetune:
+                with torch.no_grad():
+                    self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+                
+
+                self.freeze_bert = not self.config.encdec.bert_finetune
+
+                for param in self.bert_encoder.parameters():
+                    param.requires_grad = False
+            else:
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
-            # self.encoder = DistilBertModel.from_pretrained('distilbert-base-uncased')
-
-            self.freeze_bert = True
-
-            for param in self.bert_encoder.parameters():
-                param.requires_grad = False
         
         encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
         encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
@@ -135,7 +129,7 @@ class TransformerAqModel(nn.Module):
             # Fwd pass through encoder
             if self.config.encdec.bert_encoder:
 
-                if self.freeze_bert:
+                if self.freeze_bert or not self.config.encdec.bert_finetune:
                     self.bert_encoder.eval()
                     with torch.no_grad():
                         bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
@@ -189,7 +183,7 @@ class TransformerAqModel(nn.Module):
             
             memory_full = torch.cat(memory_elements, dim=-1) #, encoding, ctxt_embedded.permute(1,0,2), memory_pooled.expand(-1, max_ctxt_len, -1)
             
-            if len(memory_elements) > 1:
+            if len(memory_elements) > 1 or True:
                 memory = self.encoder_projection(memory_full)
             else:
                 memory = memory_full
@@ -198,8 +192,6 @@ class TransformerAqModel(nn.Module):
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('-inf')).to(self.device)
         tgt_mask = torch.triu(tgt_mask, diagonal=1)
-        # tgt_mask = generate_square_subsequent_mask(output_max_len).to(self.device)
-        # src_mask = generate_square_subsequent_mask(max_ctxt_len).to(self.device)
 
         # ie how many indices are non-pad
         output_len = torch.sum(torch.ne(output, BPE.pad_id), dim=-1)

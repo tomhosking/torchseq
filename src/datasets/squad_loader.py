@@ -1,7 +1,4 @@
 
-"""
-An example for dataset loaders, starting with data loading including all the functions that either preprocess or postprocess data.
-"""
 import os
 import torch
 import torch.nn.functional as F
@@ -19,14 +16,17 @@ class SquadDataLoader:
 
         train = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=False, test=False)
         valid = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=True, test=False)
+        test = SquadDataset(os.path.join(config.env.data_path, 'squad/'), config=config, dev=False, test=True)
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)
+        self.len_valid_data = len(test)
 
         print("Loaded {:} training and {:} validation examples from {:}".format(self.len_train_data, self.len_valid_data, os.path.join(config.env.data_path, 'squad/')))
 
         self.train_iterations = (self.len_train_data + self.config.training.batch_size - 1) // self.config.training.batch_size
         self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
+        self.test_iterations = (self.len_test_data + self.config.training.batch_size - 1) // self.config.training.batch_size
 
 
         self.train_loader = DataLoader(train,
@@ -37,6 +37,13 @@ class SquadDataLoader:
                                         worker_init_fn=init_worker)
 
         self.valid_loader = DataLoader(valid, 
+                                        batch_size=config.eval.eval_batch_size, 
+                                        shuffle=False, 
+                                        num_workers=6,
+                                        collate_fn=self.pad_and_order_sequences, 
+                                        worker_init_fn=init_worker)
+                                    
+        self.test_loader = DataLoader(test, 
                                         batch_size=config.eval.eval_batch_size, 
                                         shuffle=False, 
                                         num_workers=6,

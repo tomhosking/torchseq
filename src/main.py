@@ -9,7 +9,7 @@ from datasets import loaders
 from datasets import cqa_triple
 
 from agents.aq_agent import AQAgent
-from agents.prepro import PreprocessorAgent
+from agents.prepro_agent import PreprocessorAgent
 
 from utils.config import Config
 from utils.seed import set_seed
@@ -34,7 +34,7 @@ def main(_):
     BPE.pad_id = config.prepro.vocab_size
     BPE.embedding_dim = config.embedding_dim
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')
 
     print("** Run ID is {:} **".format(run_id))
 
@@ -54,10 +54,16 @@ def main(_):
         agent.logger.info('Starting training...')
         agent.train()
         agent.logger.info('...training done!')
+
     if FLAGS.validate:
         agent.logger.info('Starting validation...')
         agent.validate(save=False, force_save_output=True)
         agent.logger.info('...validation done!')
+
+    if FLAGS.test:
+        agent.logger.info('Starting testing...')
+        agent.validate(save=False, force_save_output=True, use_test=True)
+        agent.logger.info('...testing done!')
 
     
 
