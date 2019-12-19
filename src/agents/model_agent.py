@@ -30,6 +30,7 @@ class ModelAgent(BaseAgent):
         # initialize counter
         self.best_metric = None
         self.all_metrics_at_best = {}
+        self.best_epoch = None
         self.current_epoch = 0
         self.current_iteration = 0
 

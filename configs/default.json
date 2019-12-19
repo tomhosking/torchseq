@@ -1,6 +1,6 @@
 {
     "name": "bestguess",
-    "tag": "bert_finetune",
+    "tag": "bert_embeds",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -21,17 +21,18 @@
         "num_epochs": 50,
         "opt": "adam",
         "warmup_epochs": 5,
-        "suppression_loss_weight": 0.01,
-        "label_smoothing": "UNUSED"
+        "suppression_loss_weight": 0.1,
+        "label_smoothing": "UNUSED",
+        "early_stopping_lag": 3
     },
     "eval": {
-        "eval_batch_size": 6
+        "eval_batch_size": 8
 
     },
     "beam_search": {
         "beam_width": 8,
-        "beam_expansion": 6,
-        "length_alpha": 0.5
+        "beam_expansion": 4,
+        "length_alpha": 2.0
     },
     "prepro": {
         "vocab_size": 30522,
@@ -41,7 +42,7 @@
         "bio_tagging": true
     },
 
-    "dropout": 0.2,
+    "dropout": 0.1,
 
     "raw_embedding_dim": 768,
     "embedding_dim": 768,
@@ -67,9 +68,9 @@
         "num_heads": 4,
         "dim_feedforward": 2048,
         "activation": "relu",
-        "bert_encoder": true,
+        "bert_encoder": false,
         "bert_model": "bert-base-uncased",
         "bert_warmup_epochs": 20,
-        "bert_finetune": true
+        "bert_finetune": false
     }
 }

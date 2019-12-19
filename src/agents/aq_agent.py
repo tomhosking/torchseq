@@ -236,7 +236,10 @@ class AQAgent(ModelAgent):
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 
         # TODO: refactor this out somewhere
-        if self.best_metric is None or test_loss < self.best_metric or force_save_output:
+        if self.best_metric is None \
+                or test_loss < self.best_metric \
+                or force_save_output \
+                or (self.config.training.early_stopping_lag > 0 and self.best_epoch is not None and (self.current_epoch-self.best_epoch) <= self.config.training.early_stopping_lag > 0):
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'output.txt'), 'w') as f:
                 f.write("\n".join(q_preds))
 
@@ -249,8 +252,21 @@ class AQAgent(ModelAgent):
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'metrics.json'), 'w') as f:
                 json.dump(self.all_metrics_at_best, f)
 
-        if self.best_metric is None or test_loss < self.best_metric:
-            self.best_metric = test_loss
+        if self.best_metric is None \
+                or test_loss < self.best_metric \
+                or (self.config.training.early_stopping_lag > 0 and self.best_epoch is not None and (self.current_epoch-self.best_epoch) <= self.config.training.early_stopping_lag > 0):
+            
 
-            self.logger.info('New best score! Saving...')
+            if test_loss < self.best_metric:
+                self.logger.info('New best score! Saving...')
+            else:
+                self.logger.info('Early stopping lag active: saving...')
+                
+            self.best_metric = test_loss
+            self.best_epoch = self.current_epoch
+
             self.save_checkpoint()
+
+        
+
+
