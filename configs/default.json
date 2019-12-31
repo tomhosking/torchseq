@@ -1,6 +1,6 @@
 {
-    "name": "bestguess",
-    "tag": "bert_embeds",
+    "name": "3x9",
+    "tag": "bert_fixed",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -20,13 +20,13 @@
         "clip_gradient": 5,
         "num_epochs": 50,
         "opt": "adam",
-        "warmup_epochs": 5,
+        "warmup_epochs": 0,
         "suppression_loss_weight": 0.1,
         "label_smoothing": "UNUSED",
-        "early_stopping_lag": 3
+        "early_stopping_lag": 1
     },
     "eval": {
-        "eval_batch_size": 8
+        "eval_batch_size": 6
 
     },
     "beam_search": {
@@ -39,7 +39,7 @@
         "sent_window": 0,
         "tok_window": 300,
         "concat_ctxt_ans": false,
-        "bio_tagging": true
+        "bio_tagging": false
     },
 
     "dropout": 0.1,
@@ -63,14 +63,14 @@
         "c_ans_labels": false
     },
     "encdec": {
-        "num_encoder_layers": 5,
-        "num_decoder_layers": 5,
-        "num_heads": 4,
+        "num_encoder_layers": 3,
+        "num_decoder_layers": 9,
+        "num_heads": 2,
         "dim_feedforward": 2048,
         "activation": "relu",
-        "bert_encoder": false,
+        "bert_encoder": true,
         "bert_model": "bert-base-uncased",
-        "bert_warmup_epochs": 20,
+        "bert_warmup_epochs": 25,
         "bert_finetune": false
     }
 }

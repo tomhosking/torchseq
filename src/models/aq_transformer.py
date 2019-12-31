@@ -101,13 +101,16 @@ class TransformerAqModel(nn.Module):
         # curr_batch_size = batch['c'].size()[0]
         output_max_len = output.size()[-1]
 
+        context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch['c_len'][:, None].cpu()).to(self.device)
+
         # First pass? Construct the encoding
         if memory is None:
             src_mask = torch.FloatTensor(max_ctxt_len, max_ctxt_len).fill_(float('-inf') if self.config.directional_masks else 0.0).to(self.device)
             src_mask = torch.triu(src_mask, diagonal=1)
             # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
-            context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch['c_len'][:, None].cpu()).to(self.device)
+            
+
 
 
             ctxt_toks_embedded = self.embeddings(batch['c']).to(self.device)
@@ -129,12 +132,15 @@ class TransformerAqModel(nn.Module):
             # Fwd pass through encoder
             if self.config.encdec.bert_encoder:
 
+                # BERT expects a mask that's 1 unmasked, 0 for masked
+                bert_context_mask = (~context_mask).double()
+
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
                     self.bert_encoder.eval()
                     with torch.no_grad():
-                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
-                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
                 if self.config.encdec.num_encoder_layers > 0:
                     bert_encoding_augmented = torch.cat([bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)
@@ -212,7 +218,8 @@ class TransformerAqModel(nn.Module):
                                 output_embedded,
                                 memory.permute(1,0,2),
                                 tgt_mask=tgt_mask,
-                                tgt_key_padding_mask=output_pad_mask
+                                tgt_key_padding_mask=output_pad_mask,
+                                memory_key_padding_mask=context_mask
                             ).permute(1,0,2)
 
         logits = self.output_projection(output)

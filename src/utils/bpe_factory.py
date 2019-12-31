@@ -73,7 +73,7 @@ class BPE:
         return BPE._instance
 
     @staticmethod
-    def tokenise(text, add_bos_eos=False):
+    def tokenise(text, add_bos_eos=True):
         tokens = BPE.instance().tokenize(text)
 
         # clean_text = BPE.instance().basic_tokenizer._clean_text(text)

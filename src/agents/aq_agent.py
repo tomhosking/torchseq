@@ -30,6 +30,7 @@ from utils.misc import print_cuda_statistics
 from utils.metrics import bleu_corpus
 
 from utils.bpe_factory import BPE
+from utils.mckenzie import update_mckenzie
 
 from models.suppression_loss import SuppressionLoss
 
@@ -82,6 +83,7 @@ class AQAgent(ModelAgent):
         :return:
         """
         self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
+        update_mckenzie(0,'-')
         for epoch in range(self.config.training.num_epochs):
             self.model.freeze_bert = self.current_epoch >= self.config.encdec.bert_warmup_epochs
             self.train_one_epoch()
@@ -235,6 +237,8 @@ class AQAgent(ModelAgent):
         
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 
+        
+
         # TODO: refactor this out somewhere
         if self.best_metric is None \
                 or test_loss < self.best_metric \
@@ -257,15 +261,21 @@ class AQAgent(ModelAgent):
                 or (self.config.training.early_stopping_lag > 0 and self.best_epoch is not None and (self.current_epoch-self.best_epoch) <= self.config.training.early_stopping_lag > 0):
             
 
-            if test_loss < self.best_metric:
+            if self.best_metric is None:
+                self.best_epoch = self.current_epoch
+                self.best_metric = test_loss
+            elif test_loss < self.best_metric:
                 self.logger.info('New best score! Saving...')
+                self.best_epoch = self.current_epoch
+                self.best_metric = test_loss
             else:
                 self.logger.info('Early stopping lag active: saving...')
                 
-            self.best_metric = test_loss
-            self.best_epoch = self.current_epoch
+            
 
             self.save_checkpoint()
+
+        update_mckenzie(self.current_epoch/self.config.training.num_epochs*100,"{:0.2f}".format(self.all_metrics_at_best['bleu']))
 
         
 
