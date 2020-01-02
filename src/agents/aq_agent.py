@@ -35,6 +35,7 @@ from utils.mckenzie import update_mckenzie
 from models.suppression_loss import SuppressionLoss
 
 from models.lr_schedule import get_lr
+from models.cross_entropy import CrossEntropyLossWithLS
 
 import os
 
@@ -61,8 +62,10 @@ class AQAgent(ModelAgent):
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
         # define loss
-        self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
-        # self.loss = CrossEntropyLossWithLS(ignore_index=BPE.pad_id, smooth_eps=self.config.training.label_smoothing, )
+        if self.config.training.label_smoothing != "UNUSED" and self.config.training.label_smoothing > 1e-6:
+            self.loss = CrossEntropyLossWithLS(ignore_index=BPE.pad_id, smooth_eps=self.config.training.label_smoothing, reduction='none' )
+        else:
+            self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
 
         self.suppression_loss = SuppressionLoss(self.config)
 
@@ -192,17 +195,15 @@ class AQAgent(ModelAgent):
 
                 _, logits = self.decode_teacher_force(self.model, batch)
                 
-                # dev_output, _, dev_output_lens = self.decode_greedy(self.model, batch)
-                beam_output, _, beam_lens = self.decode_beam(self.model, batch)
+                if self.config.eval.sampler == 'nucleus':
+                    dev_output, _, dev_output_lens = self.decode_nucleus(self.model, batch)
+                elif self.config.eval.sampler == 'beam':
+                    beam_output, _, beam_lens = self.decode_beam(self.model, batch)
 
-                # if batch_idx == 0:
-                #     print('OUTPUT OF BEAM')
-                #     for i in range(beam_output.shape[1]):
-                #         print(BPE.decode(beam_output.data[0,i][:output_lens[0,i]]))
-                #     exit()
-
-                dev_output = beam_output[:, 0, :]
-                dev_output_lens = beam_lens[:, 0]
+                    dev_output = beam_output[:, 0, :]
+                    dev_output_lens = beam_lens[:, 0]
+                else:
+                    raise Exception("Unknown sampling method!")
 
                 this_loss = self.loss(logits.permute(0,2,1), batch['q'])
             

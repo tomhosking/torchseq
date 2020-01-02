@@ -135,12 +135,17 @@ class TransformerAqModel(nn.Module):
                 # BERT expects a mask that's 1 unmasked, 0 for masked
                 bert_context_mask = (~context_mask).double()
 
+                if 'bert_typeids' in self.config.encdec.data and self.config.encdec.bert_typeids:
+                    bert_typeids = batch['a_pos'].to(self.device)
+                else:
+                    bert_typeids = None
+
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
                     self.bert_encoder.eval()
                     with torch.no_grad():
-                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
-                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
                 if self.config.encdec.num_encoder_layers > 0:
                     bert_encoding_augmented = torch.cat([bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)

@@ -10,6 +10,7 @@ import torch.optim as optim
 from models.samplers.greedy import GreedySampler
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.teacher_force import TeacherForcedSampler
+from models.samplers.parallel_nucleus import ParallelNucleusSampler
 
 class ModelAgent(BaseAgent):
 
@@ -46,6 +47,7 @@ class ModelAgent(BaseAgent):
         self.decode_greedy = GreedySampler(self.config, self.device)
         self.decode_beam = BeamSearchSampler(self.config, self.device)
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
+        self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
     
     def load_checkpoint(self, file_name):
