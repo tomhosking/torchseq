@@ -3,7 +3,7 @@ import requests, os
 def update_mckenzie(progress, metric):
 
     try:
-        job_id = os.environ.get('SLURM_JOB_ID', '')
+        job_id = os.environ['SLURM_JOB_ID']
         endpoint = os.environ['MCKENZIE_ENDPOINT']
         requests.post(
             'http://' + endpoint+'/hooks/update_job/',
@@ -14,4 +14,4 @@ def update_mckenzie(progress, metric):
             }
         )
     except Exception as e:
-        print(e)
+        print(repr(e))
