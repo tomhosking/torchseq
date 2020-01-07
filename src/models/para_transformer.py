@@ -36,6 +36,8 @@ class TransformerParaphraseModel(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
         
         self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+
+        self.encoder_pooling = MultiHeadedPooling(config.encdec.num_heads, config.embedding_dim, dropout=config.dropout, model_dim_out=config.embedding_dim, use_final_linear=False)
         
         # Init output projection layer with embedding matrix
         if config.embedding_dim == config.raw_embedding_dim:
@@ -48,18 +50,19 @@ class TransformerParaphraseModel(nn.Module):
 
     def forward(self, batch, output, memory=None):
 
+        
         # Re-normalise the projections...
         with torch.no_grad():
             self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
-            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+            
+            # self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
         # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
         # exit()
 
         # Get some sizes
-        max_ctxt_len = torch.max(batch['s1_len'])
+        max_ctxt_len = batch['s1'].shape[1]
         # max_q_len = torch.max(batch['q_len'])
         # curr_batch_size = batch['c'].size()[0]
         output_max_len = output.size()[-1]
@@ -87,7 +90,9 @@ class TransformerParaphraseModel(nn.Module):
             
             encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
 
-            memory = encoding
+            memory = self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
+
+            # memory = encoding
 
 
         # Build some masks

@@ -29,7 +29,6 @@ class BaseAgent:
             torch.cuda.set_device(self.config.env.gpu_device)
             self.model = self.model.to(self.device)
             self.loss = self.loss.to(self.device)
-            self.suppression_loss = self.suppression_loss.to(self.device)
 
             self.logger.info("Program will run on *****GPU-CUDA***** ")
             # print_cuda_statistics()
@@ -37,6 +36,11 @@ class BaseAgent:
             self.device = torch.device("cpu")
             # torch.manual_seed(self.manual_seed)
             self.logger.info("Program will run on *****CPU*****\n")
+
+        if not self.model:
+            raise Exception('You need to define your model before calling set_device!')
+            
+        self.model.device = self.device
 
     def load_checkpoint(self, file_name):
         """

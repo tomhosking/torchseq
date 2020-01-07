@@ -1,6 +1,7 @@
 {
-    "name": "nucleus",
+    "name": "finetune_constlr_1e-5",
     "tag": "testing",
+    "task": "aq",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -9,13 +10,13 @@
     },
     "training": {
         "dataset": "squad",
-        "use_preprocessed_data": true,
+        "use_preprocessed_data": false,
         "log_interval": 10,
-        "lr_schedule": true,
-        "lr": 7e-3,
+        "lr_schedule": false,
+        "lr": 1e-5,
         "beta1": 0.9,
         "beta2": 0.98,
-        "batch_size": 32,
+        "batch_size": 8,
         "optim_batch_size": 64,
         "clip_gradient": 5,
         "num_epochs": 50,
@@ -23,21 +24,15 @@
         "warmup_epochs": 5,
         "suppression_loss_weight": 0.1,
         "label_smoothing": 0.0,
-        "early_stopping_lag": 1
+        "early_stopping_lag": 0
     },
     "eval": {
         "eval_batch_size": 6,
-        "sampler": "nucleus"
-
+        "sampler": "beam"
     },
     "beam_search": {
         "beam_width": 8,
         "beam_expansion": 4,
-        "length_alpha": 2.0
-    },
-    "nucleus_sampling": {
-        "beam_width": 8,
-        "cutoff": 0.9,
         "length_alpha": 2.0
     },
     "prepro": {
@@ -45,19 +40,16 @@
         "sent_window": 0,
         "tok_window": 300,
         "concat_ctxt_ans": false,
-        "bio_tagging": false
+        "bio_tagging": true
     },
-
     "dropout": 0.1,
-
     "raw_embedding_dim": 768,
     "embedding_dim": 768,
-    "onehot_bio" : false,
+    "onehot_bio": false,
     "bio_embedding_dim": 8,
     "freeze_embeddings": true,
     "freeze_projection": true,
     "directional_masks": true,
-
     "encoder_outputs": {
         "c_raw": true,
         "a_raw": false,
@@ -69,14 +61,15 @@
         "c_ans_labels": false
     },
     "encdec": {
-        "num_encoder_layers": 3,
-        "num_decoder_layers": 9,
+        "num_encoder_layers": 5,
+        "num_decoder_layers": 5,
         "num_heads": 2,
         "dim_feedforward": 2048,
         "activation": "relu",
         "bert_encoder": true,
         "bert_model": "bert-base-uncased",
-        "bert_warmup_epochs": 25,
-        "bert_finetune": false
+        "bert_warmup_epochs": 0,
+        "bert_finetune": true,
+        "bert_typeids": false
     }
 }

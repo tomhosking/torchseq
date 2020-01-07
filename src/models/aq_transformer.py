@@ -145,6 +145,8 @@ class TransformerAqModel(nn.Module):
                     with torch.no_grad():
                         bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
+                    for param in self.bert_encoder.parameters():
+                        param.requires_grad = False
                     bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
                 if self.config.encdec.num_encoder_layers > 0:

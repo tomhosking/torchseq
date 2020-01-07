@@ -4,8 +4,8 @@ class ParaphrasePair:
     def __init__(self, sent1_text, sent2_text):
 
 
-        self._s1_doc = BPE.tokenise(self.sent1_text)
-        self._s2_doc = BPE.tokenise(self.sent2_text)
+        self._s1_doc = BPE.tokenise(sent1_text)
+        self._s2_doc = BPE.tokenise(sent2_text)
 
 
     def s1_as_ids(self):

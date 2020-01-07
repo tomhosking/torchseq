@@ -32,21 +32,21 @@ class SquadDataLoader:
         self.train_loader = DataLoader(train,
                                         batch_size=config.training.batch_size, 
                                         shuffle=True, 
-                                        num_workers=1, 
+                                        num_workers=4, 
                                         collate_fn=self.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)
 
         self.valid_loader = DataLoader(valid, 
                                         batch_size=config.eval.eval_batch_size, 
                                         shuffle=False, 
-                                        num_workers=6,
+                                        num_workers=4,
                                         collate_fn=self.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)
                                     
         self.test_loader = DataLoader(test, 
                                         batch_size=config.eval.eval_batch_size, 
                                         shuffle=False, 
-                                        num_workers=6,
+                                        num_workers=4,
                                         collate_fn=self.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)
 

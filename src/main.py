@@ -1,3 +1,5 @@
+#!/usr/bin/python3
+
 from absl import app
 from args import FLAGS as FLAGS
 
@@ -10,6 +12,7 @@ from datasets import cqa_triple
 
 from agents.aq_agent import AQAgent
 from agents.prepro_agent import PreprocessorAgent
+from agents.para_agent import ParaphraseAgent
 
 from utils.config import Config
 from utils.seed import set_seed
@@ -46,7 +49,11 @@ def main(_):
         preprocessor.logger.info('...done!')
         return
 
-    agent = AQAgent(config, run_id, silent=FLAGS.silent)
+    if config.task == 'aq':
+        agent = AQAgent(config, run_id, silent=FLAGS.silent)
+    elif config.task == 'para':
+        agent = ParaphraseAgent(config, run_id, silent=FLAGS.silent)
+
     if FLAGS.load_chkpt is not None:
         agent.logger.info('Loading from checkpoint...')
         agent.load_checkpoint(FLAGS.load_chkpt)

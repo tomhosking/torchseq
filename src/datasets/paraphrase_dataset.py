@@ -1,27 +1,46 @@
 
-from torch.utils.data import Dataset
+from torch.utils.data import IterableDataset
 import torch
 import os
 from datasets.paraphrase_pair import ParaphrasePair
 
-class ParaphraseDataset(Dataset):
+from itertools import cycle
+
+class ParaphraseDataset(IterableDataset):
     def __init__(self, path, config, dev=False, test=False):
         self.config = config
-        
-        with open(os.path.join(path, 'para-nmt-50m.txt')) as f:
-            paraphrases = f.readlines()
 
-        self.samples =[{'s1': x[0], 's2': x[1]} for x in paraphrases if float(x[2]) < 0.8]
+        self.path = path
+        self.variant = 'dev' if dev else 'train'
         
-
-
-        
+        # TODO: Can we get the length without reading the whole file?
+        self.length = 0
+        with open(os.path.join(self.path, 'paraphrases.{:}.txt'.format(self.variant))) as f:
+            for line in f:
+                self.length += 1
 
     def __len__(self):
-        return len(self.samples)
+        return self.length
 
-    def __getitem__(self, idx):
-        return self.to_tensor(self.samples[idx])
+    def __iter__(self):
+        return self.generator()
+
+    def generator(self):
+        worker_info = torch.utils.data.get_worker_info()
+        if not worker_info:
+            worker_id = 0
+            num_workers = 1
+        else:
+            worker_id = worker_info.id
+            num_workers = worker_info.num_workers
+
+        with open(os.path.join(self.path, 'paraphrases.{:}.txt'.format(self.variant))) as f:
+            for ix, line in enumerate(f):
+                if ix % num_workers != worker_id:
+                    continue
+                x = line.split('\t')
+                sample = {'s1': x[0], 's2': x[1]}
+                yield self.to_tensor(sample)
 
 
     def to_tensor(self,x):

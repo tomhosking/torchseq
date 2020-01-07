@@ -9,9 +9,9 @@ class TeacherForcedSampler(nn.Module):
         self.config = config
         self.device = device
 
-    def forward(self, model, batch):
-        curr_batch_size = batch['c'].size()[0]
-        max_output_len = batch['q'].size()[1]
+    def forward(self, model, batch, tgt_field):
+        curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+        max_output_len = batch[tgt_field].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
         
@@ -21,7 +21,7 @@ class TeacherForcedSampler(nn.Module):
 
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input
-        output = batch['q'][:, :max_output_len-1].to(self.device)
+        output = batch[tgt_field][:, :max_output_len-1].to(self.device)
         pred_logits, _ = model(batch, output)
 
         logits = torch.cat([logits, pred_logits], dim=1)

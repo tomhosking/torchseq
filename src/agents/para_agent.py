@@ -7,11 +7,15 @@ from agents.model_agent import ModelAgent
 from models.para_transformer import TransformerParaphraseModel
 
 from datasets.paraphrase_loader import ParaphraseDataLoader
+from utils.bpe_factory import BPE
+
 
 class ParaphraseAgent(ModelAgent):
 
     def __init__(self, config, run_id, silent=False):
         super().__init__(config, run_id, silent)
+
+        self.tgt_field = 's2'
 
         # define data_loader
         if self.config.training.use_preprocessed_data:
@@ -36,8 +40,4 @@ class ParaphraseAgent(ModelAgent):
 
         self.set_device()
 
-        self.model.device = self.device
-
         self.create_samplers()
-
-        

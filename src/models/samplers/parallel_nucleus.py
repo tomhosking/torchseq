@@ -45,9 +45,10 @@ class ParallelNucleusSampler(nn.Module):
         self.config = config
         self.device = device
 
-    def forward(self, model, batch):
-        curr_batch_size = batch['c'].size()[0]
-        max_output_len = batch['q'].size()[1]
+    def forward(self, model, batch, tgt_field):
+        curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+
+        max_output_len = batch[tgt_field].size()[1]
 
         
         beam_width = self.config.nucleus_sampling.beam_width # number of total hypotheses to maintain
