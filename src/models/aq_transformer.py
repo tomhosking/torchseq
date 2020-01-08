@@ -42,6 +42,9 @@ class TransformerAqModel(nn.Module):
                     param.requires_grad = False
             else:
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+                self.bert_encoder.train()
+                for param in self.bert_encoder.parameters():
+                    param.requires_grad = True
         
         encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
         encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
@@ -96,6 +99,7 @@ class TransformerAqModel(nn.Module):
         # exit()
 
         # Get some sizes
+        # max_ctxt_len = batch['c'].shape[1]
         max_ctxt_len = torch.max(batch['c_len'])
         # max_q_len = torch.max(batch['q_len'])
         # curr_batch_size = batch['c'].size()[0]
@@ -145,8 +149,9 @@ class TransformerAqModel(nn.Module):
                     with torch.no_grad():
                         bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
+                    self.bert_encoder.train()
                     for param in self.bert_encoder.parameters():
-                        param.requires_grad = False
+                        param.requires_grad = True
                     bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
                 if self.config.encdec.num_encoder_layers > 0:

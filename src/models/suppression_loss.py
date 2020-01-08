@@ -35,6 +35,7 @@ class SuppressionLoss(nn.Module):
         penalty_onehot = onehot(penalty_sequence, N=self.config.prepro.vocab_size, ignore_index=BPE.pad_id)
 
         penalty_mask = penalty_onehot.sum(dim=-2, keepdim=True)
+        penalty_mask = torch.min(penalty_mask, torch.ones_like(penalty_mask))
         probs = nn.functional.softmax(logits, dim=-1)
 
         # print(penalty_mask.shape)

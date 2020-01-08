@@ -37,10 +37,11 @@ class ModelAgent(BaseAgent):
         self.run_id = run_id
         self.silent = silent
 
-
-        os.makedirs(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model'))
-        with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'config.json'), 'w') as f:
-            json.dump(config.data, f)
+        # Slightly hacky way of allowing for inference-only use
+        if run_id is not None:
+            os.makedirs(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'model'))
+            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, 'config.json'), 'w') as f:
+                json.dump(config.data, f)
 
         
 
@@ -105,6 +106,24 @@ class ModelAgent(BaseAgent):
         Override this if you want any logic to be triggered at the start of a new training epoch
         """
         pass
+
+    def text_to_batch(self, input):
+        """
+        Convert a dictionary of strings to a batch that can be used as input to the model
+        """
+        raise NotImplementedError("Your model is missing a text_to_batch method!")
+
+    def infer(self, input):
+        """
+        Run inference on a dictionary of strings
+        """
+        batch = self.text_to_batch(input, self.device)
+
+        _, output, output_lens = self.step_validate(batch, self.tgt_field, sample_outputs=True, calculate_loss=False)
+
+        output_strings = [BPE.decode(output.data[ix][:output_lens[ix]]) for ix in range(len(output_lens))]
+
+        return output_strings
 
     # def step_train(self, batch):
     #     """
@@ -225,9 +244,8 @@ class ModelAgent(BaseAgent):
                 torch.cuda.empty_cache()
 
 
-    def step_validate(self, batch, tgt_field, sample_outputs=True):
-        _, logits = self.decode_teacher_force(self.model, batch, tgt_field)
-
+    def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True):
+        
         if not sample_outputs:
             dev_output = None
             dev_output_lens = None
@@ -241,9 +259,13 @@ class ModelAgent(BaseAgent):
         else:
             raise Exception("Unknown sampling method!")
 
-        this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
-    
-        return torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0), dev_output, dev_output_lens
+        if calculate_loss:
+            _, logits = self.decode_teacher_force(self.model, batch, tgt_field)
+            this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+            normed_loss = torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0)
+        else:
+            normed_loss = None
+        return normed_loss, dev_output, dev_output_lens
 
     def validate(self, save=False, force_save_output=False, use_test=False, tgt_field=None):
         """

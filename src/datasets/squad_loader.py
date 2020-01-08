@@ -63,6 +63,6 @@ class SquadDataLoader:
 
         tensor_batch = {}
         for k in keys:
-            tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze()
+            tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
 
         return tensor_batch
