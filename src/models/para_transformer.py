@@ -64,7 +64,7 @@ class TransformerParaphraseModel(nn.Module):
         # Get some sizes
         max_ctxt_len = batch['s1'].shape[1]
         # max_q_len = torch.max(batch['q_len'])
-        # curr_batch_size = batch['c'].size()[0]
+        curr_batch_size = batch['s1'].size()[0]
         output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding

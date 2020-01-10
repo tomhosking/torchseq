@@ -180,9 +180,9 @@ class ModelAgent(BaseAgent):
 
 
             if 'bleu' in self.all_metrics_at_best:
-                update_mckenzie(epoch/self.config.training.num_epochs*100, "{:0.2f}".format(self.all_metrics_at_best['bleu']))
+                update_mckenzie((epoch+1)/self.config.training.num_epochs*100, "{:0.2f}".format(self.all_metrics_at_best['bleu']))
             else:
-                update_mckenzie(epoch/self.config.training.num_epochs*100, "-")
+                update_mckenzie((epoch+1)/self.config.training.num_epochs*100, "-")
 
         self.logger.info('## Training completed {:} epochs'.format(self.current_epoch+1))
         self.logger.info('## Best metrics: {:}'.format(self.all_metrics_at_best))
@@ -206,7 +206,8 @@ class ModelAgent(BaseAgent):
             
             self.global_idx += curr_batch_size
             
-            loss = self.step_train(batch, self.tgt_field)
+            # Weight the loss by the ratio of this batch to optimiser step size, so that LR is equivalent even when grad accumulation happens
+            loss = self.step_train(batch, self.tgt_field) * float(curr_batch_size)/float(self.config.training.optim_batch_size)
             
             
             loss.backward()
