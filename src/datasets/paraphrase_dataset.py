@@ -36,7 +36,7 @@ class ParaphraseDataset(IterableDataset):
 
         with open(os.path.join(self.path, 'paraphrases.{:}.txt'.format(self.variant))) as f:
             for ix, line in enumerate(f):
-                if ix % num_workers != worker_id:
+                if num_workers > 1 and ix % num_workers != worker_id:
                     continue
                 x = line.split('\t')
                 sample = {'s1': x[0], 's2': x[1]}
@@ -44,7 +44,7 @@ class ParaphraseDataset(IterableDataset):
 
 
     def to_tensor(self,x):
-        parsed_triple = ParaphrasePair(x['s1'], x['s2'])
+        parsed_triple = ParaphrasePair(x['s1'], x['s2'], config=self.config)
 
         sample = {'s1': torch.LongTensor(parsed_triple.s1_as_ids()),
                 's2': torch.LongTensor(parsed_triple.s2_as_ids()),

@@ -92,7 +92,7 @@ class BPE:
             
 
             if new_offset < 0:
-                print('Couldnt find token: {:} (pos: {:})'.format(needle, offset))
+                print('Couldnt find token in tokeniser: {:} (pos: {:})'.format(needle, offset))
                 print(text)
                 print(clean_text)
                 exit()

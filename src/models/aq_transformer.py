@@ -148,19 +148,17 @@ class TransformerAqModel(nn.Module):
                     bert_typeids = None
 
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
-                    self.bert_encoder.eval()
                     with torch.no_grad():
-                        bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                        self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
-                    self.bert_encoder.train()
-                    bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                    self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
 
                 if self.config.encdec.num_encoder_layers > 0:
-                    bert_encoding_augmented = torch.cat([bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)
+                    bert_encoding_augmented = torch.cat([self.bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)
                     bert_encoding_augmented = self.bert_embedding_projection(bert_encoding_augmented)
                     encoding = self.encoder(bert_encoding_augmented.permute(1,0,2), mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
                 else:
-                    encoding = bert_encoding
+                    encoding = self.bert_encoding
                 # print(encoding.shape)
             else:
                 encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()

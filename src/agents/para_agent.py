@@ -2,6 +2,9 @@
 import torch
 from torch import nn
 
+import torch.nn.functional as F
+
+
 from agents.model_agent import ModelAgent
 
 from models.para_transformer import TransformerParaphraseModel
@@ -23,7 +26,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle']:
+            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs']:
                 self.data_loader = ParaphraseDataLoader(config=config)
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
@@ -80,12 +83,12 @@ class ParaphraseAgent(ModelAgent):
         
     def text_to_batch(self, x, device):
 
-        parsed_triple = ParaphrasePair(x['s1'], "")
+        parsed_triple = ParaphrasePair(x['s1'], "", config=self.config)
 
         sample = {
-                's1': torch.LongTensor(parsed_triple.s1_as_ids()),
+                's1': torch.LongTensor(parsed_triple.s1_as_ids()).to(self.device),
                 # 's2': torch.LongTensor(parsed_triple.s2_as_ids()),
-                's1_len': torch.LongTensor([len(parsed_triple._s1_doc)]),
+                's1_len': torch.LongTensor([len(parsed_triple._s1_doc)]).to(self.device),
                 # 's2_len': torch.LongTensor([len(parsed_triple._s2_doc)])
                 }
             

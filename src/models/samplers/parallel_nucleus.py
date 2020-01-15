@@ -48,7 +48,7 @@ class ParallelNucleusSampler(nn.Module):
     def forward(self, model, batch, tgt_field):
         curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
 
-        max_output_len = batch[tgt_field].size()[1]
+        max_output_len = self.config.eval.data.get('max_out_len', 32)
 
         
         beam_width = self.config.nucleus_sampling.beam_width # number of total hypotheses to maintain
@@ -117,14 +117,17 @@ class ParallelNucleusSampler(nn.Module):
 
         beam_scores = torch.log(scores).sum(-1)/length_penalty
 
-        top_beams = torch.topk(beam_scores, k=1, dim=-1)
+        sorted_indices, sorted_scores = torch.sort(beam_scores, descending=True)
+
+        # top_beams = torch.topk(beam_scores, k=1, dim=-1)
 
 
         
-        output_seq = torch.gather(output_seq, 1, top_beams.indices.unsqueeze(-1).expand(-1,-1, output_seq.shape[2]))
+        output_seq = torch.gather(output_seq, 1, sorted_indices.unsqueeze(-1).expand(-1,-1, output_seq.shape[2]))
 
         
 
-        output = output_seq[:, 0, :]
+        # output = output_seq[:, 0, :]
+        output = output_seq
 
-        return output, None, torch.sum(output_seq != BPE.pad_id, dim=-1)
+        return output, sorted_scores, torch.sum(output_seq != BPE.pad_id, dim=-1)

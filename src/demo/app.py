@@ -45,6 +45,7 @@ def init():
     app.agent = AQAgent(config=config, run_id=None)
 
     app.agent.load_checkpoint(checkpoint_path)
+    app.agent.model.eval()
 
 def main(_):
     init()

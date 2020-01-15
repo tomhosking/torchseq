@@ -134,4 +134,4 @@ class BeamSearchSampler(nn.Module):
 
         # output_seq = torch.where(output_seq == BPE.pad_id, torch.LongTensor(output_seq.shape).fill_(-1).to(self.device), output_seq)
         # print(output_seq)
-        return output_seq, None, torch.sum(output_seq != BPE.pad_id, dim=-1)
+        return output_seq, scores, torch.sum(output_seq != BPE.pad_id, dim=-1)

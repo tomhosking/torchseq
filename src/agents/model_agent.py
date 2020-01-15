@@ -13,6 +13,7 @@ from models.samplers.greedy import GreedySampler
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.teacher_force import TeacherForcedSampler
 from models.samplers.parallel_nucleus import ParallelNucleusSampler
+from models.samplers.reranking_reducer import RerankingReducer
 
 from utils.mckenzie import update_mckenzie
 
@@ -65,6 +66,8 @@ class ModelAgent(BaseAgent):
         self.decode_beam = BeamSearchSampler(self.config, self.device)
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
+
+        self.reranker = RerankingReducer(self.config, self.device, top1=True)
 
     
     def load_checkpoint(self, file_name):
@@ -119,7 +122,7 @@ class ModelAgent(BaseAgent):
         """
         batch = self.text_to_batch(input, self.device)
 
-        _, output, output_lens = self.step_validate(batch, self.tgt_field, sample_outputs=True, calculate_loss=False)
+        _, output, output_lens = self.step_validate(batch, sample_outputs=True, calculate_loss=False)
 
         output_strings = [BPE.decode(output.data[ix][:output_lens[ix]]) for ix in range(len(output_lens))]
 
@@ -165,7 +168,7 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.current_epoch > 0:
             self.begin_epoch_hook()
-            self.validate(save=True, tgt_field=self.tgt_field)
+            # self.validate(save=True)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
@@ -175,7 +178,7 @@ class ModelAgent(BaseAgent):
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                self.validate(save=True, tgt_field=self.tgt_field)
+                self.validate(save=True)
 
 
 
@@ -212,6 +215,18 @@ class ModelAgent(BaseAgent):
             
             loss.backward()
 
+            # for name, param in self.model.named_parameters():
+            #     if "bert_encoder." in name:
+            #     # if "encoder_projection." in name:
+            #         # print(name, param.requires_grad)
+            #         if param.requires_grad and param.grad is None:
+            #             # print(dir(param))
+            #             print(name)
+            #             # print(torch.sum(torch.abs(param.grad)))
+
+
+            # exit()
+
             steps_accum += curr_batch_size
             
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
@@ -230,7 +245,7 @@ class ModelAgent(BaseAgent):
                 self.current_iteration += 1
             
             if batch_idx % self.config.training.log_interval == 0:
-                add_to_log('train/loss', loss, self.current_iteration, self.config.tag +'/' + self.run_id)
+                add_to_log('train/loss', loss/ float(curr_batch_size)*float(self.config.training.optim_batch_size), self.current_iteration, self.config.tag +'/' + self.run_id)
                 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval*20) == 0 and not self.silent:
@@ -238,7 +253,8 @@ class ModelAgent(BaseAgent):
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch, self.tgt_field)
                     
-                    # print(BPE.decode(batch['s1'][0][:batch['s1_len'][0]]))
+                    if self.tgt_field == 's2':
+                        print(BPE.decode(batch['s1'][0][:batch['s1_len'][0]]))
                     print(BPE.decode(batch[self.tgt_field][0][:batch[self.tgt_field+'_len'][0]]))
                     print(BPE.decode(greedy_output.data[0][:output_lens[0]]))
 
@@ -251,14 +267,21 @@ class ModelAgent(BaseAgent):
             dev_output = None
             dev_output_lens = None
         elif self.config.eval.sampler == 'nucleus':
-            dev_output, _, dev_output_lens = self.decode_nucleus(self.model, batch, tgt_field)
-        elif self.config.eval.sampler == 'beam':
-            beam_output, _, beam_lens = self.decode_beam(self.model, batch, tgt_field)
+            beam_output, beam_scores, beam_lens = self.decode_nucleus(self.model, batch, tgt_field)
 
-            dev_output = beam_output[:, 0, :]
-            dev_output_lens = beam_lens[:, 0]
+            # dev_output = beam_output[:, 0, :]
+            # dev_output_lens = beam_lens[:, 0]
+        elif self.config.eval.sampler == 'beam':
+            beam_output, beam_scores, beam_lens = self.decode_beam(self.model, batch, tgt_field)
+
+            # dev_output = beam_output[:, 0, :]
+            # dev_output_lens = beam_lens[:, 0]
         else:
             raise Exception("Unknown sampling method!")
+
+        # Rerank (or just select top-1)
+        if sample_outputs:
+            dev_output, dev_output_lens, dev_scores = self.reranker(beam_output,  beam_lens, batch, tgt_field, scores=beam_scores, presorted=True)
 
         if calculate_loss:
             _, logits = self.decode_teacher_force(self.model, batch, tgt_field)
@@ -268,13 +291,13 @@ class ModelAgent(BaseAgent):
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens
 
-    def validate(self, save=False, force_save_output=False, use_test=False, tgt_field=None):
+    def validate(self, save=False, force_save_output=False, use_test=False):
         """
         One cycle of model validation
         :return:
         """
 
-        if tgt_field is None:
+        if self.tgt_field is None:
             raise Exception('You need to specify the target output field! ie which element of a batch is the output')
 
         self.logger.info('## Validating after {:} epochs'.format(self.current_epoch))
@@ -305,8 +328,8 @@ class ModelAgent(BaseAgent):
 
                 for ix, pred in enumerate(dev_output.data):
                     pred_output.append(BPE.decode(pred[:dev_output_lens[ix]]))
-                for ix, gold in enumerate(batch[tgt_field]):
-                    gold_output.append(BPE.decode(gold[:batch[tgt_field+'_len'][ix]]))
+                for ix, gold in enumerate(batch[self.tgt_field]):
+                    gold_output.append(BPE.decode(gold[:batch[self.tgt_field+'_len'][ix]]))
                 
 
                 if batch_idx % 200 == 0 and not self.silent:

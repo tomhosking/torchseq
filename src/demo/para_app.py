@@ -26,7 +26,7 @@ def generate():
     }
     res = app.agent.infer(query)
 
-    return res[0]
+    return json.dumps(res[0])
 
 @app.route("/api/ping")
 def ping():
@@ -36,11 +36,12 @@ def init():
     # Get the config
     with open(FLAGS.config) as f:
         config = Config(json.load(f))
-    checkpoint_path = './models/optimised/bert_fixed/0sent/model/checkpoint.pth.tar'
+    checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
 
     app.agent = ParaphraseAgent(config=config, run_id=None)
 
     app.agent.load_checkpoint(checkpoint_path)
+    app.agent.model.eval()
 
 def main(_):
     init()

@@ -1,0 +1,41 @@
+from transformers import BertTokenizer, BertForQuestionAnswering
+from transformers import DistilBertTokenizer, DistilBertForQuestionAnswering
+import torch
+
+class PreTrainedQA:
+    def __init__(self, device=None):
+
+        self.device = torch.device('cuda') if device is None else device
+        self.tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+        self.model = BertForQuestionAnswering.from_pretrained('bert-large-uncased-whole-word-masking-finetuned-squad').to(self.device)
+
+        # self.tokenizer = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
+        # self.model = DistilBertForQuestionAnswering.from_pretrained('distilbert-base-uncased-distilled-squad')
+        
+        
+        
+
+
+    def infer_single(self, question, text):
+        input_ids = self.tokenizer.encode(question, text)
+        token_type_ids = [0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))]
+        start_scores, end_scores = self.model(torch.tensor([input_ids]).to(self.device), token_type_ids=torch.tensor([token_type_ids]).to(self.device))
+        all_tokens = self.tokenizer.convert_ids_to_tokens(input_ids)
+
+        return ' '.join(all_tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1])
+
+
+    def infer_batch(self, question_list, text_list):
+        input_ids_batch = [self.tokenizer.encode(question, text) for question, text in zip(question_list, text_list)]
+        token_type_ids_batch = [[0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))] for input_ids in input_ids_batch]
+        start_scores, end_scores = self.model(torch.tensor(input_ids_batch).to(self.device), token_type_ids=torch.tensor(token_type_ids_batch).to(self.device))
+        all_tokens_batch = [self.tokenizer.convert_ids_to_tokens(input_ids) for input_ids in input_ids_batch]
+
+        return [' '.join(all_tokens_batch[ix][torch.argmax(start_scores[ix]) : torch.argmax(end_scores[ix])+1]) for ix in range(len(start_scores))]
+
+
+
+if __name__ == "__main__":
+    instance = PreTrainedQA()
+
+    print(instance.infer_batch(["Who was Jim Henson?"], ["Jim Henson was a nice puppet"]))
