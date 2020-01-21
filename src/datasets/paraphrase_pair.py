@@ -3,7 +3,7 @@ from utils.bpe_factory import BPE
 
 
 class ParaphrasePair:
-    def __init__(self, sent1_text, sent2_text, config):
+    def __init__(self, sent1_text, sent2_text, tok_window=64):
 
         if "artist appear below the euro symbol" in sent2_text:
             print("Found the dodgy pair", sent1_text, sent2_text)
@@ -15,10 +15,10 @@ class ParaphrasePair:
         if "artist appear below the euro symbol" in sent2_text:
             print("Dodgy pair cleared tokenising")
 
-        if len(self._s1_doc) > config.prepro.tok_window:
-            self._s1_doc = self._s1_doc[:config.prepro.tok_window]
-        if len(self._s2_doc) > config.prepro.tok_window:
-            self._s2_doc = self._s2_doc[:config.prepro.tok_window]
+        if len(self._s1_doc) > tok_window:
+            self._s1_doc = self._s1_doc[:tok_window]
+        if len(self._s2_doc) > tok_window:
+            self._s2_doc = self._s2_doc[:tok_window]
 
 
     def s1_as_ids(self):

@@ -29,7 +29,10 @@ def main(_):
     print('** Running with config={:} **'.format(FLAGS.config))
 
     with open(FLAGS.config) as f:
-        config = Config(json.load(f))
+        cfg_dict = json.load(f)
+        if FLAGS.data_path is not None:
+            cfg_dict['env']['data_path'] = FLAGS.data_path
+        config = Config(cfg_dict)
 
     set_seed(FLAGS.seed)
 

@@ -14,9 +14,11 @@ from transformers import BertModel
 
 
 class TransformerParaphraseModel(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, src_field='s1'):
         super().__init__()
         self.config = config
+
+        self.src_field = src_field
 
         # Embedding layers
         # self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.embeddings), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
@@ -62,9 +64,9 @@ class TransformerParaphraseModel(nn.Module):
         # exit()
 
         # Get some sizes
-        max_ctxt_len = batch['s1'].shape[1]
+        max_ctxt_len = batch[self.src_field].shape[1]
         # max_q_len = torch.max(batch['q_len'])
-        curr_batch_size = batch['s1'].size()[0]
+        curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
@@ -73,10 +75,10 @@ class TransformerParaphraseModel(nn.Module):
             src_mask = torch.triu(src_mask, diagonal=1)
             # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
-            context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch['s1_len'][:, None].cpu()).to(self.device)
+            context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch[self.src_field+'_len'][:, None].cpu()).to(self.device)
 
 
-            ctxt_toks_embedded = self.embeddings(batch['s1']).to(self.device)
+            ctxt_toks_embedded = self.embeddings(batch[self.src_field]).to(self.device)
 
             # Build the context
             if self.config.raw_embedding_dim != self.config.embedding_dim:

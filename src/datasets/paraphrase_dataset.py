@@ -1,6 +1,8 @@
 
 from torch.utils.data import IterableDataset
 import torch
+import torch.nn.functional as F
+from utils.bpe_factory import BPE
 import os
 from datasets.paraphrase_pair import ParaphrasePair
 
@@ -40,15 +42,39 @@ class ParaphraseDataset(IterableDataset):
                     continue
                 x = line.split('\t')
                 sample = {'s1': x[0], 's2': x[1]}
-                yield self.to_tensor(sample)
+                yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
-
-    def to_tensor(self,x):
-        parsed_triple = ParaphrasePair(x['s1'], x['s2'], config=self.config)
+    @staticmethod
+    def to_tensor(x, tok_window=64):
+        parsed_triple = ParaphrasePair(x['s1'], x['s2'], tok_window=tok_window)
 
         sample = {'s1': torch.LongTensor(parsed_triple.s1_as_ids()),
                 's2': torch.LongTensor(parsed_triple.s2_as_ids()),
                 's1_len': torch.LongTensor([len(parsed_triple._s1_doc)]),
-                's2_len': torch.LongTensor([len(parsed_triple._s2_doc)])}
+                's2_len': torch.LongTensor([len(parsed_triple._s2_doc)]),
+                's1_text': x['s1'],
+                's2_text': x['s2']
+                }
 
         return sample
+
+    @staticmethod
+    def pad_and_order_sequences(batch):
+        keys = batch[0].keys()
+        max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
+
+        for x in batch:
+            for k in keys:
+                if k == 'a_pos':
+                    x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=0)
+                elif k[-5:] != '_text':
+                    x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.pad_id)
+
+        tensor_batch = {}
+        for k in keys:
+            if k[-5:] != '_text':
+                tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
+            else:
+                tensor_batch[k] = [x[k] for x in batch]
+
+        return tensor_batch

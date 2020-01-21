@@ -57,7 +57,7 @@ class ParallelNucleusSampler(nn.Module):
 
         # Create vector of SOS + placeholder for first prediction
         output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.bos_id).to(self.device)
-        scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(0).to(self.device)
+        scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(1).to(self.device)
         
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
@@ -69,7 +69,7 @@ class ParallelNucleusSampler(nn.Module):
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
 
-        batch_tiled = {k: _tile_batch(x) for k,x in batch.items()}
+        batch_tiled = {k: _tile_batch(x) for k,x in batch.items() if k[-5:] != '_text'}
 
         seq_ix = 0
         memory = None
@@ -114,12 +114,15 @@ class ParallelNucleusSampler(nn.Module):
         len_alpha = self.config.nucleus_sampling.length_alpha
         length_penalty = torch.pow((5+hypothesis_len).float(), len_alpha)/pow(5.0+1.0, len_alpha)
 
+        # print(scores)
 
-        beam_scores = torch.log(scores).sum(-1)/length_penalty
+        beam_scores = torch.log(scores).where(output_seq != BPE.pad_id, torch.FloatTensor([0.]).to(self.device)).sum(-1)/length_penalty
 
-        sorted_indices, sorted_scores = torch.sort(beam_scores, descending=True)
+        sorted_scores, sorted_indices = torch.sort(beam_scores, descending=True)
 
         # top_beams = torch.topk(beam_scores, k=1, dim=-1)
+
+        
 
 
         

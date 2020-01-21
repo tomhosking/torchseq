@@ -47,7 +47,7 @@ class PreprocessedDataLoader:
             for k in keys:
                 if k == 'a_pos':
                     x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=0)
-                else:
+                elif k[-5:] != '_text':
                     x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.pad_id)
 
         tensor_batch = {}

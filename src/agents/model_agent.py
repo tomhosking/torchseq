@@ -51,7 +51,8 @@ class ModelAgent(BaseAgent):
         self.all_metrics_at_best = {}
         self.best_epoch = None
         self.current_epoch = 0
-        self.current_iteration = 0
+        self.global_step = 0
+        self.global_step = 0
 
     def create_optimizer(self):
         if self.config.training.opt == 'adam':
@@ -80,9 +81,13 @@ class ModelAgent(BaseAgent):
         checkpoint = torch.load(file_name)
         self.model.load_state_dict(checkpoint['model_state_dict'])
         self.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        self.current_epoch = checkpoint['epoch']
+        # self.current_epoch = checkpoint['epoch']
+        if 'global_step' in checkpoint:
+            self.global_step = checkpoint['global_step']
+        else:
+            self.logger.warn('Checkpoint is missing global_step value!')
         self.loss = checkpoint['loss']
-        self.best_metric = checkpoint['best_metric']
+        self.best_metric = checkpoint['best_metric'] if ('reset_metrics' not in self.config.training.data or not self.config.training.reset_metrics) else None
         
 
     def save_checkpoint(self, file_name="checkpoint.pth.tar"):
@@ -95,7 +100,7 @@ class ModelAgent(BaseAgent):
 
         torch.save(
             {
-            'epoch': self.current_epoch,
+            'global_step': self.global_step,
             'model_state_dict': self.model.state_dict(),
             'optimizer_state_dict': self.optimizer.state_dict(),
             'loss': self.loss,
@@ -116,17 +121,21 @@ class ModelAgent(BaseAgent):
         """
         raise NotImplementedError("Your model is missing a text_to_batch method!")
 
-    def infer(self, input):
+    def infer(self, input, reduce_outputs=True):
         """
         Run inference on a dictionary of strings
         """
         batch = self.text_to_batch(input, self.device)
 
-        _, output, output_lens = self.step_validate(batch, sample_outputs=True, calculate_loss=False)
+        _, output, output_lens, scores = self.step_validate(batch, tgt_field=self.tgt_field, sample_outputs=True, calculate_loss=False, reduce_outputs=reduce_outputs)
 
-        output_strings = [BPE.decode(output.data[ix][:output_lens[ix]]) for ix in range(len(output_lens))]
+        if reduce_outputs:
+            output_strings = [BPE.decode(output.data[ix][:output_lens[ix]]) for ix in range(len(output_lens))]
+        else:
+            # There's an extra dim of nesting
+            output_strings = [[BPE.decode(output.data[i][j][:output_lens[i][j]]) for j in range(len(output_lens[i]))]  for i in range(len(output_lens))]
 
-        return output_strings
+        return output_strings, scores
 
     # def step_train(self, batch):
     #     """
@@ -161,14 +170,14 @@ class ModelAgent(BaseAgent):
         if self.tgt_field is None:
             raise Exception('You need to specify the target output field! ie which element of a batch is the output')
 
-        self.global_idx = self.current_epoch * len(self.data_loader.train_loader.dataset)
-        self.current_iteration = self.current_epoch * len(self.data_loader.train_loader.dataset)//self.config.training.optim_batch_size
+        # self.global_step = self.current_epoch * len(self.data_loader.train_loader.dataset)
+        # self.global_step = self.current_epoch * len(self.data_loader.train_loader.dataset)//self.config.training.optim_batch_size
         update_mckenzie(0,'-')
 
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.current_epoch > 0:
             self.begin_epoch_hook()
-            # self.validate(save=True)
+            self.validate(save=True)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
@@ -207,7 +216,7 @@ class ModelAgent(BaseAgent):
             batch= {k:v.to(self.device) for k,v in batch.items()}
             curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
             
-            self.global_idx += curr_batch_size
+            # self.global_step += curr_batch_size
             
             # Weight the loss by the ratio of this batch to optimiser step size, so that LR is equivalent even when grad accumulation happens
             loss = self.step_train(batch, self.tgt_field) * float(curr_batch_size)/float(self.config.training.optim_batch_size)
@@ -231,9 +240,9 @@ class ModelAgent(BaseAgent):
             
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
             
-            lr = get_lr(self.config.training.lr, self.current_iteration, self.config.training.lr_schedule)
+            lr = get_lr(self.config.training.lr, self.global_step, self.config.training.lr_schedule)
 
-            add_to_log('train/lr', lr, self.current_iteration, self.config.tag +'/' + self.run_id)
+            add_to_log('train/lr', lr, self.global_step, self.config.tag +'/' + self.run_id)
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = lr
 
@@ -242,10 +251,10 @@ class ModelAgent(BaseAgent):
                 self.optimizer.step()
                 self.optimizer.zero_grad()
                 steps_accum = 0
-                self.current_iteration += 1
+                self.global_step += 1
             
             if batch_idx % self.config.training.log_interval == 0:
-                add_to_log('train/loss', loss/ float(curr_batch_size)*float(self.config.training.optim_batch_size), self.current_iteration, self.config.tag +'/' + self.run_id)
+                add_to_log('train/loss', loss/ float(curr_batch_size)*float(self.config.training.optim_batch_size), self.global_step, self.config.tag +'/' + self.run_id)
                 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval*20) == 0 and not self.silent:
@@ -254,14 +263,14 @@ class ModelAgent(BaseAgent):
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch, self.tgt_field)
                     
                     if self.tgt_field == 's2':
-                        print(BPE.decode(batch['s1'][0][:batch['s1_len'][0]]))
+                        print(BPE.decode(batch[self.src_field][0][:batch[self.src_field+'_len'][0]]))
                     print(BPE.decode(batch[self.tgt_field][0][:batch[self.tgt_field+'_len'][0]]))
                     print(BPE.decode(greedy_output.data[0][:output_lens[0]]))
 
                 torch.cuda.empty_cache()
 
 
-    def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True):
+    def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True, reduce_outputs=True):
         
         if not sample_outputs:
             dev_output = None
@@ -280,8 +289,10 @@ class ModelAgent(BaseAgent):
             raise Exception("Unknown sampling method!")
 
         # Rerank (or just select top-1)
-        if sample_outputs:
+        if sample_outputs and reduce_outputs:
             dev_output, dev_output_lens, dev_scores = self.reranker(beam_output,  beam_lens, batch, tgt_field, scores=beam_scores, presorted=True)
+        elif sample_outputs:
+            dev_output, dev_output_lens, dev_scores = self.reranker(beam_output,  beam_lens, batch, tgt_field, scores=beam_scores, presorted=True, top1=False)
 
         if calculate_loss:
             _, logits = self.decode_teacher_force(self.model, batch, tgt_field)
@@ -289,7 +300,7 @@ class ModelAgent(BaseAgent):
             normed_loss = torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0)
         else:
             normed_loss = None
-        return normed_loss, dev_output, dev_output_lens
+        return normed_loss, dev_output, dev_output_lens, dev_scores
 
     def validate(self, save=False, force_save_output=False, use_test=False):
         """
@@ -317,10 +328,10 @@ class ModelAgent(BaseAgent):
         with torch.no_grad():
             num_batches = 0
             for batch_idx, batch in enumerate(tqdm(valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch), disable=self.silent)):
-                batch= {k:v.to(self.device) for k,v in batch.items()}
+                batch= {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in batch.items()}
                 curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
                 
-                this_loss, dev_output, dev_output_lens = self.step_validate(batch, self.tgt_field)
+                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(batch, self.tgt_field)
 
                 test_loss += this_loss
 
@@ -341,8 +352,8 @@ class ModelAgent(BaseAgent):
 
         dev_bleu = 100*bleu_corpus(gold_output, pred_output)
 
-        add_to_log('dev/loss', test_loss, self.current_iteration, self.config.tag +'/' + self.run_id)
-        add_to_log('dev/bleu', dev_bleu, self.current_iteration, self.config.tag +'/' + self.run_id)
+        add_to_log('dev/loss', test_loss, self.global_step, self.config.tag +'/' + self.run_id)
+        add_to_log('dev/bleu', dev_bleu, self.global_step, self.config.tag +'/' + self.run_id)
         
         self.logger.info('BLEU: {:}'.format(dev_bleu))
 

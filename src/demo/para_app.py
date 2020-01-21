@@ -1,6 +1,10 @@
+
+import sys
+sys.path.insert(0, './src/')
+
 from absl import app as absl_app
 from args import FLAGS as FLAGS
-from flask import Flask, current_app, request, redirect
+from flask import Flask, current_app, request, redirect, Response
 
 import json
 
@@ -20,13 +24,21 @@ def index():
 def generate():
 
     s1 = request.args['s1']
+    ctxt = request.args['ctxt']
+    ans = request.args['ans']
 
     query = {
-        's1': s1
+        's1': s1,
+        'ctxt': ctxt,
+        'ans': ans
     }
-    res = app.agent.infer(query)
+    res, scores = app.agent.infer(query, reduce_outputs=False)
 
-    return json.dumps(res[0])
+    # scores = scores.tolist()
+
+    output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
+
+    return Response(json.dumps(output, indent=2), mimetype='application/json') 
 
 @app.route("/api/ping")
 def ping():
@@ -34,9 +46,28 @@ def ping():
 
 def init():
     # Get the config
-    with open(FLAGS.config) as f:
-        config = Config(json.load(f))
-    checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
+    # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
+    with open('./runs/paraphrase/20200115_121750_parabank-qs_supp1.0/config.json') as f:
+        cfg_dict = json.load(f)
+        cfg_dict['eval']['sampler'] = "beam"
+        cfg_dict['nucleus_sampling'] = {
+            "beam_width": 32,
+            "cutoff": 0.9,
+            "length_alpha": 0
+        }
+        cfg_dict['beam_search'] = {
+            "beam_width": 32,
+            "beam_expansion": 8,
+            "length_alpha": 2.0
+        }
+        cfg_dict['reranker'] = {
+            'strategy': 'qa'
+        }
+        config = Config(cfg_dict)
+    
+    # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
+    checkpoint_path = './runs/paraphrase/20200115_121750_parabank-qs_supp1.0/model/checkpoint.pth.tar'
+    
 
     app.agent = ParaphraseAgent(config=config, run_id=None)
 

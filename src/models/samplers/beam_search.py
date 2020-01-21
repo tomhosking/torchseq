@@ -32,7 +32,7 @@ class BeamSearchSampler(nn.Module):
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
 
-        batch_tiled = {k: _tile_batch(x) for k,x in batch.items()}
+        batch_tiled = {k: _tile_batch(x) for k,x in batch.items() if k[-5:] != '_text'}
 
         seq_ix = 0
         memory = None
@@ -101,6 +101,8 @@ class BeamSearchSampler(nn.Module):
 
                 top_beams = torch.topk(beam_scores, k=beam_width, dim=-1)
 
+                
+
 
                 # print(top_beams.indices.shape)
                 # print(expanded_beam_scores.shape)
@@ -128,10 +130,15 @@ class BeamSearchSampler(nn.Module):
 
             
             seq_ix += 1
-        
-        # Take top-1 beam
-        # output = output_seq.view(curr_batch_size, beam_width, -1)[:, 0, :]
 
-        # output_seq = torch.where(output_seq == BPE.pad_id, torch.LongTensor(output_seq.shape).fill_(-1).to(self.device), output_seq)
-        # print(output_seq)
-        return output_seq, scores, torch.sum(output_seq != BPE.pad_id, dim=-1)
+        # Sort by score
+        
+        output_len = torch.sum(output_seq != BPE.pad_id, dim=-1)
+        length_penalty = torch.pow((5+output_len).float(), len_alpha)/pow(5.0+1.0, len_alpha)
+        beam_scores = torch.sum(scores, dim=-1)/length_penalty
+
+        sorted_scores, sorted_indices = torch.sort(beam_scores, descending=True)
+
+        output_seq = torch.gather(output_seq, 1, sorted_indices.unsqueeze(-1).expand(-1,-1, output_seq.shape[2]))
+        
+        return output_seq, sorted_scores, output_len

@@ -1,3 +1,7 @@
+
+import sys
+sys.path.insert(0, './src/')
+
 from absl import app as absl_app
 from args import FLAGS as FLAGS
 from flask import Flask, current_app, request, redirect
@@ -28,7 +32,7 @@ def generate():
         'a': answer,
         'a_pos': a_pos
     }
-    res = app.agent.infer(query)
+    res, _ = app.agent.infer(query)
 
     return res[0]
 
