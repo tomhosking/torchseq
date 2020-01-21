@@ -22,8 +22,8 @@ def bleu_corpus(golds, preds, order=4):
     return compute_bleu([[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order)[0]
 
 def f1(gold, prediction):
-    prediction_tokens = prediction.split()
-    ground_truth_tokens = gold.split()
+    prediction_tokens = prediction.lower().split()
+    ground_truth_tokens = gold.lower().split()
     common = Counter(prediction_tokens) & Counter(ground_truth_tokens)
     num_same = sum(common.values())
     if num_same == 0:

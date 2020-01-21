@@ -45,7 +45,7 @@ class RerankingReducer(nn.Module):
 
             scores = []
             for ix,q_batch in enumerate(output_strings):
-                answers = self.qa_model.infer_batch(question_list=q_batch, text_list=[batch['c_text'] for _ in range(len(q_batch))])
+                answers = self.qa_model.infer_batch(question_list=q_batch, text_list=[batch['c_text'][ix] for _ in range(len(q_batch))])
 
                 this_scores = [f1(batch['a_text'][ix], ans) for ans in answers]
 
@@ -53,7 +53,7 @@ class RerankingReducer(nn.Module):
                     print(batch['c_text'][ix], "->", batch['q_text'][ix], batch['a_text'][ix])
                     print('***')
                     for j in range(len(q_batch)):
-                        print(q_batch[j], answers[j], this_scores[j])
+                        print(q_batch[j], "##", answers[j], this_scores[j])
                     print('***')
                     # exit()
 

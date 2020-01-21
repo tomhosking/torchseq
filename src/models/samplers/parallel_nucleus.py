@@ -89,7 +89,7 @@ class ParallelNucleusSampler(nn.Module):
             
 
             
-            sampled_indices = torch.multinomial(new_probs.view(curr_batch_size*beam_width, -1), 1).view(curr_batch_size, beam_width, -1)
+            sampled_indices = torch.multinomial(new_probs.view(curr_batch_size*beam_width, -1).cpu(), 1).view(curr_batch_size, beam_width, -1).to(self.device)
 
             sampled_scores = new_probs.gather(index=sampled_indices, dim=-1)
 

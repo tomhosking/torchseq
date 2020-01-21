@@ -27,12 +27,19 @@ class PreTrainedQA:
 
 
     def infer_batch(self, question_list, text_list):
+        
         input_ids_batch = [self.tokenizer.encode(question, text) for question, text in zip(question_list, text_list)]
         token_type_ids_batch = [[0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))] for input_ids in input_ids_batch]
         start_scores, end_scores = self.model(self.pad_batch(input_ids_batch), token_type_ids=self.pad_batch(token_type_ids_batch))
         all_tokens_batch = [self.tokenizer.convert_ids_to_tokens(input_ids) for input_ids in input_ids_batch]
 
-        return [' '.join(all_tokens_batch[ix][torch.argmax(start_scores[ix]) : torch.argmax(end_scores[ix])+1]) for ix in range(len(start_scores))]
+        return [self.extract_answer(all_tokens_batch[ix], start_scores[ix], end_scores[ix], token_type_ids_batch[ix]) for ix in range(len(start_scores))]
+
+    def extract_answer(self, tokens, start_scores, end_scores, type_ids):
+        # If the answer is actually in the question... then this has failed!!
+        if torch.argmax(end_scores) <= type_ids.index(1)-1:
+            return ""
+        return ' '.join(tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1])
 
     def pad_batch(self, batch):
         pad_id = self.tokenizer.pad_token_id
