@@ -59,7 +59,7 @@ class AQAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset == 'squad':
+            if self.config.training.dataset in ['squad', 'squad-ppdb']:
                 self.data_loader = SquadDataLoader(config=config)
             elif self.config.training.dataset == 'newsqa':
                 self.data_loader = NewsqaDataLoader(config=config)
@@ -93,7 +93,7 @@ class AQAgent(ModelAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
             
-        output, logits = self.decode_teacher_force(self.model, batch, 'q')
+        output, logits = self.decode_teacher_force(self.model, batch, 'q') # bsd
 
         this_loss = self.loss(logits.permute(0,2,1), batch['q'])
 
@@ -111,7 +111,7 @@ class AQAgent(ModelAgent):
 
         x['q'] = ''
 
-        return {k:v.to(device) for k,v in SquadDataset.pad_and_order_sequences([SquadDataset.to_tensor(x,
+        return {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in SquadDataset.pad_and_order_sequences([SquadDataset.to_tensor(x,
             sent_window=self.config.prepro.sent_window,
             tok_window=self.config.prepro.tok_window,
             o_tag=2 if self.config.prepro.bio_tagging else 1,

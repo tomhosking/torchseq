@@ -13,6 +13,7 @@ from models.suppression_loss import SuppressionLoss
 from datasets.paraphrase_loader import ParaphraseDataLoader
 from datasets.squad_loader import SquadDataLoader
 from datasets.paraphrase_dataset import ParaphraseDataset
+from datasets.squad_dataset import SquadDataset
 from utils.bpe_factory import BPE
 
 from datasets.paraphrase_pair import ParaphrasePair
@@ -90,20 +91,13 @@ class ParaphraseAgent(ModelAgent):
 
         
     def text_to_batch(self, x, device):
-
-        x['s2'] = ''
-
-        return {k:v.to(device) for k,v in ParaphraseDataset.pad_and_order_sequences([ParaphraseDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]).items()}
-
-        # parsed_triple = ParaphrasePair(x['s1'], "", config=self.config)
-
-        # sample = {
-        #         's1': torch.LongTensor(parsed_triple.s1_as_ids()).to(self.device),
-        #         # 's2': torch.LongTensor(parsed_triple.s2_as_ids()),
-        #         's1_len': torch.LongTensor([len(parsed_triple._s1_doc)]).to(self.device),
-        #         # 's2_len': torch.LongTensor([len(parsed_triple._s2_doc)])
-        #         }
+        if self.config.training.dataset in ['squad']:
+            x['s2'] = ''
             
-                    
+            return {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in SquadDataset.pad_and_order_sequences([SquadDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]).items()}
+        else:
+            x['s2'] = ''
+            
+            return {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in ParaphraseDataset.pad_and_order_sequences([ParaphraseDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]).items()}
 
-        # return self.pad_and_order_sequences([sample])
+        

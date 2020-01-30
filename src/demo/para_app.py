@@ -29,12 +29,14 @@ def generate():
 
     query = {
         's1': s1,
-        'ctxt': ctxt,
-        'ans': ans
+        'c': ctxt,
+        'a': ans,
+        'a_pos': ctxt.find(ans),
+        'q': s1
     }
     res, scores = app.agent.infer(query, reduce_outputs=False)
 
-    # scores = scores.tolist()
+    scores = scores.tolist()
 
     output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
 
@@ -46,10 +48,13 @@ def ping():
 
 def init():
     # Get the config
+    MODEL_PATH = './runs/paraphrase/20200128_095215_parabank-qs_supp1.0_8heads'
+
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
-    with open('./runs/paraphrase/20200115_121750_parabank-qs_supp1.0/config.json') as f:
+    with open(MODEL_PATH + '/config.json') as f:
         cfg_dict = json.load(f)
-        cfg_dict['eval']['sampler'] = "beam"
+        cfg_dict['eval']['sampler'] = "nucleus"
+        cfg_dict['training']['dataset'] = "squad"
         cfg_dict['nucleus_sampling'] = {
             "beam_width": 32,
             "cutoff": 0.9,
@@ -58,7 +63,7 @@ def init():
         cfg_dict['beam_search'] = {
             "beam_width": 32,
             "beam_expansion": 8,
-            "length_alpha": 2.0
+            "length_alpha": 1.0
         }
         cfg_dict['reranker'] = {
             'strategy': 'qa'
@@ -66,7 +71,7 @@ def init():
         config = Config(cfg_dict)
     
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
-    checkpoint_path = './runs/paraphrase/20200115_121750_parabank-qs_supp1.0/model/checkpoint.pth.tar'
+    checkpoint_path = MODEL_PATH + '/model/checkpoint.pth.tar'
     
 
     app.agent = ParaphraseAgent(config=config, run_id=None)

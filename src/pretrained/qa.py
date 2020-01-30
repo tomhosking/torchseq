@@ -39,7 +39,7 @@ class PreTrainedQA:
         # If the answer is actually in the question... then this has failed!!
         if torch.argmax(end_scores) <= type_ids.index(1)-1:
             return ""
-        return ' '.join(tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1])
+        return ' '.join(tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1]).replace(' ##', '')
 
     def pad_batch(self, batch):
         pad_id = self.tokenizer.pad_token_id

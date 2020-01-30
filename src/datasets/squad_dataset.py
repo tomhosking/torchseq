@@ -20,7 +20,7 @@ class SquadDataset(Dataset):
             self.samples =[{'c': x[0], 'q': x[1], 'a': x[2], 'a_pos': x[3]} for x in squad if (len(x[1]) < 200 and len(x[0]) < 3500 and x[1] != "I couldn't could up with another question. But i need to fill this space because I can't submit the hit. ") or test is True]
         else:
             self.variant = 'dev' if dev else ('test' if test else 'train')
-            with open(os.path.join(path, config.training.dataset, 'questions.{:}.json'.format(self.variant))) as f:
+            with open(os.path.join(path, 'questions.{:}.json'.format(self.variant))) as f:
                 self.samples = json.load(f)
         
 
@@ -50,10 +50,10 @@ class SquadDataset(Dataset):
             o_tag=o_tag)
 
         if concat_ctxt_ans:
-            sample = {'c':  torch.LongTensor(parsed_triple.ctxt_as_ids() + [BPE.eos_id] +  parsed_triple.ans_as_ids()),
+            sample = {'c':  torch.LongTensor(parsed_triple.ans_as_ids() + [BPE.eos_id] +  parsed_triple.ctxt_as_ids()),
                     'q': torch.LongTensor(parsed_triple.q_as_ids()),
                     'a': torch.LongTensor(parsed_triple.ans_as_ids()),
-                    'a_pos': torch.LongTensor([0 for i in range(len(parsed_triple._ctxt_doc))] + [0] + [1 for i in range(len(parsed_triple._ans_doc))]),
+                    'a_pos': torch.LongTensor([0 for i in range(len(parsed_triple._ans_doc))] + [1] + [1 for i in range(len(parsed_triple._ctxt_doc))]),
                     'c_len': torch.LongTensor([len(parsed_triple._ctxt_doc) + len(parsed_triple._ans_doc) + 1]),
                     'a_len': torch.LongTensor([len(parsed_triple._ans_doc)]),
                     'q_len': torch.LongTensor([len(parsed_triple._q_doc)]),

@@ -3,6 +3,22 @@ import torch.nn as nn
 
 from utils.bpe_factory import BPE
 
+def onehot(indexes, N=None, ignore_index=None):
+    """
+    Creates a one-representation of indexes with N possible entries
+    if N is not specified, it will suit the maximum index appearing.
+    indexes is a long-tensor of indexes
+    ignore_index will be zero in onehot representation
+    """
+    if N is None:
+        N = indexes.max() + 1
+    sz = list(indexes.size())
+    output = indexes.new().byte().resize_(*sz, N).zero_()
+    output.scatter_(-1, indexes.unsqueeze(-1), 1)
+    if ignore_index is not None and ignore_index >= 0:
+        output.masked_fill_(indexes.eq(ignore_index).unsqueeze(-1), 0)
+    return output
+
 class BeamSearchSampler(nn.Module):
     def __init__(self, config, device):
         super(BeamSearchSampler, self).__init__()
@@ -16,6 +32,8 @@ class BeamSearchSampler(nn.Module):
         # TODO: move to config
         beam_width = self.config.beam_search.beam_width # number of total hypotheses to maintain
         beam_expansion = self.config.beam_search.beam_expansion # number of new predictions to add to each hypothesis each step
+
+        prevent_repetition = self.config.beam_search.prevent_repetition if 'prevent_repetition' in self.config.beam_search.data else True
 
 
         # Create vector of SOS + placeholder for first prediction
@@ -41,11 +59,18 @@ class BeamSearchSampler(nn.Module):
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size*beam_width, -1), memory)
             new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
             output_done = (output_seq[:,:,-1] == BPE.pad_id) | (output_seq[:,:,-1] == BPE.eos_id)
+
+
+            if prevent_repetition:
+                one_hot_prev = onehot(output_seq[:,:,-1], N=self.config.prepro.vocab_size)
+                new_logits[:, :, -1, :] = new_logits[:, :, -1, :] + (one_hot_prev * float('-1e-16')) 
+
             # print(output_done.shape)
             # print(output_done.unsqueeze(-1).shape)
             # print(pad_probs.shape)
             # print(new_logits.shape)
             new_probs = torch.where(output_done.unsqueeze(-1), pad_probs, torch.log_softmax(new_logits[:, :, -1, :], -1))
+
             
 
             if seq_ix == 0:

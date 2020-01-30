@@ -4,6 +4,23 @@ import torch.nn as nn
 from utils.bpe_factory import BPE
 
 
+def onehot(indexes, N=None, ignore_index=None):
+    """
+    Creates a one-representation of indexes with N possible entries
+    if N is not specified, it will suit the maximum index appearing.
+    indexes is a long-tensor of indexes
+    ignore_index will be zero in onehot representation
+    """
+    if N is None:
+        N = indexes.max() + 1
+    sz = list(indexes.size())
+    output = indexes.new().byte().resize_(*sz, N).zero_()
+    output.scatter_(-1, indexes.unsqueeze(-1), 1)
+    if ignore_index is not None and ignore_index >= 0:
+        output.masked_fill_(indexes.eq(ignore_index).unsqueeze(-1), 0)
+    return output
+
+
 # FROM: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
 def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float('Inf')):
     """ Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
@@ -50,6 +67,8 @@ class ParallelNucleusSampler(nn.Module):
 
         max_output_len = self.config.eval.data.get('max_out_len', 32)
 
+        prevent_repetition = self.config.nucleus_sampling.prevent_repetition if 'prevent_repetition' in self.config.nucleus_sampling.data else True
+
         
         beam_width = self.config.nucleus_sampling.beam_width # number of total hypotheses to maintain
         prob_cutoff = self.config.nucleus_sampling.cutoff
@@ -85,7 +104,13 @@ class ParallelNucleusSampler(nn.Module):
 
             new_logits = top_k_top_p_filtering(logits=new_logits, top_p=prob_cutoff )
 
+            if prevent_repetition:
+                one_hot_prev = onehot(output_seq[:,:,-1], N=self.config.prepro.vocab_size)
+                new_logits[:, :, -1, :] = new_logits[:, :, -1, :] + (one_hot_prev * float('-1e-16')) 
+
             new_probs = torch.where(output_done.unsqueeze(-1), pad_probs, nn.functional.softmax(new_logits[:, :, -1, :], -1))
+
+
             
 
             

@@ -175,7 +175,7 @@ class ModelAgent(BaseAgent):
         update_mckenzie(0,'-')
 
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
-        if self.current_epoch > 0:
+        if self.global_step > 0:
             self.begin_epoch_hook()
             self.validate(save=True)
 
@@ -213,7 +213,7 @@ class ModelAgent(BaseAgent):
         steps_accum = 0
         
         for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch), disable=self.silent)):
-            batch= {k:v.to(self.device) for k,v in batch.items()}
+            batch = {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in batch.items()}
             curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
             
             # self.global_step += curr_batch_size

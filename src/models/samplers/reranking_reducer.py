@@ -35,6 +35,8 @@ class RerankingReducer(nn.Module):
             # TODO: sort by score and return top-1
             
             return None
+        elif self.strategy is None and presorted:
+            return candidates, lengths, scores
 
         # TODO: strategic reranking goes here
 
