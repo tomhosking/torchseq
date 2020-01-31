@@ -45,7 +45,7 @@ class RerankingReducer(nn.Module):
             # First, stringify
             output_strings = [[BPE.decode(candidates.data[i][j][:lengths[i][j]]) for j in range(len(lengths[i]))]  for i in range(len(lengths))]
 
-            scores = []
+            qa_scores = []
             for ix,q_batch in enumerate(output_strings):
                 answers = self.qa_model.infer_batch(question_list=q_batch, text_list=[batch['c_text'][ix] for _ in range(len(q_batch))])
 
@@ -59,13 +59,13 @@ class RerankingReducer(nn.Module):
                     print('***')
                     # exit()
 
-                scores.append(this_scores)
+                qa_scores.append(this_scores)
             
 
             
             
 
-            scores = torch.tensor(scores).to(self.device)
+            # scores = torch.tensor(qa_scores).to(self.device)
 
             sorted_scores, sorted_indices = torch.sort(scores, descending=True)
             

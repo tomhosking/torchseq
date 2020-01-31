@@ -9,8 +9,10 @@ from datasets.paraphrase_pair import ParaphrasePair
 from itertools import cycle
 
 class ParaphraseDataset(IterableDataset):
-    def __init__(self, path, config, dev=False, test=False):
+    def __init__(self, path, config, dev=False, test=False, repeat=False):
         self.config = config
+
+        self.repeat = repeat
 
         self.path = path
         self.variant = 'dev' if dev else 'train'
@@ -37,12 +39,15 @@ class ParaphraseDataset(IterableDataset):
             num_workers = worker_info.num_workers
 
         with open(os.path.join(self.path, 'paraphrases.{:}.txt'.format(self.variant))) as f:
-            for ix, line in enumerate(f):
-                if num_workers > 1 and ix % num_workers != worker_id:
-                    continue
-                x = line.split('\t')
-                sample = {'s1': x[0], 's2': x[1]}
-                yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
+            num_repeats = 0
+            while self.repeat or num_repeats < 1:
+                num_repeats += 1
+                for ix, line in enumerate(f):
+                    if num_workers > 1 and ix % num_workers != worker_id:
+                        continue
+                    x = line.split('\t')
+                    sample = {'s1': x[0], 's2': x[1]}
+                    yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
     @staticmethod
     def to_tensor(x, tok_window=64):

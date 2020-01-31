@@ -32,7 +32,7 @@ class ParaphraseAgent(ModelAgent):
         else:
             if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs']:
                 self.data_loader = ParaphraseDataLoader(config=config)
-                self.src_field = 's1'
+                self.src_field = 's2' if self.config.task == 'autoencoder' else 's1'
             elif self.config.training.dataset in ['squad']:
                 self.data_loader = SquadDataLoader(config=config)
                 self.src_field = 'q'

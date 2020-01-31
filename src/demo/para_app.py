@@ -48,12 +48,13 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = './runs/paraphrase/20200128_095215_parabank-qs_supp1.0_8heads'
+    MODEL_PATH = './runs/paraphrase/20200130_113807_parabank_to_kaggle_finetuned_8heads'
+    # MODEL_PATH = './runs/paraphrase/20200128_095215_parabank-qs_supp1.0_8heads'
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + '/config.json') as f:
         cfg_dict = json.load(f)
-        cfg_dict['eval']['sampler'] = "nucleus"
+        cfg_dict['eval']['sampler'] = "beam"
         cfg_dict['training']['dataset'] = "squad"
         cfg_dict['nucleus_sampling'] = {
             "beam_width": 32,

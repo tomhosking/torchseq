@@ -14,7 +14,7 @@ class ParaphraseDataLoader:
         """
         self.config = config
 
-        train = ParaphraseDataset(os.path.join(config.env.data_path, self.config.training.dataset), config=config, dev=False, test=False)
+        train = ParaphraseDataset(os.path.join(config.env.data_path, self.config.training.dataset), config=config, dev=False, test=False, repeat=(self.config.training.data.get('epoch_steps', 0) > 0))
         valid = ParaphraseDataset(os.path.join(config.env.data_path, self.config.training.dataset), config=config, dev=True, test=False)
         # test = ParaphraseDataset(os.path.join(config.env.data_path, 'squad'), config=config, dev=False, test=True)
 

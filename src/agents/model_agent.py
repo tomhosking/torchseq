@@ -211,7 +211,9 @@ class ModelAgent(BaseAgent):
         
         self.optimizer.zero_grad()
         steps_accum = 0
-        
+
+        start_step = self.global_step
+
         for batch_idx, batch in enumerate(tqdm(self.data_loader.train_loader, desc='Epoch {:}'.format(self.current_epoch), disable=self.silent)):
             batch = {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in batch.items()}
             curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
@@ -269,12 +271,17 @@ class ModelAgent(BaseAgent):
 
                 torch.cuda.empty_cache()
 
+            if self.config.training.data.get('epoch_steps', 0) > 0 and self.global_step - start_step >= self.config.training.epoch_steps:
+                print('Epoch step size is set - validatin after {:} training steps'.format(self.config.training.epoch_steps))
+                break
+
 
     def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True, reduce_outputs=True):
         
         if not sample_outputs:
             dev_output = None
             dev_output_lens = None
+            dev_scores = None
         elif self.config.eval.sampler == 'nucleus':
             beam_output, beam_scores, beam_lens = self.decode_nucleus(self.model, batch, tgt_field)
 
@@ -330,32 +337,41 @@ class ModelAgent(BaseAgent):
             for batch_idx, batch in enumerate(tqdm(valid_loader, desc='Validating after {:} epochs'.format(self.current_epoch), disable=self.silent)):
                 batch= {k: (v.to(self.device) if k[-5:] != '_text' else v) for k,v in batch.items()}
                 curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+
+
                 
-                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(batch, self.tgt_field)
+                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(batch, self.tgt_field, sample_outputs=self.config.eval.data.get('sample_outputs', True))
 
                 test_loss += this_loss
 
                 num_batches += 1
 
-                for ix, pred in enumerate(dev_output.data):
-                    pred_output.append(BPE.decode(pred[:dev_output_lens[ix]]))
-                for ix, gold in enumerate(batch[self.tgt_field]):
-                    gold_output.append(BPE.decode(gold[:batch[self.tgt_field+'_len'][ix]]))
-                
+                if self.config.eval.data.get('sample_outputs', True):
+                    for ix, pred in enumerate(dev_output.data):
+                        pred_output.append(BPE.decode(pred[:dev_output_lens[ix]]))
+                    for ix, gold in enumerate(batch[self.tgt_field]):
+                        gold_output.append(BPE.decode(gold[:batch[self.tgt_field+'_len'][ix]]))
+                    
 
-                if batch_idx % 200 == 0 and not self.silent:
-                    print(gold_output[-2:])
-                    print(pred_output[-2:])
+                    if batch_idx % 200 == 0 and not self.silent:
+                        print(gold_output[-2:])
+                        print(pred_output[-2:])
 
             test_loss /= num_batches
             self.logger.info('Dev set: Average loss: {:.4f}'.format(test_loss))
 
-        dev_bleu = 100*bleu_corpus(gold_output, pred_output)
+        
 
         add_to_log('dev/loss', test_loss, self.global_step, self.config.tag +'/' + self.run_id)
-        add_to_log('dev/bleu', dev_bleu, self.global_step, self.config.tag +'/' + self.run_id)
-        
-        self.logger.info('BLEU: {:}'.format(dev_bleu))
+
+        if self.config.eval.data.get('sample_outputs', True):
+            dev_bleu = 100*bleu_corpus(gold_output, pred_output)
+
+            add_to_log('dev/bleu', dev_bleu, self.global_step, self.config.tag +'/' + self.run_id)
+            
+            self.logger.info('BLEU: {:}'.format(dev_bleu))
+        else:
+            dev_bleu = 0
 
         
 
