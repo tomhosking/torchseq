@@ -20,7 +20,7 @@ from utils.mckenzie import update_mckenzie
 from models.lr_schedule import get_lr
 from utils.logging import add_to_log
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 from utils.metrics import bleu_corpus
 
@@ -57,8 +57,10 @@ class ModelAgent(BaseAgent):
     def create_optimizer(self):
         if self.config.training.opt == 'adam':
             self.optimizer = optim.Adam(self.model.parameters(), lr=self.config.training.lr, betas=(self.config.training.beta1, self.config.training.beta2), eps=1e-9)
-        elif config.training.opt == 'sgd':
+        elif self.config.training.opt == 'sgd':
             self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
+
+            
         else:
             raise Exception("Unrecognised optimiser: " + self.config.training.opt)
 
@@ -68,7 +70,7 @@ class ModelAgent(BaseAgent):
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
-        self.reranker = RerankingReducer(self.config, self.device, top1=True)
+        self.reranker = RerankingReducer(self.config, self.device)
 
     
     def load_checkpoint(self, file_name):
@@ -88,6 +90,14 @@ class ModelAgent(BaseAgent):
             self.logger.warn('Checkpoint is missing global_step value!')
         self.loss = checkpoint['loss']
         self.best_metric = checkpoint['best_metric'] if ('reset_metrics' not in self.config.training.data or not self.config.training.reset_metrics) else None
+
+        if self.config.training.opt == 'sgd':
+            # Insert meta params if not there already
+            for param_group in self.optimizer.param_groups:
+                if 'momentum' not in param_group:
+                    param_group['momentum'] = 0
+                if 'dampening' not in param_group:
+                    param_group['dampening'] = 0
         
 
     def save_checkpoint(self, file_name="checkpoint.pth.tar"):
@@ -309,7 +319,7 @@ class ModelAgent(BaseAgent):
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens, dev_scores
 
-    def validate(self, save=False, force_save_output=False, use_test=False):
+    def validate(self, save=False, force_save_output=False, use_test=False, use_train=False):
         """
         One cycle of model validation
         :return:
@@ -329,6 +339,9 @@ class ModelAgent(BaseAgent):
         if use_test:
             print('***** USING TEST SET ******')
             valid_loader = self.data_loader.test_loader
+        elif use_train:
+            print('***** USING TRAINING SET ******')
+            valid_loader = self.data_loader.train_loader
         else:
             valid_loader = self.data_loader.valid_loader
 
@@ -340,13 +353,14 @@ class ModelAgent(BaseAgent):
 
 
                 
-                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(batch, self.tgt_field, sample_outputs=self.config.eval.data.get('sample_outputs', True))
+                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(batch, self.tgt_field, sample_outputs=self.config.eval.data.get('sample_outputs', True), reduce_outputs=(self.config.eval.data.get('topk', 1) == 1))
 
                 test_loss += this_loss
 
                 num_batches += 1
 
-                if self.config.eval.data.get('sample_outputs', True):
+                #  Handle top-1 sampling
+                if self.config.eval.data.get('sample_outputs', True) and (self.config.eval.data.get('topk', 1) == 1):
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(BPE.decode(pred[:dev_output_lens[ix]]))
                     for ix, gold in enumerate(batch[self.tgt_field]):
@@ -357,6 +371,16 @@ class ModelAgent(BaseAgent):
                         print(gold_output[-2:])
                         print(pred_output[-2:])
 
+                # Handle top-k sampling
+                if self.config.eval.data.get('sample_outputs', True) and not (self.config.eval.data.get('topk', 1) == 1):
+                    for ix, pred in enumerate(dev_output.data):
+                        pred_output.append([BPE.decode(pred[jx][:dev_output_lens[ix][jx]]) for jx in range(len(pred))])
+                    for ix, gold in enumerate(batch[self.tgt_field]):
+                        gold_output.append(BPE.decode(gold[:batch[self.tgt_field+'_len'][ix]]))
+
+                    # if batch_idx > 20:
+                    #     break
+
             test_loss /= num_batches
             self.logger.info('Dev set: Average loss: {:.4f}'.format(test_loss))
 
@@ -364,14 +388,14 @@ class ModelAgent(BaseAgent):
 
         add_to_log('dev/loss', test_loss, self.global_step, self.config.tag +'/' + self.run_id)
 
-        if self.config.eval.data.get('sample_outputs', True):
+        if self.config.eval.data.get('sample_outputs', True) and (self.config.eval.data.get('topk', 1) == 1):
             dev_bleu = 100*bleu_corpus(gold_output, pred_output)
 
             add_to_log('dev/bleu', dev_bleu, self.global_step, self.config.tag +'/' + self.run_id)
             
             self.logger.info('BLEU: {:}'.format(dev_bleu))
         else:
-            dev_bleu = 0
+            dev_bleu = 'n/a'
 
         
 
@@ -381,7 +405,7 @@ class ModelAgent(BaseAgent):
                 or force_save_output \
                 or (self.config.training.early_stopping_lag > 0 and self.best_epoch is not None and (self.current_epoch-self.best_epoch) <= self.config.training.early_stopping_lag > 0):
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'output.txt'), 'w') as f:
-                f.write("\n".join(pred_output))
+                f.write("\n".join([json.dumps(pred) for pred in pred_output]))
 
             
             self.all_metrics_at_best = {

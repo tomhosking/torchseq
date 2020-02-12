@@ -14,7 +14,7 @@ from datasets.paraphrase_loader import ParaphraseDataLoader
 from datasets.squad_loader import SquadDataLoader
 from datasets.paraphrase_dataset import ParaphraseDataset
 from datasets.squad_dataset import SquadDataset
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 from datasets.paraphrase_pair import ParaphrasePair
 
@@ -30,7 +30,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs']:
+            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad']:
                 self.data_loader = ParaphraseDataLoader(config=config)
                 self.src_field = 's2' if self.config.task == 'autoencoder' else 's1'
             elif self.config.training.dataset in ['squad']:

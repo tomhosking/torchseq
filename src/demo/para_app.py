@@ -48,22 +48,26 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = './runs/paraphrase/20200130_113807_parabank_to_kaggle_finetuned_8heads'
-    # MODEL_PATH = './runs/paraphrase/20200128_095215_parabank-qs_supp1.0_8heads'
+    # MODEL_PATH = './runs/paraphrase/20200203_074446_parabank_to_kaggle_finetuned_8heads'
+    # MODEL_PATH = './runs/paraphrase/20200209_190027_kaggle_8heads'
+    # MODEL_PATH = './runs/paraphrase/20200130_161250_parabank-qs_supp1.0_8heads'
+    MODEL_PATH = './runs/paraphrase/20200211_163735_parabank_to_kaggle_to_squad_8heads'
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + '/config.json') as f:
         cfg_dict = json.load(f)
+        cfg_dict['env']['data_path'] = './data/'
         cfg_dict['eval']['sampler'] = "beam"
+        cfg_dict['eval']['topk'] = 32
         cfg_dict['training']['dataset'] = "squad"
         cfg_dict['nucleus_sampling'] = {
-            "beam_width": 32,
+            "beam_width": 24,
             "cutoff": 0.9,
             "length_alpha": 0
         }
         cfg_dict['beam_search'] = {
-            "beam_width": 32,
-            "beam_expansion": 8,
+            "beam_width": 24,
+            "beam_expansion": 2,
             "length_alpha": 1.0
         }
         cfg_dict['reranker'] = {

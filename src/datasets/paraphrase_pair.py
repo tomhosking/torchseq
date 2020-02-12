@@ -1,4 +1,4 @@
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 
 

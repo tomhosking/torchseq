@@ -6,7 +6,7 @@ import torch
 import torch.nn.functional as F
 
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 import json, os
 

@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from datasets.paraphrase_dataset import ParaphraseDataset
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 from utils.seed import init_worker
 
 class ParaphraseDataLoader:

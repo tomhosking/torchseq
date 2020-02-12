@@ -4,6 +4,9 @@ from utils.sentencepiece_pb2 import SentencePieceText
 
 import unicodedata
 
+from utils.tokenizer import BPE
+
+
 
 # class BPE_bpemb:
 #     _instance = None
@@ -35,13 +38,17 @@ import unicodedata
 
 from transformers import  BertTokenizer, BertModel, DistilBertTokenizer, DistilBertModel
 
-class BPE:
+class BPE_old:
     _instance = None
 
     pad_id = None
     embedding_dim = None
     bos_id = None
     eos_id = None
+
+    model_slug = 'bert-base-uncased'
+
+    
 
     @staticmethod
     def decode(token_id_tensor):
@@ -51,7 +58,7 @@ class BPE:
     @staticmethod
     def instance():
         if BPE._instance is None:
-            BPE._instance = BertTokenizer.from_pretrained('bert-base-uncased')
+            BPE._instance = BertTokenizer.from_pretrained(BPE.model_slug)
             # BPE._instance = DistilBertTokenizer.from_pretrained('distilbert-base-uncased')
             BPE.pad_id = BPE._instance.pad_token_id
 
@@ -63,7 +70,7 @@ class BPE:
             # num_added_toks = BPE._instance.add_special_tokens(special_tokens_dict)
             
             
-            model = BertModel.from_pretrained('bert-base-uncased')
+            model = BertModel.from_pretrained(BPE.model_slug)
             # model = DistilBertModel.from_pretrained('distilbert-base-uncased')
             BPE._instance.embeddings = model.embeddings.word_embeddings.weight.data
 
@@ -95,6 +102,7 @@ class BPE:
                 print('Couldnt find token in tokeniser: {:} (pos: {:})'.format(needle, offset))
                 print(text)
                 print(clean_text)
+                print(tokens)
                 exit()
             offset = new_offset
             # char_offsets.append( (offset, offset+len(tok)) )
@@ -231,7 +239,11 @@ def _clean_text(text,prev_offsets=None):
 def normalise(text):
     # return text
 
-    clean_text, offsets1 = _run_strip_accents(text)
+    if BPE.model_slug[-8:] == '-uncased':
+        clean_text, offsets1 = _run_strip_accents(text)
+    else:
+        clean_text = text
+        offsets1 = [(i, i+1) for i in range(len(clean_text))]
 
     clean_text, offsets2 = _clean_text(clean_text, offsets1)
 
@@ -243,4 +255,7 @@ def normalise(text):
     #     print(offsets2)
     #     exit()
 
-    return clean_text.lower(), offsets2
+    if BPE.model_slug[-8:] == '-uncased':
+        clean_text = clean_text.lower()
+
+    return clean_text, offsets2

@@ -4,7 +4,7 @@ from args import FLAGS
 
 from datasets.loaders import OOV, SOS, EOS, PAD
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 import unicodedata
 

@@ -1,14 +1,14 @@
 import torch
 import torch.nn as nn
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 from pretrained.qa import PreTrainedQA
 
 from utils.metrics import f1
 
 class RerankingReducer(nn.Module):
-    def __init__(self, config, device, top1=True):
+    def __init__(self, config, device):
         super(RerankingReducer, self).__init__()
         self.config = config
         self.device = device
@@ -45,24 +45,27 @@ class RerankingReducer(nn.Module):
             # First, stringify
             output_strings = [[BPE.decode(candidates.data[i][j][:lengths[i][j]]) for j in range(len(lengths[i]))]  for i in range(len(lengths))]
 
+            
+
             qa_scores = []
             for ix,q_batch in enumerate(output_strings):
-                answers = self.qa_model.infer_batch(question_list=q_batch, text_list=[batch['c_text'][ix] for _ in range(len(q_batch))])
+                contexts_cropped = [BPE.decode(batch['c'][ix][:batch['c_len'][ix]]) for _ in range(len(q_batch))]
+                answers = self.qa_model.infer_batch(question_list=q_batch, context_list=contexts_cropped)
 
-                this_scores = [f1(batch['a_text'][ix], ans) for ans in answers]
+                this_scores = [scores[ix][jx] + (0 if f1(batch['a_text'][ix], ans) > 0.75 else -100 ) for jx,ans in enumerate(answers)]
 
-                if max(this_scores) > 0.75:
-                    print(batch['c_text'][ix], "->", batch['q_text'][ix], batch['a_text'][ix])
-                    print('***')
-                    for j in range(len(q_batch)):
-                        print(q_batch[j], "##", answers[j], this_scores[j])
-                    print('***')
-                    # exit()
+                # if max(this_scores) > 0.75:
+                #     print(batch['c_text'][ix], "->", batch['q_text'][ix], batch['a_text'][ix])
+                #     print('***')
+                #     for j in range(len(q_batch)):
+                #         print(q_batch[j], "##", answers[j], this_scores[j])
+                #     print('***')
+                #     # exit()
 
                 qa_scores.append(this_scores)
             
-
-            
+            qa_scores = torch.FloatTensor(qa_scores).to(scores)
+            scores = qa_scores
             
 
             # scores = torch.tensor(qa_scores).to(self.device)
@@ -70,11 +73,15 @@ class RerankingReducer(nn.Module):
             sorted_scores, sorted_indices = torch.sort(scores, descending=True)
             
             sorted_seqs = torch.gather(candidates, 1, sorted_indices.unsqueeze(-1).expand(-1,-1, candidates.shape[2]))
-            
+
             if top1:
                 output = sorted_seqs[:, 0, :]
             else:
-                output = sorted_seqs
+                topk = self.config.eval.data.get('topk', None)
+                if topk is not None:
+                    output = sorted_seqs[:, :topk, :]
+                else:
+                    output = sorted_seqs[:, 0, :]
 
             return output, torch.sum(output != BPE.pad_id, dim=-1), sorted_scores
 

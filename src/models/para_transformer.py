@@ -3,7 +3,7 @@ import torch
 
 import math
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 from models.positional_embeddings import PositionalEncoding
 

@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 # Get a cross-entropy style loss that penalises any token from a given sequence
 

@@ -16,7 +16,7 @@ from agents.para_agent import ParaphraseAgent
 
 from utils.config import Config
 from utils.seed import set_seed
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 from datetime import datetime
 
@@ -39,6 +39,7 @@ def main(_):
     # This is not a good way of passing this value in
     BPE.pad_id = config.prepro.vocab_size
     BPE.embedding_dim = config.embedding_dim
+    BPE.model_slug = config.encdec.bert_model
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')
 
@@ -66,6 +67,11 @@ def main(_):
         agent.logger.info('Starting training...')
         agent.train()
         agent.logger.info('...training done!')
+
+    if FLAGS.validate_train:
+        agent.logger.info('Starting validation (on training set)...')
+        agent.validate(save=False, force_save_output=True, use_train=True)
+        agent.logger.info('...validation done!')
 
     if FLAGS.validate:
         agent.logger.info('Starting validation...')

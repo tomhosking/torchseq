@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from datasets.squad_dataset import SquadDataset
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 from utils.seed import init_worker
 
 class SquadDataLoader:
@@ -31,7 +31,7 @@ class SquadDataLoader:
 
         self.train_loader = DataLoader(train,
                                         batch_size=config.training.batch_size, 
-                                        shuffle=True, 
+                                        shuffle=self.config.training.data.get('shuffle_data', True), 
                                         num_workers=4, 
                                         collate_fn=SquadDataset.pad_and_order_sequences, 
                                         worker_init_fn=init_worker)

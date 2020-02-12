@@ -26,12 +26,18 @@ class PreTrainedQA:
         return ' '.join(all_tokens[torch.argmax(start_scores) : torch.argmax(end_scores)+1])
 
 
-    def infer_batch(self, question_list, text_list):
+    def infer_batch(self, question_list, context_list):
         
-        input_ids_batch = [self.tokenizer.encode(question, text) for question, text in zip(question_list, text_list)]
+        input_ids_batch = [self.tokenizer.encode(question, text) for question, text in zip(question_list, context_list)]
         token_type_ids_batch = [[0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))] for input_ids in input_ids_batch]
         start_scores, end_scores = self.model(self.pad_batch(input_ids_batch), token_type_ids=self.pad_batch(token_type_ids_batch))
         all_tokens_batch = [self.tokenizer.convert_ids_to_tokens(input_ids) for input_ids in input_ids_batch]
+
+        if max([len(toks) for toks in all_tokens_batch]) > 500:
+            print('Mega long input!')
+            print(question_list)
+            print(text_list)
+            exit()
 
         return [self.extract_answer(all_tokens_batch[ix], start_scores[ix], end_scores[ix], token_type_ids_batch[ix]) for ix in range(len(start_scores))]
 

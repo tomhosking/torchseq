@@ -2,7 +2,7 @@
 import torch
 import torch.nn as nn
 
-from utils.bpe_factory import BPE
+from utils.tokenizer import BPE
 
 class GreedySampler(nn.Module):
     def __init__(self, config, device):
@@ -21,7 +21,7 @@ class GreedySampler(nn.Module):
         logits[:, :, BPE.bos_id] = float('inf')
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size).fill_(BPE.instance().pad_token_id).to(self.device)
+        padding = torch.LongTensor(curr_batch_size).fill_(BPE.pad_id).to(self.device)
 
         seq_ix = 0
         memory = None
