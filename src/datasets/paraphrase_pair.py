@@ -3,7 +3,7 @@ from utils.tokenizer import BPE
 
 
 class ParaphrasePair:
-    def __init__(self, sent1_text, sent2_text, tok_window=64):
+    def __init__(self, sent1_text, sent2_text, is_paraphrase=True, tok_window=64):
 
         if "artist appear below the euro symbol" in sent2_text:
             print("Found the dodgy pair", sent1_text, sent2_text)
@@ -11,6 +11,7 @@ class ParaphrasePair:
 
         self._s1_doc = BPE.tokenise(sent1_text)
         self._s2_doc = BPE.tokenise(sent2_text)
+        self.is_paraphrase = is_paraphrase
 
         if "artist appear below the euro symbol" in sent2_text:
             print("Dodgy pair cleared tokenising")

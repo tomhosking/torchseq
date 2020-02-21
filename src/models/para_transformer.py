@@ -14,11 +14,13 @@ from transformers import BertModel
 
 
 class TransformerParaphraseModel(nn.Module):
-    def __init__(self, config, src_field='s1'):
+    def __init__(self, config, src_field='s1', loss=None):
         super().__init__()
         self.config = config
 
         self.src_field = src_field
+
+        self.loss = loss
 
         # Embedding layers
         # self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.embeddings), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
@@ -27,6 +29,8 @@ class TransformerParaphraseModel(nn.Module):
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False))
+
+        self.encoder_projection = nn.utils.weight_norm(nn.Linear(config.embedding_dim * 2, config.embedding_dim, bias=False))
         
         
         encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
@@ -50,14 +54,14 @@ class TransformerParaphraseModel(nn.Module):
         self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim)
         self.positional_embeddings_dec = PositionalEncoding(config.embedding_dim)
 
-    def forward(self, batch, output, memory=None):
+    def forward(self, batch, output, memory=None, tgt_field=None):
 
         
         # Re-normalise the projections...
         with torch.no_grad():
             self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
             
-            # self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
         # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
@@ -92,7 +96,11 @@ class TransformerParaphraseModel(nn.Module):
             
             encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
 
-            memory = self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
+            if self.config.encdec.data.get('residual', False):
+                encoding = self.encoder_projection(torch.cat([encoding, ctxt_embedded.permute(1,0,2)], dim=-1))
+            
+
+            memory = self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1) if self.config.encdec.data.get('pooling', True) else encoding
 
             # memory = encoding
 
@@ -125,4 +133,12 @@ class TransformerParaphraseModel(nn.Module):
 
         logits = self.output_projection(output)
         
-        return logits, memory
+        if tgt_field is not None:
+            bos_logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-1e18')).to(self.device)
+            bos_logits[:, :, BPE.bos_id] = float('1e18')
+            loss_logits = torch.cat([bos_logits, logits], dim=1)
+            loss = self.loss(loss_logits.permute(0,2,1), batch[tgt_field])
+        else:
+            loss = None
+        
+        return logits, memory, loss

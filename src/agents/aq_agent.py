@@ -50,27 +50,30 @@ class AQAgent(ModelAgent):
     def __init__(self, config, run_id, silent=False):
         super().__init__(config, run_id, silent)
 
+        self.src_field = 'c'
         self.tgt_field = 'q'
-
-        # define models
-        self.model = TransformerAqModel(config)
-
-        # define data_loader
-        if self.config.training.use_preprocessed_data:
-            self.data_loader = PreprocessedDataLoader(config=config)
-        else:
-            if self.config.training.dataset in ['squad', 'squad-ppdb','squad-para']:
-                self.data_loader = SquadDataLoader(config=config)
-            elif self.config.training.dataset == 'newsqa':
-                self.data_loader = NewsqaDataLoader(config=config)
-            else:
-                raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
         # define loss
         if self.config.training.label_smoothing != "UNUSED" and self.config.training.label_smoothing > 1e-6:
             self.loss = CrossEntropyLossWithLS(ignore_index=BPE.pad_id, smooth_eps=self.config.training.label_smoothing, reduction='none' )
         else:
             self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
+
+        # define models
+        self.model = TransformerAqModel(config, loss=self.loss)
+
+        # define data_loader
+        if self.config.training.use_preprocessed_data:
+            self.data_loader = PreprocessedDataLoader(config=config)
+        else:
+            if self.config.training.dataset in ['squad', 'squad-ppdb','squad-para', 'squad-para-pbkag', 'squad-para-kag', 'squad-para-pb', 'squad-para-pbkagsq']:
+                self.data_loader = SquadDataLoader(config=config)
+            elif self.config.training.dataset == 'newsqa':
+                self.data_loader = NewsqaDataLoader(config=config)
+            else:
+                raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
+
+        
 
         self.suppression_loss = SuppressionLoss(self.config)
 
@@ -93,9 +96,9 @@ class AQAgent(ModelAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
             
-        output, logits = self.decode_teacher_force(self.model, batch, 'q') # bsd
+        output, logits, this_loss = self.decode_teacher_force(self.model, batch, 'q') # bsd
 
-        this_loss = self.loss(logits.permute(0,2,1), batch['q'])
+        # this_loss = self.loss(logits.permute(0,2,1), batch['q'])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss +=  self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch['a'])

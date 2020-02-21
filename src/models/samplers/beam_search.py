@@ -56,7 +56,7 @@ class BeamSearchSampler(nn.Module):
         memory = None
         while torch.sum(output_done) < curr_batch_size*beam_width and seq_ix < max_output_len:
             
-            new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size*beam_width, -1), memory)
+            new_logits, memory, _ = model(batch_tiled, output_seq.view(curr_batch_size*beam_width, -1), memory)
             new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
             output_done = (output_seq[:,:,-1] == BPE.pad_id) | (output_seq[:,:,-1] == BPE.eos_id)
 

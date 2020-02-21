@@ -41,7 +41,7 @@ def main(_):
     BPE.embedding_dim = config.embedding_dim
     BPE.model_slug = config.encdec.bert_model
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')+ ('_DEV' if FLAGS.validate else '')
 
     print("** Run ID is {:} **".format(run_id))
 

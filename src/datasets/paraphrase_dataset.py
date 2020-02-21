@@ -15,7 +15,10 @@ class ParaphraseDataset(IterableDataset):
         self.repeat = repeat
 
         self.path = path
-        self.variant = 'dev' if dev else 'train'
+        self.variant = 'dev' if dev else ('test' if test else 'train')
+
+        if test and not os.path.exists(os.path.join(self.path, 'paraphrases.{:}.txt'.format(self.variant))):
+            return None
         
         # TODO: Can we get the length without reading the whole file?
         self.length = 0
@@ -46,19 +49,21 @@ class ParaphraseDataset(IterableDataset):
                     if num_workers > 1 and ix % num_workers != worker_id:
                         continue
                     x = line.split('\t')
-                    sample = {'s1': x[0], 's2': x[1]}
+                    is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
+                    sample = {'s1': x[0], 's2': x[1], 'is_para': is_para}
                     yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
     @staticmethod
     def to_tensor(x, tok_window=64):
-        parsed_triple = ParaphrasePair(x['s1'], x['s2'], tok_window=tok_window)
+        parsed_triple = ParaphrasePair(x['s1'], x['s2'], is_paraphrase=x['is_para'], tok_window=tok_window)
 
         sample = {'s1': torch.LongTensor(parsed_triple.s1_as_ids()),
                 's2': torch.LongTensor(parsed_triple.s2_as_ids()),
                 's1_len': torch.LongTensor([len(parsed_triple._s1_doc)]),
                 's2_len': torch.LongTensor([len(parsed_triple._s2_doc)]),
                 's1_text': x['s1'],
-                's2_text': x['s2']
+                's2_text': x['s2'],
+                'is_paraphrase': torch.LongTensor([1 * parsed_triple.is_paraphrase])
                 }
 
         return sample

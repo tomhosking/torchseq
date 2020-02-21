@@ -22,9 +22,11 @@ class TeacherForcedSampler(nn.Module):
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input
         output = batch[tgt_field][:, :max_output_len-1].to(self.device)
-        pred_logits, _ = model(batch, output)
+        pred_logits, _, this_loss = model(batch, output, tgt_field=tgt_field)
+
+        
 
         logits = torch.cat([logits, pred_logits], dim=1)
         
 
-        return output, logits
+        return output, logits, this_loss

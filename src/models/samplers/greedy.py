@@ -26,7 +26,7 @@ class GreedySampler(nn.Module):
         seq_ix = 0
         memory = None
         while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
-            new_logits, memory = model(batch, output, memory)
+            new_logits, memory, _ = model(batch, output, memory)
 
             new_output = torch.argmax(new_logits, -1)
 

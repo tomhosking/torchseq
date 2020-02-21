@@ -23,16 +23,19 @@ def index():
 @app.route("/api/generate")
 def generate():
 
-    s1 = request.args['s1']
-    ctxt = request.args['ctxt']
-    ans = request.args['ans']
+    s1 = "return palm house ; return # 1 with subtropic plants ; return # 2 from the world displayed"
+
+    # s1 = request.args['s1']
+    # ctxt = request.args['ctxt']
+    # ans = request.args['ans']
 
     query = {
         's1': s1,
-        'c': ctxt,
-        'a': ans,
-        'a_pos': ctxt.find(ans),
-        'q': s1
+        'c': s1,
+        'a': ';',
+        'a_pos': s1.find(';'),
+        'q': s1,
+        'is_para': True
     }
     res, scores = app.agent.infer(query, reduce_outputs=False)
 
@@ -51,7 +54,9 @@ def init():
     # MODEL_PATH = './runs/paraphrase/20200203_074446_parabank_to_kaggle_finetuned_8heads'
     # MODEL_PATH = './runs/paraphrase/20200209_190027_kaggle_8heads'
     # MODEL_PATH = './runs/paraphrase/20200130_161250_parabank-qs_supp1.0_8heads'
-    MODEL_PATH = './runs/paraphrase/20200211_163735_parabank_to_kaggle_to_squad_8heads'
+    # MODEL_PATH = './runs/paraphrase/20200211_163735_parabank_to_kaggle_to_squad_8heads'
+    MODEL_PATH = './runs/qdmr/20200219_132950_qdmr_from_q'
+    MODEL_PATH = './runs/qdmr/20200219_132950_qdmr_to_q'
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + '/config.json') as f:
@@ -59,19 +64,20 @@ def init():
         cfg_dict['env']['data_path'] = './data/'
         cfg_dict['eval']['sampler'] = "beam"
         cfg_dict['eval']['topk'] = 32
-        cfg_dict['training']['dataset'] = "squad"
+        # cfg_dict['training']['dataset'] = "squad"
         cfg_dict['nucleus_sampling'] = {
             "beam_width": 24,
             "cutoff": 0.9,
             "length_alpha": 0
         }
         cfg_dict['beam_search'] = {
-            "beam_width": 24,
+            "beam_width": 8,
             "beam_expansion": 2,
             "length_alpha": 1.0
         }
         cfg_dict['reranker'] = {
-            'strategy': 'qa'
+            # 'strategy': 'qa'
+            'strategy': None
         }
         config = Config(cfg_dict)
     

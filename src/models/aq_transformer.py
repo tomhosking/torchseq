@@ -13,9 +13,11 @@ from transformers import BertModel
 
 
 class TransformerAqModel(nn.Module):
-    def __init__(self, config):
+    def __init__(self, config, loss=None):
         super().__init__()
         self.config = config
+
+        self.loss = loss
 
         # Embedding layers
         # self.embeddings = nn.Embedding.from_pretrained(torch.Tensor(BPE.embeddings), freeze=config.freeze_embeddings).cpu() # TODO: this should come from a config
@@ -89,7 +91,7 @@ class TransformerAqModel(nn.Module):
         
 
 
-    def forward(self, batch, output, memory=None):
+    def forward(self, batch, output, memory=None, tgt_field=None):
 
         # Re-normalise the projections...
         with torch.no_grad():
@@ -105,7 +107,7 @@ class TransformerAqModel(nn.Module):
         max_ctxt_len = batch['c'].shape[1]
         # max_ctxt_len = torch.max(batch['c_len'])
         # max_q_len = torch.max(batch['q_len'])
-        # curr_batch_size = batch['c'].size()[0]
+        curr_batch_size = batch['c'].size()[0]
         output_max_len = output.size()[-1]
 
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch['c_len'][:, None].cpu()).to(self.device)
@@ -234,5 +236,13 @@ class TransformerAqModel(nn.Module):
                             ).permute(1,0,2)
 
         logits = self.output_projection(output)
+
+        if tgt_field is not None:
+            bos_logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-1e18')).to(self.device)
+            bos_logits[:, :, BPE.bos_id] = float('1e18')
+            loss_logits = torch.cat([bos_logits, logits], dim=1)
+            loss = self.loss(loss_logits.permute(0,2,1), batch[tgt_field])
+        else:
+            loss = None
         
-        return logits, memory
+        return logits, memory, loss

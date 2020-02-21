@@ -3,6 +3,9 @@ import logging
 
 import torch 
 
+from utils.parallel import DataParallelModel, DataParallelCriterion
+
+
 
 class BaseAgent:
     """
@@ -31,10 +34,12 @@ class BaseAgent:
             self.logger.info("Program will run on *****GPU-CUDA***** ")
             # print_cuda_statistics()
 
-            # if torch.cuda.device_count() > 1:
-            #     self.logger.info("Multi GPU available: using {:} GPUs!".format(torch.cuda.device_count()))
+            if torch.cuda.device_count() > 1:
+                self.logger.info("Multi GPU available: using {:} GPUs!".format(torch.cuda.device_count()))
                 
-            # self.model = torch.nn.DataParallel(self.model)
+            # self.model = DataParallelModel(self.model)
+            # self.loss = DataParallelCriterion(self.loss)
+            
 
             # self.model.module = self.model
             

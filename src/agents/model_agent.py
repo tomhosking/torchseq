@@ -9,6 +9,8 @@ import torch
 
 import torch.optim as optim
 
+import numpy as np
+
 from models.samplers.greedy import GreedySampler
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.teacher_force import TeacherForcedSampler
@@ -23,6 +25,7 @@ from utils.logging import add_to_log
 from utils.tokenizer import BPE
 
 from utils.metrics import bleu_corpus
+from utils.sari import SARIsent
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -164,9 +167,9 @@ class ModelAgent(BaseAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
             
-        output, logits = self.decode_teacher_force(self.model, batch, tgt_field)
+        output, logits, this_loss = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+        # this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
 
         loss += torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0)
 
@@ -312,8 +315,8 @@ class ModelAgent(BaseAgent):
             dev_output, dev_output_lens, dev_scores = self.reranker(beam_output,  beam_lens, batch, tgt_field, scores=beam_scores, presorted=True, top1=False)
 
         if calculate_loss:
-            _, logits = self.decode_teacher_force(self.model, batch, tgt_field)
-            this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+            _, logits, this_loss = self.decode_teacher_force(self.model, batch, tgt_field)
+            # this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
             normed_loss = torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0)
         else:
             normed_loss = None
@@ -335,6 +338,7 @@ class ModelAgent(BaseAgent):
 
         pred_output = []
         gold_output = []
+        gold_input = [] # needed for SARI
 
         if use_test:
             print('***** USING TEST SET ******')
@@ -365,6 +369,8 @@ class ModelAgent(BaseAgent):
                         pred_output.append(BPE.decode(pred[:dev_output_lens[ix]]))
                     for ix, gold in enumerate(batch[self.tgt_field]):
                         gold_output.append(BPE.decode(gold[:batch[self.tgt_field+'_len'][ix]]))
+                    for ix, gold in enumerate(batch[self.src_field]):
+                        gold_input.append(BPE.decode(gold[:batch[self.src_field+'_len'][ix]]))
                     
 
                     if batch_idx % 200 == 0 and not self.silent:
@@ -391,9 +397,16 @@ class ModelAgent(BaseAgent):
         if self.config.eval.data.get('sample_outputs', True) and (self.config.eval.data.get('topk', 1) == 1):
             dev_bleu = 100*bleu_corpus(gold_output, pred_output)
 
+            dev_sari = np.mean([SARIsent(gold_input[ix], pred_output[ix], [gold_output[ix]]) for ix in range(len(pred_output))])
+
+            dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
+
             add_to_log('dev/bleu', dev_bleu, self.global_step, self.config.tag +'/' + self.run_id)
             
             self.logger.info('BLEU: {:}'.format(dev_bleu))
+            self.logger.info('EM: {:}'.format(dev_em))
+            self.logger.info('SARI: {:}'.format(dev_sari))
+            
         else:
             dev_bleu = 'n/a'
 
@@ -410,7 +423,9 @@ class ModelAgent(BaseAgent):
             
             self.all_metrics_at_best = {
                 'bleu': dev_bleu,
-                'nll': test_loss.item()
+                'nll': test_loss.item(),
+                'em': dev_em,
+                'sari': dev_sari
             }
 
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'metrics.json'), 'w') as f:

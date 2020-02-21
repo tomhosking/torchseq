@@ -30,7 +30,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad']:
+            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad'] or self.config.training.dataset[:5] == 'qdmr-':
                 self.data_loader = ParaphraseDataLoader(config=config)
                 self.src_field = 's2' if self.config.task == 'autoencoder' else 's1'
             elif self.config.training.dataset in ['squad']:
@@ -40,12 +40,14 @@ class ParaphraseAgent(ModelAgent):
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
-        # define model
-        self.model = TransformerParaphraseModel(self.config, src_field=self.src_field)
-
-
+        
         # define loss
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
+
+        # define model
+        self.model = TransformerParaphraseModel(self.config, src_field=self.src_field, loss=self.loss)
+
+
 
         self.suppression_loss = SuppressionLoss(self.config)
 
@@ -60,14 +62,18 @@ class ParaphraseAgent(ModelAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
             
-        output, logits = self.decode_teacher_force(self.model, batch, tgt_field)
+        output, logits, this_loss = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+        # this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss +=  self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch['s1'])
+
+        this_loss = torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss)
+
+        loss_weight = torch.where(batch['is_paraphrase'] > 0, torch.full_like(this_loss, 1.0), torch.full_like(this_loss, -1.0 * self.config.training.data.get('neg_sample_weight', 0)))
         
-        loss += torch.mean(torch.sum(this_loss, dim=1)/batch[tgt_field+'_len'].to(this_loss), dim=0)
+        loss += torch.mean(loss_weight * this_loss, dim=0)
 
         return loss
 
