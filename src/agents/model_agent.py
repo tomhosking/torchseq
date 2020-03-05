@@ -205,7 +205,7 @@ class ModelAgent(BaseAgent):
 
 
             if 'bleu' in self.all_metrics_at_best:
-                update_mckenzie((epoch+1)/self.config.training.num_epochs*100, "{:0.2f}".format(self.all_metrics_at_best['bleu']))
+                update_mckenzie((epoch+1)/self.config.training.num_epochs*100, "{:0.2f}".format(self.all_metrics_at_best[self.config.training.data.get('mckenzie_metric', 'bleu')]))
             else:
                 update_mckenzie((epoch+1)/self.config.training.num_epochs*100, "-")
 
@@ -397,7 +397,7 @@ class ModelAgent(BaseAgent):
         if self.config.eval.data.get('sample_outputs', True) and (self.config.eval.data.get('topk', 1) == 1):
             dev_bleu = 100*bleu_corpus(gold_output, pred_output)
 
-            dev_sari = np.mean([SARIsent(gold_input[ix], pred_output[ix], [gold_output[ix]]) for ix in range(len(pred_output))])
+            dev_sari = 100*np.mean([SARIsent(gold_input[ix], pred_output[ix], [gold_output[ix]]) for ix in range(len(pred_output))])
 
             dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
 
@@ -422,11 +422,17 @@ class ModelAgent(BaseAgent):
 
             
             self.all_metrics_at_best = {
-                'bleu': dev_bleu,
-                'nll': test_loss.item(),
-                'em': dev_em,
-                'sari': dev_sari
+                'nll': test_loss.item()
+                
             }
+            
+            if self.config.eval.data.get('sample_outputs', True) and (self.config.eval.data.get('topk', 1) == 1):
+                self.all_metrics_at_best = {
+                    **self.all_metrics_at_best,
+                    'bleu': dev_bleu,
+                    'em': dev_em,
+                    'sari': dev_sari
+                }
 
             with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id,'metrics.json'), 'w') as f:
                 json.dump(self.all_metrics_at_best, f)

@@ -24,15 +24,15 @@ class ParaphraseAgent(ModelAgent):
         super().__init__(config, run_id, silent)
 
         
-        self.tgt_field = 's2'
+        self.tgt_field = 's1' if self.config.training.data.get('flip_pairs', False) else 's2'
 
         # define data_loader
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad'] or self.config.training.dataset[:5] == 'qdmr-':
+            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad','kaggle-paraqdmr'] or self.config.training.dataset[:5] == 'qdmr-':
                 self.data_loader = ParaphraseDataLoader(config=config)
-                self.src_field = 's2' if self.config.task == 'autoencoder' else 's1'
+                self.src_field = 's2' if (self.config.task == 'autoencoder' or self.config.training.data.get('flip_pairs', False))  else 's1'
             elif self.config.training.dataset in ['squad']:
                 self.data_loader = SquadDataLoader(config=config)
                 self.src_field = 'q'

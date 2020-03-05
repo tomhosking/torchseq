@@ -32,6 +32,7 @@ def main(_):
         cfg_dict = json.load(f)
         if FLAGS.data_path is not None:
             cfg_dict['env']['data_path'] = FLAGS.data_path
+
         config = Config(cfg_dict)
 
     set_seed(FLAGS.seed)
@@ -41,7 +42,7 @@ def main(_):
     BPE.embedding_dim = config.embedding_dim
     BPE.model_slug = config.encdec.bert_model
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')+ ('_DEV' if FLAGS.validate else '')
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + '_' + config.name + ('_TEST' if FLAGS.test else '')+ ('_DEV' if FLAGS.validate else '')+ ('_EVALTRAIN' if FLAGS.validate_train else '')
 
     print("** Run ID is {:} **".format(run_id))
 

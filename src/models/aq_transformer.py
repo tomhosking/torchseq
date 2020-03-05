@@ -9,7 +9,7 @@ from models.positional_embeddings import PositionalEncoding
 
 from models.pooling import MultiHeadedPooling
 
-from transformers import BertModel
+from transformers import BertModel, BartModel
 
 
 class TransformerAqModel(nn.Module):
@@ -45,8 +45,12 @@ class TransformerAqModel(nn.Module):
             #     for param in self.bert_encoder.parameters():
             #         param.requires_grad = False
             # else:
-                
-            self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+            if 'bart' in config.encdec.bert_model:
+                bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+                self.bert_encoder = bart_model.encoder
+                del bart_model.decoder
+            else:
+                self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
             # self.bert_encoder.train()
             # for param in self.bert_encoder.parameters():
             #     param.requires_grad = True
@@ -145,15 +149,21 @@ class TransformerAqModel(nn.Module):
                 bert_context_mask = (~context_mask).double()
 
                 if 'bert_typeids' in self.config.encdec.data and self.config.encdec.bert_typeids:
-                    bert_typeids = batch['a_pos'].to(self.device)
+                    bert_typeids = {'token_type_ids': batch['a_pos'].to(self.device)}
                 else:
-                    bert_typeids = None
-
+                    bert_typeids = {}
+                
+                if 'bart' in self.config.encdec.bert_model:
+                    bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
+                
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
                     with torch.no_grad():
-                        self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                        self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, **bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
                 else:
-                    self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, token_type_ids=bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+                    self.bert_encoding = self.bert_encoder(input_ids=batch['c'].to(self.device), attention_mask=bert_context_mask, **bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+
+                if 'bart' in self.config.encdec.bert_model:
+                    self.bert_encoding = self.bert_encoding.permute(1,0,2)
 
                 if self.config.encdec.num_encoder_layers > 0:
                     bert_encoding_augmented = torch.cat([self.bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)

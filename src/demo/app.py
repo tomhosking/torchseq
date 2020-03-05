@@ -4,7 +4,7 @@ sys.path.insert(0, './src/')
 
 from absl import app as absl_app
 from args import FLAGS as FLAGS
-from flask import Flask, current_app, request, redirect
+from flask import Flask, current_app, request, redirect, Response
 
 import json
 
@@ -32,19 +32,44 @@ def generate():
         'a': answer,
         'a_pos': a_pos
     }
-    res, _ = app.agent.infer(query)
+    
+    res, scores = app.agent.infer(query, reduce_outputs=False)
 
-    return res[0]
+    
+
+    scores = scores.tolist()
+
+    output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
+
+    return Response(json.dumps(output, indent=2), mimetype='application/json') 
 
 @app.route("/api/ping")
 def ping():
     return "ack"
 
 def init():
+
+    MODEL_SLUG = '20200220_161434_bert_embeds_para_pbkagsq_ft_squad'
+
+    # MODEL_PATH = f'./runs/augmented/{MODEL_SLUG}/'
+    MODEL_PATH = './models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/'
+
+
     # Get the config
-    with open(FLAGS.config) as f:
-        config = Config(json.load(f))
-    checkpoint_path = './models/optimised/bert_fixed/0sent/model/checkpoint.pth.tar'
+    with open(MODEL_PATH + 'config.json') as f:
+        cfg_dict = json.load(f)
+        
+    # Override a few bits
+    cfg_dict['eval']['topk'] = 32
+    cfg_dict['reranker'] = {
+        # 'strategy': 'qa'
+        'strategy': None
+    }
+    cfg_dict['env']['data_path'] = './data'
+
+    config = Config(cfg_dict)
+
+    checkpoint_path = MODEL_PATH + 'model/checkpoint.pth.tar'
 
     app.agent = AQAgent(config=config, run_id=None)
 

@@ -1,6 +1,7 @@
 import string, re
 
 from utils.bleu import compute_bleu
+from utils.sari import SARIsent
 
 from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
 
@@ -20,6 +21,14 @@ def bleu(gold, prediction, order=4):
 # takes a list of untokenized strings as inputs
 def bleu_corpus(golds, preds, order=4):
     return compute_bleu([[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order)[0]
+
+
+def ibleu_corpus(golds, preds, inputs, alpha=0.8):
+    return alpha*bleu_corpus(golds, preds) - (1-alpha)*bleu_corpus(preds, inputs)
+    # return sum([alpha*bleu(golds[i], preds[i]) - (1-alpha)*bleu(golds[i], inputs[i]) for i in range(len(golds))])/len(golds) 
+
+def sari_corpus(golds, preds, inputs):
+    return sum([SARIsent(i,p,g) for g,p,i in zip(golds, preds, inputs)])/len(golds)
 
 def f1(gold, prediction):
     prediction_tokens = prediction.lower().split()

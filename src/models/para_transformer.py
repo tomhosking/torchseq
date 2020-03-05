@@ -29,8 +29,20 @@ class TransformerParaphraseModel(nn.Module):
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False))
+        
 
-        self.encoder_projection = nn.utils.weight_norm(nn.Linear(config.embedding_dim * 2, config.embedding_dim, bias=False))
+        # Encoder/decoders
+        if config.encdec.bert_encoder:
+            
+            if 'bart' in config.encdec.bert_model:
+                bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+                self.bert_encoder = bart_model.encoder
+                del bart_model.decoder
+            else:
+                self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+
+        if self.config.encdec.data.get('residual', False):
+            self.encoder_projection = nn.utils.weight_norm(nn.Linear(config.embedding_dim * 2, config.embedding_dim, bias=False))
         
         
         encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
@@ -60,8 +72,8 @@ class TransformerParaphraseModel(nn.Module):
         # Re-normalise the projections...
         with torch.no_grad():
             self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            
-            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+            if self.config.encdec.data.get('residual', False):
+                self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
         # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
@@ -94,7 +106,32 @@ class TransformerParaphraseModel(nn.Module):
             
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1,0,2))
             
-            encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+            # encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+            #  Fwd pass through encoder
+            if self.config.encdec.bert_encoder:
+
+                # BERT expects a mask that's 1 unmasked, 0 for masked
+                bert_context_mask = (~context_mask).double()
+
+                bert_typeids = {}
+                
+                if 'bart' in self.config.encdec.bert_model:
+                    bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
+                
+                self.bert_encoding = self.bert_encoder(input_ids=batch[self.src_field].to(self.device), attention_mask=bert_context_mask, **bert_typeids)[0] #, token_type_ids=batch['a_pos'].to(self.device)
+
+                if 'bart' in self.config.encdec.bert_model:
+                    self.bert_encoding = self.bert_encoding.permute(1,0,2)
+
+                if self.config.encdec.num_encoder_layers > 0:
+                    encoding = self.encoder(self.bert_encoding.permute(1,0,2), mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+                else:
+                    encoding = self.bert_encoding
+                # print(encoding.shape)
+            else:
+                encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
+
+            
 
             if self.config.encdec.data.get('residual', False):
                 encoding = self.encoder_projection(torch.cat([encoding, ctxt_embedded.permute(1,0,2)], dim=-1))

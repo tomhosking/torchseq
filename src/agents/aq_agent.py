@@ -66,7 +66,7 @@ class AQAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['squad', 'squad-ppdb','squad-para', 'squad-para-pbkag', 'squad-para-kag', 'squad-para-pb', 'squad-para-pbkagsq']:
+            if self.config.training.dataset[:5] == 'squad':
                 self.data_loader = SquadDataLoader(config=config)
             elif self.config.training.dataset == 'newsqa':
                 self.data_loader = NewsqaDataLoader(config=config)

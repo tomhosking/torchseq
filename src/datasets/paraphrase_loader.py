@@ -20,7 +20,7 @@ class ParaphraseDataLoader:
 
         self.len_train_data = len(train)
         self.len_valid_data = len(valid)
-        self.len_test_data = len(test)
+        # self.len_test_data = len(test)
 
         print("Loaded {:} training and {:} validation examples from {:}".format(self.len_train_data, self.len_valid_data, os.path.join(config.env.data_path, self.config.training.dataset)))
 

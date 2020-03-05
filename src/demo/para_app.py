@@ -23,9 +23,9 @@ def index():
 @app.route("/api/generate")
 def generate():
 
-    s1 = "return palm house ; return # 1 with subtropic plants ; return # 2 from the world displayed"
+    s1 = request.args['s1']
 
-    # s1 = request.args['s1']
+    s1 = "return palm house ; return #1 that has subtropic plants from around the world on display ; return where is #1 from"
     # ctxt = request.args['ctxt']
     # ans = request.args['ans']
 
@@ -55,8 +55,8 @@ def init():
     # MODEL_PATH = './runs/paraphrase/20200209_190027_kaggle_8heads'
     # MODEL_PATH = './runs/paraphrase/20200130_161250_parabank-qs_supp1.0_8heads'
     # MODEL_PATH = './runs/paraphrase/20200211_163735_parabank_to_kaggle_to_squad_8heads'
-    MODEL_PATH = './runs/qdmr/20200219_132950_qdmr_from_q'
-    MODEL_PATH = './runs/qdmr/20200219_132950_qdmr_to_q'
+    MODEL_PATH = './runs/qdmr/20200304_154646_qdmr_from_q_withresidual_abs_lang'
+    # MODEL_PATH = './runs/qdmr/20200221_153512_qdmr_to_q_withresidual_relative'
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + '/config.json') as f:
@@ -73,7 +73,7 @@ def init():
         cfg_dict['beam_search'] = {
             "beam_width": 8,
             "beam_expansion": 2,
-            "length_alpha": 1.0
+            "length_alpha": 0.0
         }
         cfg_dict['reranker'] = {
             # 'strategy': 'qa'

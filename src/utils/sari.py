@@ -107,6 +107,7 @@ def SARIngram(sgrams, cgrams, rgramslist, numref):
     if addscore_precision > 0 or addscore_recall > 0:
         addscore = 2 * addscore_precision * addscore_recall / (addscore_precision + addscore_recall)
     
+    return (keepscore, delscore, addscore)
     return (keepscore, delscore_precision, addscore)
     
 
