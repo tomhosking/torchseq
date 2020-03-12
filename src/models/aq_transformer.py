@@ -130,16 +130,17 @@ class TransformerAqModel(nn.Module):
             ctxt_ans_embedded = self.bio_embeddings(batch['a_pos']).to(self.device)
 
             # Build the context
+
+            if self.config.raw_embedding_dim != self.config.embedding_dim:
+                ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
+
             if self.config.encdec.bert_encoder:
                 ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
             else:
-                if self.config.raw_embedding_dim != self.config.embedding_dim:
-                    ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
-
                 ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(self.config.embedding_dim)
 
-                
             
+
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1,0,2))
             
             # Fwd pass through encoder
@@ -153,8 +154,8 @@ class TransformerAqModel(nn.Module):
                 else:
                     bert_typeids = {}
                 
-                if 'bart' in self.config.encdec.bert_model:
-                    bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
+                # if 'bart' in self.config.encdec.bert_model:
+                #     bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
                 
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
                     with torch.no_grad():
@@ -165,6 +166,12 @@ class TransformerAqModel(nn.Module):
                 if 'bart' in self.config.encdec.bert_model:
                     self.bert_encoding = self.bert_encoding.permute(1,0,2)
 
+                
+                if self.config.raw_embedding_dim != self.config.embedding_dim:
+                    self.bert_encoding = self.embedding_projection(self.bert_encoding)
+
+                
+
                 if self.config.encdec.num_encoder_layers > 0:
                     bert_encoding_augmented = torch.cat([self.bert_encoding, ctxt_ans_embedded], dim=-1) # ctxt_embedded.permute(1,0,2)
                     bert_encoding_augmented = self.bert_embedding_projection(bert_encoding_augmented)
@@ -172,6 +179,8 @@ class TransformerAqModel(nn.Module):
                 else:
                     encoding = self.bert_encoding
                 # print(encoding.shape)
+                
+
             else:
                 encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
 

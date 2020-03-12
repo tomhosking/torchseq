@@ -29,6 +29,9 @@ class DiverseBeamSearchSampler(nn.Module):
         curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
         max_output_len = self.config.eval.data.get('max_out_len', 32)
 
+        if not self.config.eval.data.get('shifted_decoding', True):
+            raise "Unshifted decoding not supported by DBS decoder!"
+
         # TODO: move to config
         beam_width = self.config.beam_search.beam_width # number of total hypotheses to maintain
         beam_expansion = self.config.beam_search.beam_expansion # number of new predictions to add to each hypothesis each step

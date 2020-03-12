@@ -239,14 +239,15 @@ class ModelAgent(BaseAgent):
             
             loss.backward()
 
+            # print(loss)
             # for name, param in self.model.named_parameters():
-            #     if "bert_encoder." in name:
-            #     # if "encoder_projection." in name:
-            #         # print(name, param.requires_grad)
+            #     if "encoder_pooling." in name:
+            #     # if "encoder_projection" in name:
+            #         print(name, param.requires_grad, param.grad is None)
+            #         # print(torch.sum(torch.abs(param.grad)))
             #         if param.requires_grad and param.grad is None:
             #             # print(dir(param))
             #             print(name)
-            #             # print(torch.sum(torch.abs(param.grad)))
 
 
             # exit()
@@ -305,6 +306,13 @@ class ModelAgent(BaseAgent):
 
             # dev_output = beam_output[:, 0, :]
             # dev_output_lens = beam_lens[:, 0]
+
+        elif self.config.eval.sampler == 'greedy':
+            greedy_output, greedy_scores, greedy_lens = self.decode_greedy(self.model, batch, tgt_field)
+            # Greedy returns a single estimate, so expand to create a fake "beam"
+            beam_output = greedy_output.unsqueeze(1)
+            beam_scores = greedy_scores.unsqueeze(1)
+            beam_lens = greedy_lens.unsqueeze(1)
         else:
             raise Exception("Unknown sampling method!")
 

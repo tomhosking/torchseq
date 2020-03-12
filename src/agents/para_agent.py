@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from agents.model_agent import ModelAgent
 
 from models.para_transformer import TransformerParaphraseModel
+from models.pretrained_modular import PretrainedModularModel
 from models.suppression_loss import SuppressionLoss
 
 from datasets.paraphrase_loader import ParaphraseDataLoader
@@ -30,7 +31,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad','kaggle-paraqdmr'] or self.config.training.dataset[:5] == 'qdmr-':
+            if self.config.training.dataset in ['paranmt', 'parabank', 'kaggle', 'parabank-qs', 'para-squad'] or self.config.training.dataset[:5] == 'qdmr-' or 'kaggle-' in self.config.training.dataset:
                 self.data_loader = ParaphraseDataLoader(config=config)
                 self.src_field = 's2' if (self.config.task == 'autoencoder' or self.config.training.data.get('flip_pairs', False))  else 's1'
             elif self.config.training.dataset in ['squad']:
@@ -45,7 +46,10 @@ class ParaphraseAgent(ModelAgent):
         self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction='none')
 
         # define model
-        self.model = TransformerParaphraseModel(self.config, src_field=self.src_field, loss=self.loss)
+        if self.config.data.get('model', None) is not None and self.config.model == 'pretrained_modular':
+            self.model = PretrainedModularModel(self.config, src_field=self.src_field, loss=self.loss)
+        else:
+            self.model = TransformerParaphraseModel(self.config, src_field=self.src_field, loss=self.loss)
 
 
 

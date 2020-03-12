@@ -14,6 +14,9 @@ class TeacherForcedSampler(nn.Module):
         max_output_len = batch[tgt_field].size()[1]
 
         # Create vector of SOS + placeholder for first prediction
+
+        if not self.config.eval.data.get('shifted_decoding', True):
+            raise "Unshifted decoding not supported by teacher forced decoder!"
         
         
         logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-1e18')).to(self.device)

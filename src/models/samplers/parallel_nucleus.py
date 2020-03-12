@@ -69,6 +69,9 @@ class ParallelNucleusSampler(nn.Module):
 
         prevent_repetition = self.config.nucleus_sampling.prevent_repetition if 'prevent_repetition' in self.config.nucleus_sampling.data else True
 
+        if not self.config.eval.data.get('shifted_decoding', True):
+            raise "Unshifted decoding not supported by nucleus decoder!"
+
         
         beam_width = self.config.nucleus_sampling.beam_width # number of total hypotheses to maintain
         prob_cutoff = self.config.nucleus_sampling.cutoff

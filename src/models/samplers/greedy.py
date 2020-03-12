@@ -15,6 +15,9 @@ class GreedySampler(nn.Module):
 
         max_output_len = batch[tgt_field].size()[1]
 
+        if not self.config.eval.data.get('shifted_decoding', True):
+            raise "Unshifted decoding not supported by greedy decoder!"
+
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.bos_id).to(self.device)
         logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-inf')).to(self.device)
