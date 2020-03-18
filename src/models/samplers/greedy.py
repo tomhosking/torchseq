@@ -15,8 +15,8 @@ class GreedySampler(nn.Module):
 
         max_output_len = batch[tgt_field].size()[1]
 
-        if not self.config.eval.data.get('shifted_decoding', True):
-            raise "Unshifted decoding not supported by greedy decoder!"
+        BART_HACK = self.config.eval.data.get('prepend_eos', False)
+
 
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.bos_id).to(self.device)
@@ -26,12 +26,22 @@ class GreedySampler(nn.Module):
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
         padding = torch.LongTensor(curr_batch_size).fill_(BPE.pad_id).to(self.device)
 
+        if BART_HACK:
+            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(BPE.eos_id).to(self.device)
+            output = torch.cat([dummy_token, output], dim=1)
+
         seq_ix = 0
         memory = None
         while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
+
+
             new_logits, memory, _ = model(batch, output, memory)
 
             new_output = torch.argmax(new_logits, -1)
+            
+            # print('tgt  ', batch[tgt_field])
+            # print('Dec in:', output_for_decoder)
+            # print('Dec out', new_output)
 
             new_scores = torch.max(new_logits, -1).values
             # print(new_scores)
@@ -49,7 +59,11 @@ class GreedySampler(nn.Module):
             output_done = output_done | (output[:, -1] == BPE.eos_id)
             seq_ix += 1
         # exit()
-        
+            # if seq_ix > 1:
+            #     exit()
         # output.where(output == BPE.pad_id, torch.LongTensor(output.shape).fill_(-1).to(self.device))
+
+        if BART_HACK:
+            output = output[:, 1:]
 
         return output, logits, torch.sum(output != BPE.pad_id, dim=-1)

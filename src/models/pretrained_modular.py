@@ -11,19 +11,39 @@ from models.pooling import MultiHeadedPooling
 
 from transformers import BertModel
 
-def combine_masks(key_padding_mask, attn_mask, targ_size):
+# def combine_masks(key_padding_mask, attn_mask, targ_size):
+#     # targ_size = (bsz, tgt_len, src_len)
+#     a = torch.zeros(targ_size)
+#     b = torch.zeros(targ_size)
+#     if key_padding_mask is not None:  # (bsz, tgt_len) -> targ_size
+#         # _check_shapes(key_padding_mask.shape, targ_size[:2])
+#         reshaped = key_padding_mask.unsqueeze(2).expand(*targ_size)
+#         a[reshaped] = -1e8
+
+#     if attn_mask is not None:  # (tgt_len, src_len) -> targ_size
+#         # _check_shapes(attn_mask.shape, targ_size[-2:])
+#         b = attn_mask.cpu().unsqueeze(0).expand(*targ_size)
+#     return (a + b).unsqueeze(1).clamp(-1e-8,)
+
+# Helper Functions, mostly for making masks
+def _check_shapes(shape_1, shape2):
+    if shape_1 != shape2:
+        raise AssertionError("shape mismatch: {} != {}".format(shape_1, shape2))
+
+LARGE_NEGATIVE = -1e8
+def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
     # targ_size = (bsz, tgt_len, src_len)
     a = torch.zeros(targ_size)
     b = torch.zeros(targ_size)
     if key_padding_mask is not None:  # (bsz, tgt_len) -> targ_size
-        # _check_shapes(key_padding_mask.shape, targ_size[:2])
+        _check_shapes(key_padding_mask.shape, targ_size[:2])
         reshaped = key_padding_mask.unsqueeze(2).expand(*targ_size)
-        a[reshaped] = -1e8
+        a[reshaped] = LARGE_NEGATIVE
 
-    if attn_mask is not None:  # (tgt_len, src_len) -> targ_size
-        # _check_shapes(attn_mask.shape, targ_size[-2:])
-        b = attn_mask.cpu().unsqueeze(0).expand(*targ_size)
-    return (a + b).unsqueeze(1).clamp(-1e-8,)
+    if causal_lm_mask is not None:  # (tgt_len, src_len) -> targ_size
+        _check_shapes(causal_lm_mask.shape, targ_size[-2:])
+        b = causal_lm_mask.cpu().unsqueeze(0).expand(*targ_size)
+    return (a + b).unsqueeze(1).clamp(LARGE_NEGATIVE,)
 
 
 
@@ -160,13 +180,13 @@ class PretrainedModularModel(nn.Module):
 
         output = self.decoder(
                                 output,
-                                memory,
+                                memory.transpose(0,1),
                                 ~memory_mask,
                                 bert_tgt_mask
                                 # tgt_key_padding_mask=output_pad_mask
                             )
 
-        # print(output[0])
+        # print(output[0].shape)
 
         logits = self.output_projection(output[0])
 
@@ -177,6 +197,9 @@ class PretrainedModularModel(nn.Module):
 
         # print(memory.shape)
         # print(logits.shape)
+
+        # print('src  ', batch[self.src_field])
+        
         # print(output[0].shape)
 
         loss = None

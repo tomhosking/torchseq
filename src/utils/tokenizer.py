@@ -11,6 +11,8 @@ class BPE:
     embedding_dim = None
     bos_id = None
     eos_id = None
+    mask_id = None
+    unk_id = None
 
     model_slug = 'bert-base-uncased'
 
@@ -27,13 +29,14 @@ class BPE:
             if 'bart' in BPE.model_slug:
                 BPE._instance  = ByteLevelBPETokenizer("./data/bert-vocabs/{:}-vocab.json".format(BPE.model_slug), "./data/bert-vocabs/{:}-merges.txt".format(BPE.model_slug), lowercase=False)
                 
-                BPE.pad_id = BPE._instance.token_to_id('<pad>')
+                BPE._instance.add_special_tokens(["<s>","</s>","<pad>", "<mask>", "<unk>"])
 
+                BPE.pad_id = BPE._instance.token_to_id('<pad>')
+                BPE.mask_id = BPE._instance.token_to_id('<mask>')
+                BPE.unk_id = BPE._instance.token_to_id('<unk>')
                 
                 BPE.bos_id = BPE._instance.token_to_id('<s>')
                 BPE.eos_id = BPE._instance.token_to_id('</s>')
-
-                BPE._instance.add_special_tokens(["<s>","</s>","<pad>", "<mask>", "<unk>"])
 
                 
                 model = BartModel.from_pretrained(BPE.model_slug)
@@ -44,7 +47,8 @@ class BPE:
                 BPE._instance  = BertWordPieceTokenizer("./data/bert-vocabs/{:}-vocab.txt".format(BPE.model_slug), lowercase=(BPE.model_slug[-8:] == '-uncased'))
             
                 BPE.pad_id = BPE._instance.token_to_id('[PAD]')
-
+                BPE.mask_id = BPE._instance.token_to_id('[MASK]')
+                BPE.unk_id = BPE._instance.token_to_id('[UNK')
                 
                 BPE.bos_id = BPE._instance.token_to_id('[CLS]')
                 BPE.eos_id = BPE._instance.token_to_id('[SEP]')
