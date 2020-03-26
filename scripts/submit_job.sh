@@ -33,16 +33,18 @@ res=$(sbatch $@)
 
 jobId=`echo $res | sed -E 's/Submitted batch job ([0-9]+)/\1/'`
 
+partition=`scontrol show job $jobId | grep "Partition=([^\s]+)" -Po | sed s/Partition=//`
+
 if [ "$jobId" != "$res" ]
 then
 
     
-    ${MCKENZIE_HOOK} -a 1 -i $jobId > /dev/null
+    ${MCKENZIE_HOOK} -a 1 -i $jobId -p $partition > /dev/null
     
     jobName=$(cat $CONFIG | grep \"name\"\: | sed -E 's/.+\"name\": \"(.*)\"\,/\1/')
     jobTag=$(cat $CONFIG | grep \"tag\"\: | sed -E 's/.+\"tag\": \"(.*)\"\,/\1/')
     
-    ${MCKENZIE_HOOK} -i $jobId -n $jobTag/$jobName > /dev/null
+    ${MCKENZIE_HOOK} -i $jobId -p $partition -n $jobTag/$jobName > /dev/null
 
     echo "Batch job ID $jobId -> $jobTag/$jobName"
 else
