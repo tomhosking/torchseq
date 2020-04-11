@@ -5,11 +5,13 @@ from datetime import datetime
 import torch
 from absl import app
 
+
+from tests import utils as test_utils
+
 from agents.aq_agent import AQAgent
 from agents.para_agent import ParaphraseAgent
 from args import FLAGS as FLAGS
 from datasets import cqa_triple, loaders
-from tests import utils as test_utils
 from utils.config import Config
 from utils.seed import set_seed
 from utils.tokenizer import BPE
