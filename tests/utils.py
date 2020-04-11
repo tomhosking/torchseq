@@ -1,7 +1,7 @@
-import os, sys
+import os
+import sys
 import unittest
 from distutils.util import strtobool
-
 
 sys.path.insert(0, "./src/")
 

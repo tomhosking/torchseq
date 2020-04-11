@@ -1,6 +1,3 @@
-from tests import utils as test_utils
-
-
 import json
 import os
 from datetime import datetime
@@ -12,9 +9,11 @@ from agents.aq_agent import AQAgent
 from agents.para_agent import ParaphraseAgent
 from args import FLAGS as FLAGS
 from datasets import cqa_triple, loaders
+from tests import utils as test_utils
 from utils.config import Config
 from utils.seed import set_seed
 from utils.tokenizer import BPE
+
 
 @test_utils.slow
 def test_bert_embeds():
@@ -59,5 +58,5 @@ def test_bert_embeds():
 
     # Now check the output
     assert abs(loss - 2.3993) < 1e-3
-    assert 'bleu' in metrics
-    assert abs(metrics['bleu'] - 17.989) < 1e-2
+    assert "bleu" in metrics
+    assert abs(metrics["bleu"] - 17.989) < 1e-2
