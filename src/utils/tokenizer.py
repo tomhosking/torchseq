@@ -15,6 +15,12 @@ class BPE:
     model_slug = "bert-base-uncased"
 
     @staticmethod
+    def reload():
+        del BPE._instance
+        BPE._instance = None
+        return BPE.instance()
+
+    @staticmethod
     def decode(token_id_tensor):
         return (
             BPE.instance()

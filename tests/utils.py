@@ -1,6 +1,9 @@
-import os
+import os, sys
 import unittest
 from distutils.util import strtobool
+
+
+sys.path.insert(0, "./src/")
 
 
 def parse_flag_from_env(key, default=False):

@@ -494,3 +494,5 @@ class ModelAgent(BaseAgent):
                 self.logger.info("Early stopping lag active: saving...")
 
             self.save_checkpoint()
+
+        return test_loss, self.all_metrics_at_best
