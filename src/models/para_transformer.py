@@ -2,7 +2,7 @@ import math
 
 import torch
 import torch.nn as nn
-from transformers import BertModel, BartModel
+from transformers import BartModel, BertModel
 
 from models.pooling import MultiHeadedPooling
 from models.positional_embeddings import PositionalEncoding

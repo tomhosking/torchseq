@@ -44,7 +44,7 @@ class AQAgent(ModelAgent):
             self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction="none")
 
         # define models
-        self.model = TransformerAqModel(config) #, loss=self.loss
+        self.model = TransformerAqModel(config)  # , loss=self.loss
 
         # define data_loader
         if self.config.training.use_preprocessed_data:
@@ -79,7 +79,7 @@ class AQAgent(ModelAgent):
 
         output, logits, _ = self.decode_teacher_force(self.model, batch, "q")  # bsd
 
-        this_loss = self.loss(logits.permute(0,2,1), batch['q'])
+        this_loss = self.loss(logits.permute(0, 2, 1), batch["q"])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["a"])

@@ -36,8 +36,6 @@ from utils.tokenizer import BPE
 #         return bos + [{'id': piece.id, 'text': piece.piece, 'begin': piece.begin, 'end': piece.end} for piece in spt.pieces] + eos
 
 
-
-
 class BPE_old:
     _instance = None
 

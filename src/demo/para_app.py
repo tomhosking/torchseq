@@ -11,10 +11,6 @@ from utils.config import Config
 sys.path.insert(0, "./src/")
 
 
-
-
-
-
 app = Flask(__name__)
 
 

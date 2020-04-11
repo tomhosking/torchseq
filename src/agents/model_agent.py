@@ -167,7 +167,7 @@ class ModelAgent(BaseAgent):
 
         output, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+        this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
         loss += torch.mean(torch.sum(this_loss, dim=1) / batch[tgt_field + "_len"].to(this_loss), dim=0)
 
@@ -344,7 +344,7 @@ class ModelAgent(BaseAgent):
 
         if calculate_loss:
             _, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
-            this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+            this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
             normed_loss = torch.mean(torch.sum(this_loss, dim=1) / batch[tgt_field + "_len"].to(this_loss), dim=0)
         else:
             normed_loss = None

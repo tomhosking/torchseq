@@ -3,14 +3,12 @@ import torch.nn.functional as F
 from torch import nn
 
 from agents.model_agent import ModelAgent
-
-from datasets.preprocessed_loader import PreprocessedDataLoader
 from datasets.paraphrase_dataset import ParaphraseDataset
 from datasets.paraphrase_loader import ParaphraseDataLoader
 from datasets.paraphrase_pair import ParaphrasePair
+from datasets.preprocessed_loader import PreprocessedDataLoader
 from datasets.squad_dataset import SquadDataset
 from datasets.squad_loader import SquadDataLoader
-
 from models.para_transformer import TransformerParaphraseModel
 from models.pretrained_modular import PretrainedModularModel
 from models.suppression_loss import SuppressionLoss
@@ -69,7 +67,7 @@ class ParaphraseAgent(ModelAgent):
 
         output, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0,2,1), batch[tgt_field])
+        this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["s1"])
