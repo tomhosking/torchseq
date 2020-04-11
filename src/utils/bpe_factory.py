@@ -1,12 +1,12 @@
 import re
-# from bpemb import BPEmb
-from utils.sentencepiece_pb2 import SentencePieceText
-
 import unicodedata
 
+from transformers import (BertModel, BertTokenizer, DistilBertModel,
+                          DistilBertTokenizer)
+
+# from bpemb import BPEmb
+from utils.sentencepiece_pb2 import SentencePieceText
 from utils.tokenizer import BPE
-
-
 
 # class BPE_bpemb:
 #     _instance = None
@@ -36,7 +36,7 @@ from utils.tokenizer import BPE
 #         return bos + [{'id': piece.id, 'text': piece.piece, 'begin': piece.begin, 'end': piece.end} for piece in spt.pieces] + eos
 
 
-from transformers import  BertTokenizer, BertModel, DistilBertTokenizer, DistilBertModel
+
 
 class BPE_old:
     _instance = None
@@ -46,14 +46,11 @@ class BPE_old:
     bos_id = None
     eos_id = None
 
-    model_slug = 'bert-base-uncased'
-
-    
+    model_slug = "bert-base-uncased"
 
     @staticmethod
     def decode(token_id_tensor):
         return BPE.instance().decode(token_id_tensor.tolist(), skip_special_tokens=True)
-
 
     @staticmethod
     def instance():
@@ -68,8 +65,7 @@ class BPE_old:
             BPE.eos_id = BPE._instance.sep_token_id
 
             # num_added_toks = BPE._instance.add_special_tokens(special_tokens_dict)
-            
-            
+
             model = BertModel.from_pretrained(BPE.model_slug)
             # model = DistilBertModel.from_pretrained('distilbert-base-uncased')
             BPE._instance.embeddings = model.embeddings.word_embeddings.weight.data
@@ -93,13 +89,12 @@ class BPE_old:
         for tok in tokens:
             if tok == BPE.instance().unk_token:
                 continue
-            needle = tok[2:] if tok[:2] == '##' else tok
+            needle = tok[2:] if tok[:2] == "##" else tok
 
             new_offset = clean_text.find(needle, offset)
-            
 
             if new_offset < 0:
-                print('Couldnt find token in tokeniser: {:} (pos: {:})'.format(needle, offset))
+                print("Couldnt find token in tokeniser: {:} (pos: {:})".format(needle, offset))
                 print(text)
                 print(clean_text)
                 print(tokens)
@@ -112,15 +107,14 @@ class BPE_old:
             for x in offsets:
                 if x[1] == offset:
                     orig_offset = x[0]
-            
-            
+
             pieces.append(
                 {
-                    'id': BPE.instance().convert_tokens_to_ids(tok),
-                    'text': tok,
-                    'begin_new': offset,
-                    'begin': get_byte_offsets(clean_text, orig_offset),
-                    'end': get_byte_offsets(clean_text, orig_offset + len(needle))
+                    "id": BPE.instance().convert_tokens_to_ids(tok),
+                    "text": tok,
+                    "begin_new": offset,
+                    "begin": get_byte_offsets(clean_text, orig_offset),
+                    "end": get_byte_offsets(clean_text, orig_offset + len(needle)),
                 }
             )
             # print(tok, offset, offset + len(needle))
@@ -138,16 +132,21 @@ class BPE_old:
         #     print(text)
         #     print(tokens)
         #     print(pieces)
-            
+
         #     exit()
 
         # bos = [{'id': BPE.bos_id, 'text': BPE.instance().bos_token, 'begin': 0, 'end': 0}]
         # eos = [{'id': BPE.eos_id, 'text': BPE.instance().eos_token, 'begin': len(text), 'end': len(text)}]
 
-        bos = [{'id': BPE.instance().cls_token_id, 'text': BPE.instance().cls_token, 'begin': 0, 'end': 0}]
-        eos = [{'id': BPE.instance().sep_token_id, 'text': BPE.instance().sep_token, 'begin': len(text), 'end': len(text)}]
+        bos = [{"id": BPE.instance().cls_token_id, "text": BPE.instance().cls_token, "begin": 0, "end": 0}]
+        eos = [
+            {"id": BPE.instance().sep_token_id, "text": BPE.instance().sep_token, "begin": len(text), "end": len(text)}
+        ]
 
-        tokenised = [{'id': piece['id'], 'text': piece['text'], 'begin': piece['begin'], 'end': piece['end']} for piece in pieces]
+        tokenised = [
+            {"id": piece["id"], "text": piece["text"], "begin": piece["begin"], "end": piece["end"]}
+            for piece in pieces
+        ]
         if add_bos_eos:
             return bos + tokenised + eos
         else:
@@ -164,19 +163,22 @@ def get_byte_offsets(text, character_offset):
     #     begin_offset = character_offset
     # return begin_offset
 
+
 def _run_strip_accents(text):
     # nfkd_form = unicodedata.normalize('NFKD', text)
     # return u"".join([c for c in nfkd_form if not unicodedata.combining(c)])
-    
+
     output = []
-    offsets=[]
-    delta=0
+    offsets = []
+    delta = 0
     for i, char in enumerate(text):
-        char = unicodedata.normalize("NFD", char) # Normalise a char at a time as otherwise it's not a length preserving process!!
-        if len(char) > 1:# and unicodedata.category(char[1]) == 'Mn':
-#             print(char, char[0], [unicodedata.category(c) for c in char])
-#             char = char[0]
-            if unicodedata.category(char[1]) == 'Mn':
+        char = unicodedata.normalize(
+            "NFD", char
+        )  # Normalise a char at a time as otherwise it's not a length preserving process!!
+        if len(char) > 1:  # and unicodedata.category(char[1]) == 'Mn':
+            #             print(char, char[0], [unicodedata.category(c) for c in char])
+            #             char = char[0]
+            if unicodedata.category(char[1]) == "Mn":
                 output.append(char[0])
             else:
                 output.append(char)
@@ -188,7 +190,7 @@ def _run_strip_accents(text):
                 delta -= 1
             else:
                 output.append(char)
-        offsets.append((i, i+delta))
+        offsets.append((i, i + delta))
     return "".join(output), offsets
 
 
@@ -203,6 +205,7 @@ def _is_whitespace(char):
         return True
     return False
 
+
 def _is_control(char):
     """Checks whether `chars` is a control character."""
     # These are technically control characters but we count them as whitespace
@@ -214,40 +217,40 @@ def _is_control(char):
         return True
     return False
 
-def _clean_text(text,prev_offsets=None):
+
+def _clean_text(text, prev_offsets=None):
     """Performs invalid character removal and whitespace cleanup on text."""
     output = []
     offsets = []
     delta = 0
-    j=0
-    for i,char in enumerate(text):
+    j = 0
+    for i, char in enumerate(text):
         cp = ord(char)
-        if cp == 0 or cp == 0xfffd or _is_control(char):
+        if cp == 0 or cp == 0xFFFD or _is_control(char):
             delta -= 1
         elif _is_whitespace(char):
             output.append(" ")
         else:
             output.append(char)
-        
+
         # Move the cursor
-        while j < len(prev_offsets)-1 and prev_offsets[j+1][1] <= i:
+        while j < len(prev_offsets) - 1 and prev_offsets[j + 1][1] <= i:
             j += 1
-        
-        offsets.append((prev_offsets[j][0], i+delta))
+
+        offsets.append((prev_offsets[j][0], i + delta))
     return "".join(output), offsets
+
 
 def normalise(text):
     # return text
 
-    if BPE.model_slug[-8:] == '-uncased':
+    if BPE.model_slug[-8:] == "-uncased":
         clean_text, offsets1 = _run_strip_accents(text)
     else:
         clean_text = text
-        offsets1 = [(i, i+1) for i in range(len(clean_text))]
+        offsets1 = [(i, i + 1) for i in range(len(clean_text))]
 
     clean_text, offsets2 = _clean_text(clean_text, offsets1)
-
-    
 
     # Combine offsets
     # if 'is usually translated into english as "virtuous behavior"' in text.lower():
@@ -255,7 +258,7 @@ def normalise(text):
     #     print(offsets2)
     #     exit()
 
-    if BPE.model_slug[-8:] == '-uncased':
+    if BPE.model_slug[-8:] == "-uncased":
         clean_text = clean_text.lower()
 
     return clean_text, offsets2

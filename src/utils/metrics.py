@@ -1,11 +1,11 @@
-import string, re
-
-from utils.bleu import compute_bleu
-from utils.sari import SARIsent
+import re
+import string
+from collections import Counter
 
 from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
 
-from collections import Counter
+from utils.bleu import compute_bleu
+from utils.sari import SARIsent
 
 
 def tokenize(text):
@@ -14,21 +14,27 @@ def tokenize(text):
     tokens = [tok.lower() for sent in sents for tok in TreebankWordTokenizer().tokenize(sent)]
     return tokens
 
+
 # takes a single untokenised string as input
 def bleu(gold, prediction, order=4):
     return compute_bleu([[tokenize(gold)]], [tokenize(prediction)], smooth=False, max_order=order)[0]
 
+
 # takes a list of untokenized strings as inputs
 def bleu_corpus(golds, preds, order=4):
-    return compute_bleu([[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order)[0]
+    return compute_bleu(
+        [[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order
+    )[0]
 
 
 def ibleu_corpus(golds, preds, inputs, alpha=0.8):
-    return alpha*bleu_corpus(golds, preds) - (1-alpha)*bleu_corpus(preds, inputs)
-    # return sum([alpha*bleu(golds[i], preds[i]) - (1-alpha)*bleu(golds[i], inputs[i]) for i in range(len(golds))])/len(golds) 
+    return alpha * bleu_corpus(golds, preds) - (1 - alpha) * bleu_corpus(preds, inputs)
+    # return sum([alpha*bleu(golds[i], preds[i]) - (1-alpha)*bleu(golds[i], inputs[i]) for i in range(len(golds))])/len(golds)
+
 
 def sari_corpus(golds, preds, inputs):
-    return sum([SARIsent(i,p,g) for g,p,i in zip(golds, preds, inputs)])/len(golds)
+    return sum([SARIsent(i, p, g) for g, p, i in zip(golds, preds, inputs)]) / len(golds)
+
 
 def f1(gold, prediction):
     prediction_tokens = prediction.lower().split()
@@ -42,17 +48,17 @@ def f1(gold, prediction):
     f1 = (2 * precision * recall) / (precision + recall)
     return f1
 
-def normalize_answer(s):
 
+def normalize_answer(s):
     def remove_articles(text):
-        return re.sub(r'\b(a|an|the)\b', ' ', text)
+        return re.sub(r"\b(a|an|the)\b", " ", text)
 
     def white_space_fix(text):
-        return ' '.join(text.split())
+        return " ".join(text.split())
 
     def remove_punc(text):
         exclude = set(string.punctuation)
-        return ''.join(ch for ch in text if ch not in exclude)
+        return "".join(ch for ch in text if ch not in exclude)
 
     def lower(text):
         return text.lower()

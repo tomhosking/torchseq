@@ -8,31 +8,34 @@ and
   http://www.mathworks.com/matlabcentral/fileexchange/15426
 """
 import numpy
+
 # from scipy.special import erfc
 
+
 def fleiss(data):
-  if not len(data.shape) == 2:
-    raise(ValueError, 'input must be 2-dimensional array')
-  if not issubclass(data.dtype.type, numpy.integer):
-    raise(TypeError, 'expected integer type')
-  if not numpy.isfinite(data).all():
-    raise(ValueError, 'all data must be finite')
+    if not len(data.shape) == 2:
+        raise (ValueError, "input must be 2-dimensional array")
+    if not issubclass(data.dtype.type, numpy.integer):
+        raise (TypeError, "expected integer type")
+    if not numpy.isfinite(data).all():
+        raise (ValueError, "all data must be finite")
 
-  raters = data.sum(axis=1)
-  if (raters - raters.max()).any():
-    raise(ValueError, 'inconsistent number of raters')
+    raters = data.sum(axis=1)
+    if (raters - raters.max()).any():
+        raise (ValueError, "inconsistent number of raters")
 
-  num_raters = raters[0]
-  num_subjects, num_category = data.shape
-  total_ratings = num_subjects * num_raters
+    num_raters = raters[0]
+    num_subjects, num_category = data.shape
+    total_ratings = num_subjects * num_raters
 
-  pj = data.sum(axis=0) / float(total_ratings)
-  pi = ((data * data).sum(axis=1) - num_raters).astype(float) / ( num_raters * (num_raters-1) )
-  pbar = pi.sum() / num_subjects
-  pebar = (pj * pj).sum()
+    pj = data.sum(axis=0) / float(total_ratings)
+    pi = ((data * data).sum(axis=1) - num_raters).astype(float) / (num_raters * (num_raters - 1))
+    pbar = pi.sum() / num_subjects
+    pebar = (pj * pj).sum()
 
-  kappa = (pbar - pebar) / (1 - pebar)
-  return kappa
+    kappa = (pbar - pebar) / (1 - pebar)
+    return kappa
+
 
 # def fleiss(data):
 #   if not len(data.shape) == 2:
@@ -94,17 +97,19 @@ def fleiss(data):
 #   return k, p
 
 if __name__ == "__main__":
-  data = numpy.array([
-    [0,0,0,0,14],
-    [0,2,6,4,2],
-    [0,0,3,5,6],
-    [0,3,9,2,0],
-    [2,2,8,1,1],
-    [7,7,0,0,0],
-    [3,2,6,3,0],
-    [2,5,3,2,2],
-    [6,5,2,1,0],
-    [0,2,2,3,7],
-    ])
+    data = numpy.array(
+        [
+            [0, 0, 0, 0, 14],
+            [0, 2, 6, 4, 2],
+            [0, 0, 3, 5, 6],
+            [0, 3, 9, 2, 0],
+            [2, 2, 8, 1, 1],
+            [7, 7, 0, 0, 0],
+            [3, 2, 6, 3, 0],
+            [2, 5, 3, 2, 2],
+            [6, 5, 2, 1, 0],
+            [0, 2, 2, 3, 7],
+        ]
+    )
 
-  print(fleiss(data))
+    print(fleiss(data))

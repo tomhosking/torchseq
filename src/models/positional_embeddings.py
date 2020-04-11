@@ -1,9 +1,11 @@
 # https://github.com/pytorch/examples/blob/master/word_language_model/model.py
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 
 # Temporarily leave PositionalEncoding module here. Will be moved somewhere else.
 class PositionalEncoding(nn.Module):
@@ -33,7 +35,7 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
-        self.register_buffer('pe', pe)
+        self.register_buffer("pe", pe)
 
     def forward(self, x):
         r"""Inputs of forward function
@@ -46,5 +48,5 @@ class PositionalEncoding(nn.Module):
             >>> output = pos_encoder(x)
         """
 
-        x = x + self.pe[:x.size(0), :]
+        x = x + self.pe[: x.size(0), :]
         return self.dropout(x)

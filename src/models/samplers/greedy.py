@@ -1,8 +1,8 @@
-
 import torch
 import torch.nn as nn
 
 from utils.tokenizer import BPE
+
 
 class GreedySampler(nn.Module):
     def __init__(self, config, device):
@@ -15,13 +15,14 @@ class GreedySampler(nn.Module):
 
         max_output_len = batch[tgt_field].size()[1]
 
-        BART_HACK = self.config.eval.data.get('prepend_eos', False)
-
+        BART_HACK = self.config.eval.data.get("prepend_eos", False)
 
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(BPE.bos_id).to(self.device)
-        logits = torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float('-inf')).to(self.device)
-        logits[:, :, BPE.bos_id] = float('inf')
+        logits = (
+            torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-inf")).to(self.device)
+        )
+        logits[:, :, BPE.bos_id] = float("inf")
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
         padding = torch.LongTensor(curr_batch_size).fill_(BPE.pad_id).to(self.device)
@@ -34,11 +35,10 @@ class GreedySampler(nn.Module):
         memory = None
         while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
 
-
             new_logits, memory, _ = model(batch, output, memory)
 
             new_output = torch.argmax(new_logits, -1)
-            
+
             # print('tgt  ', batch[tgt_field])
             # print('Dec in:', output_for_decoder)
             # print('Dec out', new_output)
@@ -48,7 +48,7 @@ class GreedySampler(nn.Module):
 
             # Use pad for the output for elements that have completed
             new_output[:, -1] = torch.where(output_done, padding, new_output[:, -1])
-            
+
             output = torch.cat([output, new_output[:, -1].unsqueeze(-1)], dim=-1)
 
             logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
@@ -59,8 +59,8 @@ class GreedySampler(nn.Module):
             output_done = output_done | (output[:, -1] == BPE.eos_id)
             seq_ix += 1
         # exit()
-            # if seq_ix > 1:
-            #     exit()
+        # if seq_ix > 1:
+        #     exit()
         # output.where(output == BPE.pad_id, torch.LongTensor(output.shape).fill_(-1).to(self.device))
 
         if BART_HACK:

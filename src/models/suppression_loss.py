@@ -5,6 +5,7 @@ from utils.tokenizer import BPE
 
 # Get a cross-entropy style loss that penalises any token from a given sequence
 
+
 def onehot(indexes, N=None, ignore_index=None):
     """
     Creates a one-representation of indexes with N possible entries
@@ -21,12 +22,11 @@ def onehot(indexes, N=None, ignore_index=None):
         output.masked_fill_(indexes.eq(ignore_index).unsqueeze(-1), 0)
     return output
 
+
 class SuppressionLoss(nn.Module):
     def __init__(self, config):
         super(SuppressionLoss, self).__init__()
         self.config = config
-
-        
 
     def forward(self, logits, penalty_sequence):
         curr_batch_size = logits.size()[0]

@@ -21,12 +21,8 @@ class SinusoidalPositionalEmbedding(nn.Module):
         super().__init__()
         self.embedding_dim = embedding_dim
         self.padding_idx = padding_idx
-        self.weights = SinusoidalPositionalEmbedding.get_embedding(
-            init_size,
-            embedding_dim,
-            padding_idx,
-        )
-        self.register_buffer('_float_tensor', torch.FloatTensor(init_size, embedding_dim))
+        self.weights = SinusoidalPositionalEmbedding.get_embedding(init_size, embedding_dim, padding_idx,)
+        self.register_buffer("_float_tensor", torch.FloatTensor(init_size, embedding_dim))
 
     @staticmethod
     def get_embedding(num_embeddings, embedding_dim, padding_idx=None):
@@ -50,25 +46,21 @@ class SinusoidalPositionalEmbedding(nn.Module):
         """Input is expected to be of size [bsz x seqlen]."""
         bsz, seq_len = torch.onnx.operators.shape_as_tensor(input)
         max_pos = self.padding_idx + 1 + seq_len
-        
+
         if self.weights is None or max_pos > self.weights.size(0):
             # recompute/expand embeddings if needed
-            print('Resizing weights')
-            self.weights = SinusoidalPositionalEmbedding.get_embedding(
-                max_pos,
-                self.embedding_dim,
-                self.padding_idx,
-            )
+            print("Resizing weights")
+            self.weights = SinusoidalPositionalEmbedding.get_embedding(max_pos, self.embedding_dim, self.padding_idx,)
 
         self.weights = self.weights.to(self._float_tensor)
-        
+
         if incremental_state is not None:
             # positions is the same for every token when decoding a single step
             pos = timestep.view(-1)[0] + 1 if timestep is not None else seq_len
             return self.weights[self.padding_idx + pos, :].expand(bsz, 1, -1)
 
         positions = self.make_positions(input, self.padding_idx)
-        
+
         return self.weights.index_select(0, positions.view(-1)).view(bsz, seq_len, -1).detach()
 
     def max_positions(self):
@@ -85,6 +77,4 @@ class SinusoidalPositionalEmbedding(nn.Module):
         # prefers ints, cumsum defaults to output longs, and ONNX doesn't know
         # how to handle the dtype kwarg in cumsum.
         mask = tensor.ne(padding_idx).int()
-        return (
-            torch.cumsum(mask, dim=1).type_as(mask) * mask
-        ).long() + padding_idx
+        return (torch.cumsum(mask, dim=1).type_as(mask) * mask).long() + padding_idx
