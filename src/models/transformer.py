@@ -6,7 +6,7 @@ from torch.nn import (Dropout, LayerNorm, Linear, Module, ModuleList,
 from torch.nn import functional as F
 from torch.nn.init import xavier_uniform_
 
-from .mish import Mish
+from .activations import Mish, Swish
 
 
 class Transformer(Module):
@@ -408,5 +408,7 @@ def _get_activation_fn(activation):
         return F.gelu
     elif activation == "mish":
         return Mish()
+    elif activation == "swish":
+        return Swish()
     else:
         raise RuntimeError("activation should be relu/gelu, not %s." % activation)

@@ -22,6 +22,11 @@ from utils.metrics import bleu_corpus
 from utils.sari import SARIsent
 from utils.tokenizer import BPE
 
+from models.ranger import Ranger
+
+
+# Variable length sequences = worse performance if we try to optimise
+from torch.backends import cudnn
 cudnn.benchmark = False
 
 
@@ -57,6 +62,9 @@ class ModelAgent(BaseAgent):
             )
         elif self.config.training.opt == "sgd":
             self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
+        elif self.config.training.opt == 'ranger':
+            self.optimizer = Ranger(self.model.parameters())
+
 
         else:
             raise Exception("Unrecognised optimiser: " + self.config.training.opt)
@@ -261,8 +269,8 @@ class ModelAgent(BaseAgent):
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
-
-            lr = get_lr(self.config.training.lr, self.global_step, self.config.training.lr_schedule)
+            
+            lr = get_lr(self.config.training.lr, self.global_step, self.config.training.lr_schedule, self.config.training.data.get("lr_warmup", True))
 
             add_to_log("train/lr", lr, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
             for param_group in self.optimizer.param_groups:
@@ -385,6 +393,7 @@ class ModelAgent(BaseAgent):
                 tqdm(valid_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
             ):
                 batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
+
                 curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
 
                 this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(

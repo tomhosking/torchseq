@@ -9,3 +9,15 @@ class Mish(nn.Module):
 
     def forward(self, x):
         return x * torch.tanh(F.softplus(x))
+
+
+class Swish(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        return x * F.sigmoid(x)
+
+
+
+    

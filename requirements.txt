@@ -6,3 +6,4 @@ tqdm
 nltk==3.4.5
 transformers==2.8.0
 tokenizers==0.6.0
+jsonlines

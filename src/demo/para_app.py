@@ -24,7 +24,7 @@ def generate():
 
     s1 = request.args["s1"]
 
-    s1 = "return palm house ; return #1 that has subtropic plants from around the world on display ; return where is #1 from"
+    s1 = "(l-punct (l-nsubj (l-cop w-1-what w-2-is) (l-acl (l-det (l-BIND w-4-plague v-w-4-plague) w-3-another) (l-nsubj (l-xcomp w-5-thought (l-mark (l-aux (l-dobj w-8-spread (l-det (l-amod w-11-way w-10-same) w-9-the)) w-7-have) w-6-to)) v-w-4-plague))) w-12-?)"
     # ctxt = request.args['ctxt']
     # ans = request.args['ans']
 
@@ -45,12 +45,8 @@ def ping():
 
 def init():
     # Get the config
-    # MODEL_PATH = './runs/paraphrase/20200203_074446_parabank_to_kaggle_finetuned_8heads'
-    # MODEL_PATH = './runs/paraphrase/20200209_190027_kaggle_8heads'
-    # MODEL_PATH = './runs/paraphrase/20200130_161250_parabank-qs_supp1.0_8heads'
-    # MODEL_PATH = './runs/paraphrase/20200211_163735_parabank_to_kaggle_to_squad_8heads'
-    MODEL_PATH = "./runs/qdmr/20200304_154646_qdmr_from_q_withresidual_abs_lang"
-    # MODEL_PATH = './runs/qdmr/20200221_153512_qdmr_to_q_withresidual_relative'
+    MODEL_PATH = './runs/udep/20200318_141347_udep_to_q_deptree'
+    
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + "/config.json") as f:
@@ -59,9 +55,17 @@ def init():
         cfg_dict["eval"]["sampler"] = "beam"
         cfg_dict["eval"]["topk"] = 32
         # cfg_dict['training']['dataset'] = "squad"
-        cfg_dict["nucleus_sampling"] = {"beam_width": 24, "cutoff": 0.9, "length_alpha": 0}
-        cfg_dict["beam_search"] = {"beam_width": 8, "beam_expansion": 2, "length_alpha": 0.0}
-        cfg_dict["reranker"] = {
+        cfg_dict['nucleus_sampling'] = {
+            "beam_width": 12,
+            "cutoff": 0.9,
+            "length_alpha": 0
+        }
+        cfg_dict['beam_search'] = {
+            "beam_width": 16,
+            "beam_expansion": 4,
+            "length_alpha": 0.0
+        }
+        cfg_dict['reranker'] = {
             # 'strategy': 'qa'
             "strategy": None
         }

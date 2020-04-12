@@ -1,5 +1,6 @@
 import json
 import os
+import jsonlines
 
 import torch
 import torch.nn.functional as F
@@ -8,6 +9,7 @@ from torch.utils.data import Dataset
 from datasets.cqa_triple import CQATriple
 from datasets.loaders import load_squad_triples
 from utils.tokenizer import BPE
+
 
 
 class SquadDataset(Dataset):
@@ -29,9 +31,27 @@ class SquadDataset(Dataset):
                 or test is True
             ]
         else:
-            self.variant = "dev" if dev else ("test" if test else "train")
-            with open(os.path.join(path, "questions.{:}.json".format(self.variant))) as f:
-                self.samples = json.load(f)
+            self.variant = 'dev' if dev else ('test' if test else 'train')
+            file_path = os.path.join(path, 'questions.{:}.json'.format(self.variant))
+
+            # JSON format
+            if os.path.exists(file_path):
+                with open(file_path) as f:
+                    self.samples = json.load(f)
+
+            # JSONlines format
+            elif os.path.exists(file_path+'l'):
+                with open(file_path+'l') as f:
+                    reader = jsonlines.Reader(f)
+                    self.samples = [x for x in reader]  # TODO: this will explode for large files - would be nice to auto detect jsonlines files and switch to a streaming dataset
+                    
+                    reader.close()
+            else:
+                raise Exception("Couldn't find dataset file! {:}".format(file_path))
+        
+
+
+        
 
     def __len__(self):
         return len(self.samples)
@@ -67,7 +87,7 @@ class SquadDataset(Dataset):
                 "q_len": torch.LongTensor([len(parsed_triple._q_doc)]),
                 "c_text": x["c"],
                 "a_text": x["a"],
-                "q_text": x["q"],
+                "q_text": x["q"]
             }
         else:
             sample = {
@@ -80,7 +100,7 @@ class SquadDataset(Dataset):
                 "q_len": torch.LongTensor([len(parsed_triple._q_doc)]),
                 "c_text": x["c"],
                 "a_text": x["a"],
-                "q_text": x["q"],
+                "q_text": x["q"]
             }
 
         return sample
