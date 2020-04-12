@@ -9,7 +9,7 @@ from torch.backends import cudnn
 from tqdm import tqdm
 
 from agents.base import BaseAgent
-from args import FLAGS as FLAGS
+
 from models.lr_schedule import get_lr
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.greedy import GreedySampler
@@ -26,17 +26,18 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-    def __init__(self, config, run_id, silent=False):
+    def __init__(self, config, run_id, output_path, silent=False):
         super().__init__(config)
 
         self.run_id = run_id
         self.silent = silent
+        self.output_path = output_path
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
-            os.makedirs(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, "model"))
-            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, "config.json"), "w") as f:
-                json.dump(config.data, f)
+            os.makedirs(os.path.join(self.output_path, self.config.tag, self.run_id, "model"))
+            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "config.json"), "w") as f:
+                json.dump(config.data, f, indent=4)
 
         # initialize counter
         self.best_metric = None
@@ -114,7 +115,7 @@ class ModelAgent(BaseAgent):
                 "loss": self.loss,
                 "best_metric": self.best_metric,
             },
-            os.path.join(FLAGS.output_path, self.config.tag, self.run_id, "model", file_name),
+            os.path.join(self.output_path, self.config.tag, self.run_id, "model", file_name),
         )
 
     def begin_epoch_hook(self):
@@ -169,7 +170,7 @@ class ModelAgent(BaseAgent):
 
         this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
-        loss += torch.mean(torch.sum(this_loss, dim=1) / batch[tgt_field + "_len"].to(this_loss), dim=0)
+        loss += torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
 
         return loss
 
@@ -263,7 +264,7 @@ class ModelAgent(BaseAgent):
 
             lr = get_lr(self.config.training.lr, self.global_step, self.config.training.lr_schedule)
 
-            add_to_log("train/lr", lr, self.global_step, self.config.tag + "/" + self.run_id)
+            add_to_log("train/lr", lr, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
@@ -277,9 +278,10 @@ class ModelAgent(BaseAgent):
             if batch_idx % self.config.training.log_interval == 0:
                 add_to_log(
                     "train/loss",
-                    loss / float(curr_batch_size) * float(self.config.training.optim_batch_size),
+                    loss,
                     self.global_step,
                     self.config.tag + "/" + self.run_id,
+                    self.output_path
                 )
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
@@ -345,7 +347,7 @@ class ModelAgent(BaseAgent):
         if calculate_loss:
             _, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
-            normed_loss = torch.mean(torch.sum(this_loss, dim=1) / batch[tgt_field + "_len"].to(this_loss), dim=0)
+            normed_loss = torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
         else:
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens, dev_scores
@@ -426,7 +428,7 @@ class ModelAgent(BaseAgent):
             test_loss /= num_batches
             self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
-        add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id)
+        add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
         if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
             dev_bleu = 100 * bleu_corpus(gold_output, pred_output)
@@ -437,7 +439,7 @@ class ModelAgent(BaseAgent):
 
             dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
 
-            add_to_log("dev/bleu", dev_bleu, self.global_step, self.config.tag + "/" + self.run_id)
+            add_to_log("dev/bleu", dev_bleu, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
             self.logger.info("BLEU: {:}".format(dev_bleu))
             self.logger.info("EM: {:}".format(dev_em))
@@ -457,7 +459,7 @@ class ModelAgent(BaseAgent):
                 and (self.current_epoch - self.best_epoch) <= self.config.training.early_stopping_lag > 0
             )
         ):
-            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
+            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
                 f.write("\n".join([json.dumps(pred) for pred in pred_output]))
 
             self.all_metrics_at_best = {"nll": test_loss.item()}
@@ -470,7 +472,7 @@ class ModelAgent(BaseAgent):
                     "sari": dev_sari,
                 }
 
-            with open(os.path.join(FLAGS.output_path, self.config.tag, self.run_id, "metrics.json"), "w") as f:
+            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "metrics.json"), "w") as f:
                 json.dump(self.all_metrics_at_best, f)
 
         if (

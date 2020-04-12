@@ -11,7 +11,7 @@ from torch.autograd import Variable
 from tqdm import tqdm
 
 from agents.model_agent import ModelAgent
-from args import FLAGS as FLAGS
+
 from datasets.cqa_triple import CQATriple
 from datasets.loaders import get_embeddings, load_glove
 from datasets.newsqa_loader import NewsqaDataLoader
@@ -21,7 +21,7 @@ from datasets.squad_loader import SquadDataLoader
 from models.aq_transformer import TransformerAqModel
 from models.cross_entropy import CrossEntropyLossWithLS
 from models.suppression_loss import SuppressionLoss
-from utils.logging import add_to_log
+
 from utils.mckenzie import update_mckenzie
 from utils.metrics import bleu_corpus
 from utils.misc import print_cuda_statistics
@@ -29,8 +29,8 @@ from utils.tokenizer import BPE
 
 
 class AQAgent(ModelAgent):
-    def __init__(self, config, run_id, silent=False):
-        super().__init__(config, run_id, silent)
+    def __init__(self, config, run_id, output_path, silent=False):
+        super().__init__(config, run_id, output_path, silent)
 
         self.src_field = "c"
         self.tgt_field = "q"
@@ -84,7 +84,7 @@ class AQAgent(ModelAgent):
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["a"])
 
-        loss += torch.mean(torch.sum(this_loss, dim=1) / batch["q_len"].to(this_loss), dim=0)
+        loss += torch.mean(torch.sum(this_loss, dim=1) / (batch["q_len"] - 1).to(this_loss), dim=0)
 
         return loss
 

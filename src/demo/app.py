@@ -5,7 +5,7 @@ from absl import app as absl_app
 from flask import Flask, Response, current_app, redirect, request
 
 from agents.aq_agent import AQAgent
-from args import FLAGS as FLAGS
+
 from utils.config import Config
 
 sys.path.insert(0, "./src/")

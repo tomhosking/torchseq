@@ -10,7 +10,6 @@ from tests import utils as test_utils
 
 from agents.aq_agent import AQAgent
 from agents.para_agent import ParaphraseAgent
-from args import FLAGS as FLAGS
 from datasets import cqa_triple, loaders
 from utils.config import Config
 from utils.seed import set_seed
@@ -20,21 +19,27 @@ from utils.tokenizer import BPE
 @test_utils.slow
 def test_bert_embeds():
 
+    CONFIG = './models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/config.json'
+    CHKPT = './models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/model/checkpoint.pth.tar'
+    DATA_PATH = './data/'
+    OUTPUT_PATH = './runs/'
+    SEED = 123
+
     # Most of this is copied from main.py
     use_cuda = torch.cuda.is_available()
     # kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
     device = torch.device("cuda" if use_cuda else "cpu")
 
-    print("** Running with config={:} **".format(FLAGS.config))
+    assert use_cuda, "This test needs to run on GPU!"
 
-    with open(FLAGS.config) as f:
+    with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if FLAGS.data_path is not None:
-            cfg_dict["env"]["data_path"] = FLAGS.data_path
+        if DATA_PATH is not None:
+            cfg_dict["env"]["data_path"] = DATA_PATH
 
         config = Config(cfg_dict)
 
-    set_seed(FLAGS.seed)
+    set_seed(SEED)
 
     # This is not a good way of passing this value in
     BPE.pad_id = config.prepro.vocab_size
@@ -45,20 +50,18 @@ def test_bert_embeds():
         datetime.now().strftime("%Y%m%d_%H%M%S")
         + "_"
         + config.name
-        + ("_TEST" if FLAGS.test else "")
-        + ("_DEV" if FLAGS.validate else "")
-        + ("_EVALTRAIN" if FLAGS.validate_train else "")
+        + "_REGRESSION"
     )
 
     if config.task == "aq":
-        agent = AQAgent(config, run_id, silent=FLAGS.silent)
+        agent = AQAgent(config, run_id, OUTPUT_PATH, silent=True)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, run_id, silent=FLAGS.silent)
+        agent = ParaphraseAgent(config, run_id, OUTPUT_PATH, silent=True)
 
-    agent.load_checkpoint(FLAGS.load_chkpt)
+    agent.load_checkpoint(CHKPT)
     loss, metrics = agent.validate(save=False, force_save_output=True)
 
     # Now check the output
-    assert abs(loss - 2.3993) < 1e-3
-    assert "bleu" in metrics
-    assert abs(metrics["bleu"] - 17.989) < 1e-2
+    assert abs(loss.item() - 2.5841) < 1e-3, "Loss is different to expected!" # 2.3993
+    assert "bleu" in metrics, "BLEU is missing from output metrics!"
+    assert abs(metrics["bleu"] - 17.989) < 1e-2, "BLEU score is different to expected!"

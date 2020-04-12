@@ -16,8 +16,8 @@ from utils.tokenizer import BPE
 
 
 class ParaphraseAgent(ModelAgent):
-    def __init__(self, config, run_id, silent=False):
-        super().__init__(config, run_id, silent)
+    def __init__(self, config, run_id, output_path, silent=False):
+        super().__init__(config, run_id, output_path, silent)
 
         self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
 
@@ -72,7 +72,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["s1"])
 
-        this_loss = torch.sum(this_loss, dim=1) / batch[tgt_field + "_len"].to(this_loss)
+        this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         loss_weight = torch.where(
             batch["is_paraphrase"] > 0,

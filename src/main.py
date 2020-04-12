@@ -58,9 +58,9 @@ def main(_):
         return
 
     if config.task == "aq":
-        agent = AQAgent(config, run_id, silent=FLAGS.silent)
+        agent = AQAgent(config, run_id, FLAGS.output_path, silent=FLAGS.silent)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, run_id, silent=FLAGS.silent)
+        agent = ParaphraseAgent(config, run_id, FLAGS.output_path, silent=FLAGS.silent)
 
     if FLAGS.load_chkpt is not None:
         agent.logger.info("Loading from checkpoint...")
