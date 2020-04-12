@@ -61,7 +61,7 @@ class TransformerAqModel(nn.Module):
             # for param in self.bert_encoder.parameters():
             #     param.requires_grad = True
         
-        if self.config.encdec.data.get("pre_nl", False):
+        if self.config.encdec.data.get("pre_ln", False):
             encoder_layer = custom_transformer.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
             encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
             self.encoder = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
