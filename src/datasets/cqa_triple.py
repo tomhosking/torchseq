@@ -3,7 +3,7 @@ import unicodedata
 from nltk.tokenize import sent_tokenize
 
 
-from datasets.loaders import EOS, OOV, PAD, SOS
+
 from utils.tokenizer import BPE
 
 

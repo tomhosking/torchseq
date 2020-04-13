@@ -8,6 +8,8 @@ from torch.nn.init import xavier_uniform_
 
 from .activations import Mish, Swish
 
+LNORM_EPS = 1e-5
+
 
 class Transformer(Module):
     r"""A transformer model. User is able to modify the attributes as needed. The architecture
@@ -56,14 +58,14 @@ class Transformer(Module):
             self.encoder = custom_encoder
         else:
             encoder_layer = TransformerEncoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-            encoder_norm = LayerNorm(d_model)
+            encoder_norm = LayerNorm(d_model, eps=LNORM_EPS)
             self.encoder = TransformerEncoder(encoder_layer, num_encoder_layers, encoder_norm)
 
         if custom_decoder is not None:
             self.decoder = custom_decoder
         else:
             decoder_layer = TransformerDecoderLayer(d_model, nhead, dim_feedforward, dropout, activation)
-            decoder_norm = LayerNorm(d_model)
+            decoder_norm = LayerNorm(d_model, eps=LNORM_EPS)
             self.decoder = TransformerDecoder(decoder_layer, num_decoder_layers, decoder_norm)
 
         self._reset_parameters()
@@ -287,8 +289,8 @@ class TransformerEncoderLayer(Module):
         self.dropout = Dropout(dropout)
         self.linear2 = Linear(dim_feedforward, d_model)
 
-        self.norm1 = LayerNorm(d_model)
-        self.norm2 = LayerNorm(d_model)
+        self.norm1 = LayerNorm(d_model, eps=LNORM_EPS)
+        self.norm2 = LayerNorm(d_model, eps=LNORM_EPS)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
 
@@ -352,9 +354,9 @@ class TransformerDecoderLayer(Module):
         self.dropout = Dropout(dropout)
         self.linear2 = Linear(dim_feedforward, d_model)
 
-        self.norm1 = LayerNorm(d_model)
-        self.norm2 = LayerNorm(d_model)
-        self.norm3 = LayerNorm(d_model)
+        self.norm1 = LayerNorm(d_model, eps=LNORM_EPS)
+        self.norm2 = LayerNorm(d_model, eps=LNORM_EPS)
+        self.norm3 = LayerNorm(d_model, eps=LNORM_EPS)
         self.dropout1 = Dropout(dropout)
         self.dropout2 = Dropout(dropout)
         self.dropout3 = Dropout(dropout)

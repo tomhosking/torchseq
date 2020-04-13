@@ -28,6 +28,8 @@ done
 set -- "${POSITIONAL[@]}" # restore positional parameters
 
 
+
+
 res=$(sbatch $@)
 
 
@@ -37,16 +39,15 @@ partition=`scontrol show job $jobId | grep "Partition=([^\s]+)" -Po | sed s/Part
 
 if [ "$jobId" != "$res" ]
 then
-
     
     ${MCKENZIE_HOOK} -a 1 -i $jobId -p $partition > /dev/null
     
     jobName=$(cat $CONFIG | grep \"name\"\: | sed -E 's/.+\"name\": \"(.*)\"\,/\1/')
     jobTag=$(cat $CONFIG | grep \"tag\"\: | sed -E 's/.+\"tag\": \"(.*)\"\,/\1/')
-    
-    ${MCKENZIE_HOOK} -i $jobId -p $partition -n $jobTag/$jobName > /dev/null
 
     echo "Batch job ID $jobId -> $jobTag/$jobName"
+    
+    ${MCKENZIE_HOOK} -i $jobId -p $partition -n $jobTag/$jobName > /dev/null
 else
     echo "Error submitting job!"
     echo res

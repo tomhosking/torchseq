@@ -13,7 +13,7 @@ from tqdm import tqdm
 from agents.model_agent import ModelAgent
 
 from datasets.cqa_triple import CQATriple
-from datasets.loaders import get_embeddings, load_glove
+
 from datasets.newsqa_loader import NewsqaDataLoader
 from datasets.preprocessed_loader import PreprocessedDataLoader
 from datasets.squad_dataset import SquadDataset
