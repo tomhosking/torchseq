@@ -93,10 +93,12 @@ class PretrainedModularModel(nn.Module):
         # self.output_projection = bart_model.lm_head
         self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        for param in self.encoder.parameters():
-            param.requires_grad = False
-        # for param in self.decoder.parameters():
-        #     param.requires_grad = False
+        if config.encdec.freeze_encoder:
+            for param in self.encoder.parameters():
+                param.requires_grad = False
+        if config.encdec.freeze_decoder:
+            for param in self.decoder.parameters():
+                param.requires_grad = False
 
     def forward(self, batch, output, memory=None, tgt_field=None):
 
@@ -160,9 +162,9 @@ class PretrainedModularModel(nn.Module):
 
         # tgt_mask = None
 
-        bert_tgt_mask = combine_masks(output_pad_mask, tgt_mask, (curr_batch_size, output_max_len, output_max_len)).to(
-            self.device
-        )
+        # bert_tgt_mask = combine_masks(output_pad_mask, tgt_mask, (curr_batch_size, output_max_len, output_max_len)).to(
+        #     self.device
+        # )
 
         # bert_tgt_mask = None
 
@@ -176,18 +178,18 @@ class PretrainedModularModel(nn.Module):
 
         # bert_tgt_mask = (1.0 - bert_tgt_mask.long()) * -10000.0
 
-        # print(output.shape)
-        # print(memory.shape)
+        # memory = memory.transpose(0, 1)
 
         memory_mask = (
-            torch.arange(memory.shape[1])[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
+            torch.arange(memory.shape[0])[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
         ).to(self.device)
 
         output = self.decoder(
             output,
             memory.transpose(0, 1),
             ~memory_mask,
-            bert_tgt_mask
+            output_pad_mask,
+            decoder_causal_mask=tgt_mask,
             # tgt_key_padding_mask=output_pad_mask
         )
 
@@ -209,14 +211,14 @@ class PretrainedModularModel(nn.Module):
 
         loss = None
 
-        if tgt_field is not None:
-            bos_logits = (
-                torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size)
-                .fill_(float("-1e18"))
-                .to(self.device)
-            )
-            bos_logits[:, :, BPE.bos_id] = float("1e18")
-            loss_logits = torch.cat([bos_logits, logits], dim=1)
-            loss = self.loss(loss_logits.permute(0, 2, 1), batch[tgt_field])
+        # if tgt_field is not None:
+        #     bos_logits = (
+        #         torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size)
+        #         .fill_(float("-1e18"))
+        #         .to(self.device)
+        #     )
+        #     bos_logits[:, :, BPE.bos_id] = float("1e18")
+        #     loss_logits = torch.cat([bos_logits, logits], dim=1)
+        #     loss = self.loss(loss_logits.permute(0, 2, 1), batch[tgt_field])
 
         return logits, memory, loss

@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 import torch.optim as optim
+
 # Variable length sequences = worse performance if we try to optimise
 from torch.backends import cudnn
 from tqdm import tqdm
@@ -27,6 +28,7 @@ from models.ranger import Ranger
 
 # Variable length sequences = worse performance if we try to optimise
 from torch.backends import cudnn
+
 cudnn.benchmark = False
 
 
@@ -62,9 +64,8 @@ class ModelAgent(BaseAgent):
             )
         elif self.config.training.opt == "sgd":
             self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
-        elif self.config.training.opt == 'ranger':
+        elif self.config.training.opt == "ranger":
             self.optimizer = Ranger(self.model.parameters())
-
 
         else:
             raise Exception("Unrecognised optimiser: " + self.config.training.opt)
@@ -269,8 +270,13 @@ class ModelAgent(BaseAgent):
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
-            
-            lr = get_lr(self.config.training.lr, self.global_step, self.config.training.lr_schedule, self.config.training.data.get("lr_warmup", True))
+
+            lr = get_lr(
+                self.config.training.lr,
+                self.global_step,
+                self.config.training.lr_schedule,
+                self.config.training.data.get("lr_warmup", True),
+            )
 
             add_to_log("train/lr", lr, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
             for param_group in self.optimizer.param_groups:
@@ -284,13 +290,7 @@ class ModelAgent(BaseAgent):
                 self.global_step += 1
 
             if batch_idx % self.config.training.log_interval == 0:
-                add_to_log(
-                    "train/loss",
-                    loss,
-                    self.global_step,
-                    self.config.tag + "/" + self.run_id,
-                    self.output_path
-                )
+                add_to_log("train/loss", loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and not self.silent:
@@ -355,7 +355,9 @@ class ModelAgent(BaseAgent):
         if calculate_loss:
             _, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
-            normed_loss = torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
+            normed_loss = torch.mean(
+                torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
+            )
         else:
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens, dev_scores
@@ -424,9 +426,10 @@ class ModelAgent(BaseAgent):
                 if self.config.eval.data.get("sample_outputs", True) and not (
                     self.config.eval.data.get("topk", 1) == 1
                 ):
+                    topk = self.config.eval.data.get("topk", 1)
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(
-                            [BPE.decode(pred[jx][: dev_output_lens[ix][jx]]) for jx in range(len(pred))]
+                            [BPE.decode(pred[jx][: dev_output_lens[ix][jx]]) for jx in range(min(len(pred), topk))]
                         )
                     for ix, gold in enumerate(batch[self.tgt_field]):
                         gold_output.append(BPE.decode(gold[: batch[self.tgt_field + "_len"][ix]]))

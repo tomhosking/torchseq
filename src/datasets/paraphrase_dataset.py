@@ -49,7 +49,7 @@ class ParaphraseDataset(IterableDataset):
                 for ix, line in enumerate(f):
                     if num_workers > 1 and ix % num_workers != worker_id:
                         continue
-                    x = line.split("\t")
+                    x = line.strip().split("\t")
                     is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
                     sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
                     yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)

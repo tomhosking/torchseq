@@ -1,8 +1,7 @@
 import copy
 
 import torch
-from torch.nn import (Dropout, LayerNorm, Linear, Module, ModuleList,
-                      MultiheadAttention)
+from torch.nn import Dropout, LayerNorm, Linear, Module, ModuleList, MultiheadAttention
 from torch.nn import functional as F
 from torch.nn.init import xavier_uniform_
 

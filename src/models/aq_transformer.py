@@ -9,9 +9,7 @@ from models.positional_embeddings import PositionalEncoding
 from utils.tokenizer import BPE
 
 
-
 import models.transformer as custom_transformer
-
 
 
 class TransformerAqModel(nn.Module):
@@ -60,24 +58,55 @@ class TransformerAqModel(nn.Module):
             # self.bert_encoder.train()
             # for param in self.bert_encoder.parameters():
             #     param.requires_grad = True
-        
-        if self.config.encdec.data.get("pre_ln", False):
-            encoder_layer = custom_transformer.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
-            encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
-            self.encoder = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
-            decoder_layer = custom_transformer.TransformerDecoderLayer(config.embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
+        if self.config.encdec.data.get("pre_ln", False):
+            encoder_layer = custom_transformer.TransformerEncoderLayer(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            )
+            self.encoder = custom_transformer.TransformerEncoder(
+                encoder_layer, config.encdec.num_encoder_layers, encoder_norm
+            )
+
+            decoder_layer = custom_transformer.TransformerDecoderLayer(
+                config.embedding_dim,
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
             decoder_norm = nn.LayerNorm(config.embedding_dim)
-            self.decoder = custom_transformer.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
+            self.decoder = custom_transformer.TransformerDecoder(
+                decoder_layer, config.encdec.num_decoder_layers, decoder_norm
+            )
         else:
-            encoder_layer = nn.TransformerEncoderLayer(config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim), nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
-            encoder_norm = nn.LayerNorm(config.embedding_dim+(0 if config.encdec.bert_encoder else config.bio_embedding_dim))
+            encoder_layer = nn.TransformerEncoderLayer(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            )
             self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
-            decoder_layer = nn.TransformerDecoderLayer(config.embedding_dim, nhead=config.encdec.num_heads, dim_feedforward=config.encdec.dim_feedforward, dropout=config.dropout, activation=config.encdec.activation)
+            decoder_layer = nn.TransformerDecoderLayer(
+                config.embedding_dim,
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
             decoder_norm = nn.LayerNorm(config.embedding_dim)
             self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
-            
 
         if self.config.encdec.data.get("xav_uni_init", False):
             for p in self.encoder.parameters():
@@ -86,7 +115,6 @@ class TransformerAqModel(nn.Module):
             for p in self.decoder.parameters():
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p)
-
 
         # Encoder combination
         num_encoder_outputs = sum(
@@ -142,7 +170,6 @@ class TransformerAqModel(nn.Module):
             self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
             self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
-        
         # print(batch['c_text'][0])
         # print(batch['a_text'][0])
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))

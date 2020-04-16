@@ -27,7 +27,16 @@ class ParaphraseAgent(ModelAgent):
         else:
             if (
                 self.config.training.dataset
-                in ["paranmt", "parabank", "kaggle", "parabank-qs", "para-squad", "models/squad-udep"]
+                in [
+                    "paranmt",
+                    "parabank",
+                    "kaggle",
+                    "parabank-qs",
+                    "para-squad",
+                    "models/squad-udep",
+                    "models/squad-constituency",
+                    "models/squad-udep-deptree",
+                ]
                 or self.config.training.dataset[:5] == "qdmr-"
                 or "kaggle-" in self.config.training.dataset
             ):

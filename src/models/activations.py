@@ -17,7 +17,3 @@ class Swish(nn.Module):
 
     def forward(self, x):
         return x * F.sigmoid(x)
-
-
-
-    

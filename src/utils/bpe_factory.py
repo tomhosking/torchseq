@@ -1,8 +1,7 @@
 import re
 import unicodedata
 
-from transformers import (BertModel, BertTokenizer, DistilBertModel,
-                          DistilBertTokenizer)
+from transformers import BertModel, BertTokenizer, DistilBertModel, DistilBertTokenizer
 
 # from bpemb import BPEmb
 from utils.sentencepiece_pb2 import SentencePieceText

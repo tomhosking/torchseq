@@ -8,8 +8,6 @@ import numpy as np
 # import spacy
 
 
-
-
 def load_squad_dataset(path, dev=False, test=False, v2=False):
     expected_version = "v2.0" if v2 else "1.1"
     if v2:
@@ -40,7 +38,7 @@ def load_squad_triples(path, dev=False, test=False, v2=False, as_dict=False, ans
                 else:
                     ans_count = defaultdict(int)
                     for ans in qa["answers"]:
-                        ans_count[(ans['text'], int(ans['answer_start']))] += 1
+                        ans_count[(ans["text"], int(ans["answer_start"]))] += 1
 
                     ans_text, ans_pos = sorted(ans_count.items(), reverse=True, key=lambda x: x[1])[0][0]
                 if v2:

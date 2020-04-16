@@ -1,7 +1,6 @@
 from torch.utils.tensorboard import SummaryWriter
 
 
-
 writer = None
 
 # TODO: This is all really crappy

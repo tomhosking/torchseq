@@ -45,8 +45,7 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = './runs/udep/20200318_141347_udep_to_q_deptree'
-    
+    MODEL_PATH = "./runs/udep/20200318_141347_udep_to_q_deptree"
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + "/config.json") as f:
@@ -55,17 +54,9 @@ def init():
         cfg_dict["eval"]["sampler"] = "beam"
         cfg_dict["eval"]["topk"] = 32
         # cfg_dict['training']['dataset'] = "squad"
-        cfg_dict['nucleus_sampling'] = {
-            "beam_width": 12,
-            "cutoff": 0.9,
-            "length_alpha": 0
-        }
-        cfg_dict['beam_search'] = {
-            "beam_width": 16,
-            "beam_expansion": 4,
-            "length_alpha": 0.0
-        }
-        cfg_dict['reranker'] = {
+        cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
+        cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 4, "length_alpha": 0.0}
+        cfg_dict["reranker"] = {
             # 'strategy': 'qa'
             "strategy": None
         }

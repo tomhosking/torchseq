@@ -11,7 +11,6 @@ from datasets.loaders import load_squad_triples
 from utils.tokenizer import BPE
 
 
-
 class SquadDataset(Dataset):
     def __init__(self, path, config, dev=False, test=False):
         self.config = config
@@ -31,8 +30,8 @@ class SquadDataset(Dataset):
                 or test is True
             ]
         else:
-            self.variant = 'dev' if dev else ('test' if test else 'train')
-            file_path = os.path.join(path, 'questions.{:}.json'.format(self.variant))
+            self.variant = "dev" if dev else ("test" if test else "train")
+            file_path = os.path.join(path, "questions.{:}.json".format(self.variant))
 
             # JSON format
             if os.path.exists(file_path):
@@ -40,18 +39,16 @@ class SquadDataset(Dataset):
                     self.samples = json.load(f)
 
             # JSONlines format
-            elif os.path.exists(file_path+'l'):
-                with open(file_path+'l') as f:
+            elif os.path.exists(file_path + "l"):
+                with open(file_path + "l") as f:
                     reader = jsonlines.Reader(f)
-                    self.samples = [x for x in reader]  # TODO: this will explode for large files - would be nice to auto detect jsonlines files and switch to a streaming dataset
-                    
+                    self.samples = [
+                        x for x in reader
+                    ]  # TODO: this will explode for large files - would be nice to auto detect jsonlines files and switch to a streaming dataset
+
                     reader.close()
             else:
                 raise Exception("Couldn't find dataset file! {:}".format(file_path))
-        
-
-
-        
 
     def __len__(self):
         return len(self.samples)
@@ -63,18 +60,26 @@ class SquadDataset(Dataset):
             tok_window=self.config.prepro.tok_window,
             o_tag=2 if self.config.prepro.bio_tagging else 1,
             concat_ctxt_ans=self.config.prepro.concat_ctxt_ans,
+            roberta_style_encoding=self.config.prepro.data.get("roberta_style_encoding", False)
         )
 
     @staticmethod
-    def to_tensor(x, sent_window=0, tok_window=300, o_tag=2, concat_ctxt_ans=False):
+    def to_tensor(x, sent_window=0, tok_window=300, o_tag=2, concat_ctxt_ans=False, roberta_style_encoding=False):
 
         parsed_triple = CQATriple(
             x["c"], x["a"], x["a_pos"], x["q"], sent_window=sent_window, tok_window=tok_window, o_tag=o_tag
         )
 
         if concat_ctxt_ans:
+            if roberta_style_encoding:
+                # Roberta sequence pairs look like <s>A</s></s>B</s> for no obvious reason
+                ctxt = torch.LongTensor(
+                    parsed_triple.ans_as_ids() + [BPE.eos_id] * 2 + parsed_triple.ctxt_as_ids()[1:]
+                )
+            else:
+                ctxt = torch.LongTensor(parsed_triple.ans_as_ids() + [BPE.eos_id] + parsed_triple.ctxt_as_ids())
             sample = {
-                "c": torch.LongTensor(parsed_triple.ans_as_ids() + [BPE.eos_id] + parsed_triple.ctxt_as_ids()),
+                "c": ctxt,
                 "q": torch.LongTensor(parsed_triple.q_as_ids()),
                 "a": torch.LongTensor(parsed_triple.ans_as_ids()),
                 "a_pos": torch.LongTensor(
@@ -87,7 +92,7 @@ class SquadDataset(Dataset):
                 "q_len": torch.LongTensor([len(parsed_triple._q_doc)]),
                 "c_text": x["c"],
                 "a_text": x["a"],
-                "q_text": x["q"]
+                "q_text": x["q"],
             }
         else:
             sample = {
@@ -100,7 +105,7 @@ class SquadDataset(Dataset):
                 "q_len": torch.LongTensor([len(parsed_triple._q_doc)]),
                 "c_text": x["c"],
                 "a_text": x["a"],
-                "q_text": x["q"]
+                "q_text": x["q"],
             }
 
         return sample

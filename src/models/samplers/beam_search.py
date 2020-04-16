@@ -43,9 +43,16 @@ class BeamSearchSampler(nn.Module):
             else True
         )
 
+        BART_HACK = self.config.eval.data.get("prepend_eos", False)
+
         # Create vector of SOS + placeholder for first prediction
         output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.bos_id).to(self.device)
         scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(0).to(self.device)
+
+        if BART_HACK:
+            dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(BPE.eos_id).to(self.device)
+            output_seq = torch.cat([dummy_token, output_seq], dim=-1)
+            scores = torch.cat([scores, scores], dim=-1)
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
         padding = torch.LongTensor(curr_batch_size, beam_width).fill_(BPE.pad_id).to(self.device)
@@ -169,6 +176,10 @@ class BeamSearchSampler(nn.Module):
             seq_ix += 1
 
         # Sort by score
+
+        if BART_HACK:
+            output_seq = output_seq[:, :, 1:]
+            scores = scores[:, :, 1:]
 
         output_len = torch.sum(output_seq != BPE.pad_id, dim=-1)
         length_penalty = torch.pow((5 + output_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)

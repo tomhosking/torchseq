@@ -19,10 +19,10 @@ from utils.tokenizer import BPE
 @test_utils.slow
 def test_bert_embeds():
 
-    CONFIG = './models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/config.json'
-    CHKPT = './models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/model/checkpoint.pth.tar'
-    DATA_PATH = './data/'
-    OUTPUT_PATH = './runs/'
+    CONFIG = "./models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/config.json"
+    CHKPT = "./models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/model/checkpoint.pth.tar"
+    DATA_PATH = "./data/"
+    OUTPUT_PATH = "./runs/"
     SEED = 123
 
     # Most of this is copied from main.py
@@ -46,12 +46,7 @@ def test_bert_embeds():
     BPE.embedding_dim = config.embedding_dim
     BPE.model_slug = config.encdec.bert_model
 
-    run_id = (
-        datetime.now().strftime("%Y%m%d_%H%M%S")
-        + "_"
-        + config.name
-        + "_REGRESSION"
-    )
+    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + config.name + "_REGRESSION"
 
     if config.task == "aq":
         agent = AQAgent(config, run_id, OUTPUT_PATH, silent=True)
@@ -62,6 +57,6 @@ def test_bert_embeds():
     loss, metrics = agent.validate(save=False, force_save_output=True)
 
     # Now check the output
-    assert abs(loss.item() - 2.5841) < 1e-3, "Loss is different to expected!" # 2.3993
+    assert abs(loss.item() - 2.5841) < 1e-3, "Loss is different to expected!"  # 2.3993
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 17.989) < 1e-2, "BLEU score is different to expected!"

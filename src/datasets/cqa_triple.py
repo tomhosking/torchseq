@@ -3,7 +3,6 @@ import unicodedata
 from nltk.tokenize import sent_tokenize
 
 
-
 from utils.tokenizer import BPE
 
 
@@ -179,20 +178,28 @@ class CQATriple:
 
         # Find the sentence that contains the answer
         self.a_sent_idx = None
-        for ix,offset in enumerate(ctxt_char_offsets):
+        for ix, offset in enumerate(ctxt_char_offsets):
             if self.a_char_pos_uncrop >= offset[0] and self.a_char_pos_uncrop < offset[1]:
                 self.a_sent_idx = ix
                 break
-                
+
         if self.a_sent_idx is None:
-            print('Couldnt find sentence idx')
+            print("Couldnt find sentence idx")
             print(ctxt_char_offsets)
             print(self.a_char_pos_uncrop)
             print(self.answer_text)
             print(self.context_text)
             exit()
-        
-        self.cropped_sents = ctxt_sent_toks[max(0,self.a_sent_idx-SENT_WINDOW_SIZE):min(len(ctxt_sents), self.a_sent_idx+SENT_WINDOW_SIZE+1)] if SENT_WINDOW_SIZE is not None else ctxt_sent_toks
+
+        self.cropped_sents = (
+            ctxt_sent_toks[
+                max(0, self.a_sent_idx - SENT_WINDOW_SIZE) : min(
+                    len(ctxt_sents), self.a_sent_idx + SENT_WINDOW_SIZE + 1
+                )
+            ]
+            if SENT_WINDOW_SIZE is not None
+            else ctxt_sent_toks
+        )
         self._ctxt_doc = [tok for sent in self.cropped_sents for tok in sent]
         self._ctxt_doc_uncrop = [tok for sent in ctxt_sent_toks for tok in sent]
         # self._ctxt_doc = self._ctxt_doc_uncrop # TODO: reimplement sentence cropping

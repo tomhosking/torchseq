@@ -1,7 +1,6 @@
 import torch
 import torch.nn.functional as F
-from transformers import (BertForQuestionAnswering, BertTokenizer,
-                          DistilBertForQuestionAnswering, DistilBertTokenizer)
+from transformers import BertForQuestionAnswering, BertTokenizer, DistilBertForQuestionAnswering, DistilBertTokenizer
 
 
 class PreTrainedQA:
