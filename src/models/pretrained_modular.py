@@ -109,7 +109,7 @@ class PretrainedModularModel(nn.Module):
         #         self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
-        # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
+        # print([BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0])])
         # exit()
 
         # Get some sizes

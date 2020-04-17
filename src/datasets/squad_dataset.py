@@ -60,7 +60,7 @@ class SquadDataset(Dataset):
             tok_window=self.config.prepro.tok_window,
             o_tag=2 if self.config.prepro.bio_tagging else 1,
             concat_ctxt_ans=self.config.prepro.concat_ctxt_ans,
-            roberta_style_encoding=self.config.prepro.data.get("roberta_style_encoding", False)
+            roberta_style_encoding=self.config.prepro.data.get("roberta_style_encoding", False),
         )
 
     @staticmethod
@@ -74,7 +74,7 @@ class SquadDataset(Dataset):
             if roberta_style_encoding:
                 # Roberta sequence pairs look like <s>A</s></s>B</s> for no obvious reason
                 ctxt = torch.LongTensor(
-                    parsed_triple.ans_as_ids() + [BPE.eos_id] * 2 + parsed_triple.ctxt_as_ids()[1:]
+                    parsed_triple.ctxt_as_ids() + [BPE.eos_id] * 2 + parsed_triple.ans_as_ids()[1:]
                 )
             else:
                 ctxt = torch.LongTensor(parsed_triple.ans_as_ids() + [BPE.eos_id] + parsed_triple.ctxt_as_ids())

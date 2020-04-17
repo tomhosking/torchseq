@@ -19,6 +19,7 @@ from datasets.preprocessed_loader import PreprocessedDataLoader
 from datasets.squad_dataset import SquadDataset
 from datasets.squad_loader import SquadDataLoader
 from models.aq_transformer import TransformerAqModel
+from models.pretrained_modular import PretrainedModularModel
 from models.cross_entropy import CrossEntropyLossWithLS
 from models.suppression_loss import SuppressionLoss
 
@@ -44,7 +45,10 @@ class AQAgent(ModelAgent):
             self.loss = nn.CrossEntropyLoss(ignore_index=BPE.pad_id, reduction="none")
 
         # define models
-        self.model = TransformerAqModel(config)  # , loss=self.loss
+        if self.config.data.get("model", None) is not None and self.config.model == "pretrained_modular":
+            self.model = PretrainedModularModel(self.config, src_field=self.src_field)
+        else:
+            self.model = TransformerAqModel(self.config)  # , loss=self.loss
 
         # define data_loader
         if self.config.training.use_preprocessed_data:

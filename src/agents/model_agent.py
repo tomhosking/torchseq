@@ -298,8 +298,8 @@ class ModelAgent(BaseAgent):
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch, self.tgt_field)
 
-                    if self.tgt_field == "s2":
-                        print(BPE.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
+                    # if self.tgt_field == "s2":
+                    print(BPE.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
                     print(BPE.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
                     print(BPE.decode(greedy_output.data[0][: output_lens[0]]))
 
