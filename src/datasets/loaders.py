@@ -18,8 +18,8 @@ def load_squad_dataset(path, dev=False, test=False, v2=False):
         filename = "train-v1.1.json" if not dev else "dev-v1.1.json"
     with open(path + filename) as dataset_file:
         dataset_json = json.load(dataset_file)
-        if dataset_json["version"] != expected_version:
-            print("Expected SQuAD v-" + expected_version + ", but got dataset with v-" + dataset_json["version"])
+        # if dataset_json["version"] != expected_version:
+        #     print("Expected SQuAD v-" + expected_version + ", but got dataset with v-" + dataset_json["version"])
         dataset = dataset_json["data"]
         return dataset
 

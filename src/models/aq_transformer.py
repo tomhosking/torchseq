@@ -170,25 +170,25 @@ class TransformerAqModel(nn.Module):
             self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
             self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
-        print(batch["c_text"][0])
-        print(batch["a_text"][0])
-        print(
-            BPE.decode(batch["a"][0][: batch["a_len"][0]]),
-            [
-                BPE.instance().decode([x.item()])
-                for i, x in enumerate(batch["c"][0])
-                if batch["a_pos"][0][i].item() > 0
-            ],
-            BPE.decode(batch["q"][0][: batch["q_len"][0]]),
-        )
-        print(
-            [
-                BPE.instance().decode([x.item()]) + "/" + str(batch["a_pos"][0][i].item())
-                for i, x in enumerate(batch["c"][0])
-            ]
-        )
-        print(batch.keys())
-        exit()
+        # print(batch["c_text"][0])
+        # print(batch["a_text"][0])
+        # print(
+        #     BPE.decode(batch["a"][0][: batch["a_len"][0]]),
+        #     [
+        #         BPE.instance().decode([x.item()])
+        #         for i, x in enumerate(batch["c"][0])
+        #         if batch["a_pos"][0][i].item() > 0
+        #     ],
+        #     BPE.decode(batch["q"][0][: batch["q_len"][0]]),
+        # )
+        # print(
+        #     [
+        #         BPE.instance().decode([x.item()]) + "/" + str(batch["a_pos"][0][i].item())
+        #         for i, x in enumerate(batch["c"][0])
+        #     ]
+        # )
+        # print(batch.keys())
+        # exit()
 
         # Get some sizes
         max_ctxt_len = batch["c"].shape[1]

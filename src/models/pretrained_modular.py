@@ -76,6 +76,23 @@ class PretrainedModularModel(nn.Module):
         self.decoder = bart_model.decoder
         self.decoder.generation_mode = False
 
+        if self.config.encdec.data.get("module", False):
+
+            encoder_layer = nn.TransformerEncoderLayer(
+                config.embedding_dim,
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(config.embedding_dim)
+
+            self.module = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+
+            # for p in self.module.parameters():
+            #     if p.dim() > 1:
+            #         nn.init.xavier_uniform_(p, gain=1e-1)
+
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
             config.embedding_dim,
@@ -140,10 +157,13 @@ class PretrainedModularModel(nn.Module):
                 0
             ]  # , token_type_ids=batch['a_pos'].to(self.device)
 
-            encoding = encoding.permute(1, 0, 2)  # -> bsz x seq x dim
+            # encoding = encoding.permute(1, 0, 2)  # -> bsz x seq x dim
 
             # memory = self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
             memory = encoding
+
+            if self.config.encdec.data.get("module", False):
+                memory = self.module(memory.transpose(0, 1)).transpose(0, 1)
 
             # memory = self.encoder_projection(memory)
 
@@ -180,14 +200,14 @@ class PretrainedModularModel(nn.Module):
 
         # memory = memory.transpose(0, 1)
 
-        memory_mask = (
-            torch.arange(memory.shape[0])[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
-        ).to(self.device)
+        # memory_mask = (
+        #     torch.arange(memory.shape[1])[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
+        # ).to(self.device)
 
         output = self.decoder(
             output,
-            memory.transpose(0, 1),
-            ~memory_mask,
+            memory,
+            ~context_mask,
             output_pad_mask,
             decoder_causal_mask=tgt_mask,
             # tgt_key_padding_mask=output_pad_mask

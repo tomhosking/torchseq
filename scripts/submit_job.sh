@@ -9,8 +9,6 @@ while [[ $# -gt 0 ]]
 do
 key="$1"
 
-
-
 case $key in
     --config)
     CONFIG="$2"

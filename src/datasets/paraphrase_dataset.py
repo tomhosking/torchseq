@@ -18,14 +18,18 @@ class ParaphraseDataset(IterableDataset):
         self.path = path
         self.variant = "dev" if dev else ("test" if test else "train")
 
-        if test and not os.path.exists(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))):
-            return None
+        self.exists = True
 
-        # TODO: Can we get the length without reading the whole file?
         self.length = 0
-        with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
-            for line in f:
-                self.length += 1
+
+        if test and not os.path.exists(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))):
+            self.exists = False
+        else:
+
+            # TODO: Can we get the length without reading the whole file?
+            with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
+                for line in f:
+                    self.length += 1
 
     def __len__(self):
         return self.length
@@ -49,7 +53,11 @@ class ParaphraseDataset(IterableDataset):
                 for ix, line in enumerate(f):
                     if num_workers > 1 and ix % num_workers != worker_id:
                         continue
-                    x = line.strip().split("\t")
+                    x = line.strip("\n").split("\t")
+                    if len(x) < 2:
+                        print(x)
+                        print(line)
+                        exit()
                     is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
                     sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
                     yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)

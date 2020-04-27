@@ -30,8 +30,8 @@ from utils.tokenizer import BPE
 
 
 class AQAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False):
-        super().__init__(config, run_id, output_path, silent)
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True):
+        super().__init__(config, run_id, output_path, silent, training_mode)
 
         self.src_field = "c"
         self.tgt_field = "q"

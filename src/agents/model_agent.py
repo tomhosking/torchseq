@@ -33,12 +33,13 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-    def __init__(self, config, run_id, output_path, silent=False):
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True):
         super().__init__(config)
 
         self.run_id = run_id
         self.silent = silent
         self.output_path = output_path
+        self.training_mode = training_mode
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
@@ -87,7 +88,8 @@ class ModelAgent(BaseAgent):
         self.logger.info("Loading from checkpoint " + file_name)
         checkpoint = torch.load(file_name)
         self.model.load_state_dict(checkpoint["model_state_dict"])
-        self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+        if self.training_mode:
+            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         # self.current_epoch = checkpoint['epoch']
         if "global_step" in checkpoint:
             self.global_step = checkpoint["global_step"]
@@ -209,16 +211,9 @@ class ModelAgent(BaseAgent):
 
             if self.current_epoch > self.config.training.warmup_epochs:
                 self.validate(save=True)
-
-            if "bleu" in self.all_metrics_at_best:
-                update_mckenzie(
-                    (epoch + 1) / self.config.training.num_epochs * 100,
-                    "{:0.2f}".format(
-                        self.all_metrics_at_best[self.config.training.data.get("mckenzie_metric", "bleu")]
-                    ),
-                )
             else:
-                update_mckenzie((epoch + 1) / self.config.training.num_epochs * 100, "-")
+                # We won't have metrics - but we should update the progress tracker
+                self.update_dashboard()
 
         self.logger.info("## Training completed {:} epochs".format(self.current_epoch + 1))
         self.logger.info("## Best metrics: {:}".format(self.all_metrics_at_best))
@@ -290,7 +285,14 @@ class ModelAgent(BaseAgent):
                 self.global_step += 1
 
             if batch_idx % self.config.training.log_interval == 0:
-                add_to_log("train/loss", loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
+                # Loss is weighted for grad accumulation - unweight it for reporting
+                add_to_log(
+                    "train/loss",
+                    loss * float(self.config.training.optim_batch_size) / float(curr_batch_size),
+                    self.global_step,
+                    self.config.tag + "/" + self.run_id,
+                    self.output_path,
+                )
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and not self.silent:
@@ -390,7 +392,7 @@ class ModelAgent(BaseAgent):
             valid_loader = self.data_loader.valid_loader
 
         with torch.no_grad():
-            num_batches = 0
+            num_samples = 0
             for batch_idx, batch in enumerate(
                 tqdm(valid_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
             ):
@@ -405,9 +407,9 @@ class ModelAgent(BaseAgent):
                     reduce_outputs=(self.config.eval.data.get("topk", 1) == 1),
                 )
 
-                test_loss += this_loss
+                test_loss += this_loss * curr_batch_size
 
-                num_batches += 1
+                num_samples += curr_batch_size
 
                 #  Handle top-1 sampling
                 if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
@@ -437,7 +439,7 @@ class ModelAgent(BaseAgent):
                     # if batch_idx > 20:
                     #     break
 
-            test_loss /= num_batches
+            test_loss /= num_samples
             self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
         add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
@@ -509,4 +511,23 @@ class ModelAgent(BaseAgent):
 
             self.save_checkpoint()
 
+        self.update_dashboard()
+
         return test_loss, self.all_metrics_at_best
+
+    def update_dashboard(self):
+        if "bleu" in self.all_metrics_at_best:
+            update_mckenzie(
+                self.current_epoch / self.config.training.num_epochs * 100,
+                "{:0.2f}".format(self.all_metrics_at_best[self.config.training.data.get("mckenzie_metric", "bleu")]),
+            )
+        elif "nll" in self.all_metrics_at_best:
+            update_mckenzie(
+                self.current_epoch / self.config.training.num_epochs * 100,
+                "{:0.2f}".format(self.all_metrics_at_best["nll"]),
+            )
+        else:
+            update_mckenzie(
+                self.current_epoch / self.config.training.num_epochs * 100,
+                "-",
+            )

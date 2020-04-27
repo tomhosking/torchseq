@@ -16,8 +16,8 @@ from utils.tokenizer import BPE
 
 
 class ParaphraseAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False):
-        super().__init__(config, run_id, output_path, silent)
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True):
+        super().__init__(config, run_id, output_path, silent, training_mode)
 
         self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
 
@@ -36,6 +36,7 @@ class ParaphraseAgent(ModelAgent):
                     "models/squad-udep",
                     "models/squad-constituency",
                     "models/squad-udep-deptree",
+                    "models/qdmr-squad"
                 ]
                 or self.config.training.dataset[:5] == "qdmr-"
                 or "kaggle-" in self.config.training.dataset

@@ -63,7 +63,7 @@ class ParaphraseDataLoader:
             collate_fn=ParaphraseDataset.pad_and_order_sequences,
             worker_init_fn=init_worker,
         )
-        if test is not None:
+        if test.exists:
             self.test_loader = DataLoader(
                 test,
                 batch_size=config.eval.eval_batch_size,

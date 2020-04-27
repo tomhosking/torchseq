@@ -57,6 +57,6 @@ def test_bert_embeds():
     loss, metrics = agent.validate(save=False, force_save_output=True)
 
     # Now check the output
-    assert abs(loss.item() - 2.5841) < 1e-3, "Loss is different to expected!"  # 2.3993
+    assert abs(loss.item() - 2.5665) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 17.989) < 1e-2, "BLEU score is different to expected!"
