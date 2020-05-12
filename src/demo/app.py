@@ -44,7 +44,7 @@ def ping():
 
 def init():
 
-    MODEL_SLUG = "20200220_161434_bert_embeds_para_pbkagsq_ft_squad"
+    # MODEL_SLUG = "20200220_161434_bert_embeds_para_pbkagsq_ft_squad"
 
     # MODEL_PATH = f'./runs/augmented/{MODEL_SLUG}/'
     MODEL_PATH = "./models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/"

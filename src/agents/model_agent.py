@@ -5,8 +5,6 @@ import numpy as np
 import torch
 import torch.optim as optim
 
-# Variable length sequences = worse performance if we try to optimise
-from torch.backends import cudnn
 from tqdm import tqdm
 
 from agents.base import BaseAgent
@@ -162,18 +160,6 @@ class ModelAgent(BaseAgent):
 
         return output_strings, scores
 
-    # def step_train(self, batch):
-    #     """
-    #     Implement the main logic here for a single training step
-    #     """
-    #     pass
-
-    # def step_validate(self, batch):
-    #     """
-    #     Implement the main logic here for a single validation/inference step
-    #     """
-    #     pass
-
     def step_train(self, batch, tgt_field):
         loss = 0
 
@@ -193,8 +179,6 @@ class ModelAgent(BaseAgent):
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
-        # self.global_step = self.current_epoch * len(self.data_loader.train_loader.dataset)
-        # self.global_step = self.current_epoch * len(self.data_loader.train_loader.dataset)//self.config.training.optim_batch_size
         update_mckenzie(0, "-")
 
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
@@ -250,18 +234,6 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
-            # print(loss)
-            # for name, param in self.model.named_parameters():
-            #     if "encoder_pooling." in name:
-            #     # if "encoder_projection" in name:
-            #         print(name, param.requires_grad, param.grad is None)
-            #         # print(torch.sum(torch.abs(param.grad)))
-            #         if param.requires_grad and param.grad is None:
-            #             # print(dir(param))
-            #             print(name)
-
-            # exit()
-
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
@@ -300,7 +272,6 @@ class ModelAgent(BaseAgent):
                     with torch.no_grad():
                         greedy_output, _, output_lens = self.decode_greedy(self.model, batch, self.tgt_field)
 
-                    # if self.tgt_field == "s2":
                     print(BPE.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
                     print(BPE.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
                     print(BPE.decode(greedy_output.data[0][: output_lens[0]]))
@@ -327,13 +298,8 @@ class ModelAgent(BaseAgent):
         elif self.config.eval.sampler == "nucleus":
             beam_output, beam_scores, beam_lens = self.decode_nucleus(self.model, batch, tgt_field)
 
-            # dev_output = beam_output[:, 0, :]
-            # dev_output_lens = beam_lens[:, 0]
         elif self.config.eval.sampler == "beam":
             beam_output, beam_scores, beam_lens = self.decode_beam(self.model, batch, tgt_field)
-
-            # dev_output = beam_output[:, 0, :]
-            # dev_output_lens = beam_lens[:, 0]
 
         elif self.config.eval.sampler == "greedy":
             greedy_output, greedy_scores, greedy_lens = self.decode_greedy(self.model, batch, tgt_field)
@@ -376,7 +342,6 @@ class ModelAgent(BaseAgent):
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()
         test_loss = 0
-        correct = 0
 
         pred_output = []
         gold_output = []
@@ -528,6 +493,5 @@ class ModelAgent(BaseAgent):
             )
         else:
             update_mckenzie(
-                self.current_epoch / self.config.training.num_epochs * 100,
-                "-",
+                self.current_epoch / self.config.training.num_epochs * 100, "-",
             )

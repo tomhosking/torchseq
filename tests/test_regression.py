@@ -27,8 +27,6 @@ def test_bert_embeds():
 
     # Most of this is copied from main.py
     use_cuda = torch.cuda.is_available()
-    # kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    device = torch.device("cuda" if use_cuda else "cpu")
 
     assert use_cuda, "This test needs to run on GPU!"
 

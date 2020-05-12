@@ -170,31 +170,9 @@ class TransformerAqModel(nn.Module):
             self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
             self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
-        # print(batch["c_text"][0])
-        # print(batch["a_text"][0])
-        # print(
-        #     BPE.decode(batch["a"][0][: batch["a_len"][0]]),
-        #     [
-        #         BPE.instance().decode([x.item()])
-        #         for i, x in enumerate(batch["c"][0])
-        #         if batch["a_pos"][0][i].item() > 0
-        #     ],
-        #     BPE.decode(batch["q"][0][: batch["q_len"][0]]),
-        # )
-        # print(
-        #     [
-        #         BPE.instance().decode([x.item()]) + "/" + str(batch["a_pos"][0][i].item())
-        #         for i, x in enumerate(batch["c"][0])
-        #     ]
-        # )
-        # print(batch.keys())
-        # exit()
-
         # Get some sizes
         max_ctxt_len = batch["c"].shape[1]
-        # max_ctxt_len = torch.max(batch['c_len'])
-        # max_q_len = torch.max(batch['q_len'])
-        curr_batch_size = batch["c"].size()[0]
+
         output_max_len = output.size()[-1]
 
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch["c_len"][:, None].cpu()).to(self.device)
@@ -207,13 +185,11 @@ class TransformerAqModel(nn.Module):
                 .to(self.device)
             )
             src_mask = torch.triu(src_mask, diagonal=1)
-            # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
             ctxt_toks_embedded = self.embeddings(batch["c"]).to(self.device)
             ctxt_ans_embedded = self.bio_embeddings(batch["a_pos"]).to(self.device)
 
             # Build the context
-
             if self.config.raw_embedding_dim != self.config.embedding_dim:
                 ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
 
@@ -236,9 +212,6 @@ class TransformerAqModel(nn.Module):
                     bert_typeids = {"token_type_ids": batch["a_pos"].to(self.device)}
                 else:
                     bert_typeids = {}
-
-                # if 'bart' in self.config.encdec.bert_model:
-                #     bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
 
                 if self.freeze_bert or not self.config.encdec.bert_finetune:
                     with torch.no_grad():
@@ -274,7 +247,6 @@ class TransformerAqModel(nn.Module):
                     )
                 else:
                     encoding = self.bert_encoding
-                # print(encoding.shape)
 
             else:
                 encoding = (
@@ -354,16 +326,6 @@ class TransformerAqModel(nn.Module):
 
         logits = self.output_projection(output)
 
-        # if tgt_field is not None:
-        #     bos_logits = (
-        #         torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size)
-        #         .fill_(float("-1e18"))
-        #         .to(self.device)
-        #     )
-        #     bos_logits[:, :, BPE.bos_id] = float("1e18")
-        #     loss_logits = torch.cat([bos_logits, logits], dim=1)
-        #     loss = self.loss(loss_logits.permute(0, 2, 1), batch[tgt_field])
-        # else:
         loss = None
 
         return logits, memory, loss

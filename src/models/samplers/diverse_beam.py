@@ -39,8 +39,9 @@ class DiverseBeamSearchSampler(nn.Module):
         beam_expansion = (
             self.config.beam_search.beam_expansion
         )  # number of new predictions to add to each hypothesis each step
-        num_groups = self.config.beam_search.num_groups
-        penalty_weight = self.config.beam_search.diversity_penalty
+
+        # num_groups = self.config.beam_search.num_groups
+        # penalty_weight = self.config.beam_search.diversity_penalty
 
         prevent_repetition = (
             self.config.beam_search.prevent_repetition

@@ -109,18 +109,6 @@ class CQATriple:
 
             ctxt_char_offsets.append((sent_char_offset, sent_char_offset + len(sent)))  # .encode('utf8')
 
-        # if 'Morningside Park' in answer:
-        #     print(context)
-        #     print(len(context))
-        #     print(len(self.context_text))
-        #     print(len(self.context_text.strip()))
-        #     print(len(ctxt_sents[0]))
-        #     print(a_pos)
-        #     print(self.a_char_pos_uncrop)
-        #     print(self.a_char_end_uncrop)
-        #     print(ctxt_char_offsets)
-        #     exit()
-
         # self._ctxt_doc_uncrop = BPE.tokenise(self.context_text)
         ctxt_sent_toks = [BPE.tokenise(sent) for sent in ctxt_sents]
 
@@ -136,30 +124,16 @@ class CQATriple:
             # print(sent_ix, offset)
 
             for ix, tok in enumerate(sent_toks):
-                # if 'is usually translated into english as "virtuous behavior"' in self.context_text.lower():
-                #     print(tok)
-                #     print(tok['text'], tok['begin']+offset, tok['end']+offset, offset, self.a_char_pos_uncrop, self.a_char_end_uncrop)
-                #     if tok['begin']+offset > 100:
-                #         exit()
                 if self.a_char_pos_uncrop >= tok["begin"] + offset:  # and self.a_char_pos_uncrop <= tok['end']+offset
                     self.a_tok_pos_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
-                    # if self.answer_text == 'Catholics':
-                    # print(ix, tok, tok['begin'], offset, self.a_char_pos_uncrop)
-
-                    #     exit()
 
                 if self.a_char_end_uncrop >= tok["begin"] + offset and self.a_char_end_uncrop <= tok["end"] + offset:
                     self.a_tok_end_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]])
-                    # print(tok, ix, sent_ix, [len(sent) for sent in ctxt_sent_toks[:sent_ix]])
-                    # exit()
                     break
 
                 if self.a_char_end_uncrop <= tok["begin"] + offset and self.a_tok_end_uncrop is None:
                     self.a_tok_end_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]]) - 1
-                    # if 'hudie' in self.answer_text:
-                    #     exit()
                     break
-        # exit()
 
         if self.a_tok_pos_uncrop is None:
             print("Cannot find a_tok_pos")
@@ -202,11 +176,7 @@ class CQATriple:
         )
         self._ctxt_doc = [tok for sent in self.cropped_sents for tok in sent]
         self._ctxt_doc_uncrop = [tok for sent in ctxt_sent_toks for tok in sent]
-        # self._ctxt_doc = self._ctxt_doc_uncrop # TODO: reimplement sentence cropping
 
-        # print(self.context_text[self.a_char_pos_uncrop:self.a_char_pos_uncrop+10])
-
-        # self.a_pos = self.a_char_pos_uncrop# - self.cropped_sents[0].start_char
         self.a_tok_pos = self.a_tok_pos_uncrop - (
             sum([len(sent) for sent in ctxt_sent_toks[: max(0, self.a_sent_idx - SENT_WINDOW_SIZE)]])
             if SENT_WINDOW_SIZE is not None
@@ -219,16 +189,6 @@ class CQATriple:
             else 0
         )
 
-        # print(self.answer_text, self._ctxt_doc_uncrop[self.a_tok_pos:self.a_tok_end+1])
-        # print(self._ans_doc)
-        # exit()
-
-        # print(self.a_tok_pos_uncrop, self.a_sent_idx, self.a_tok_pos, self.a_tok_end)
-        # print(self._ctxt_doc[self.a_tok_pos:self.a_tok_end])
-        # print(self._ans_doc)
-        # exit()
-
-        # TODO: crop it...
         if TOKEN_WINDOW_SIZE is not None and len(self._ctxt_doc) > TOKEN_WINDOW_SIZE:
             # print('OVERSIZE CONTEXT!', len(self._ctxt_doc))
             crop_begin_ix = max(self.a_tok_pos - (TOKEN_WINDOW_SIZE // 2), 0)
@@ -237,24 +197,6 @@ class CQATriple:
             self.a_tok_pos = self.a_tok_pos - crop_begin_ix
             self.a_tok_end = self.a_tok_end - crop_begin_ix
             self._ctxt_doc = self._ctxt_doc[crop_begin_ix:crop_end_ix]
-
-            # print(len(self._ctxt_doc))
-
-        # print(self.context_text)
-        # print(BPE.decode([tok['id'] for tok in self._ctxt_doc]))
-        # print(self.answer_text)
-        # exit()
-
-        # Determine the context specific vocab for this example, using only novel words
-        # self.copy_vocab = {w:i+len(self.vocab) for i,w in enumerate(list(set([tok['text'] for tok in self._ctxt_doc if tok['text'] not in self.vocab.keys()]))) }
-
-    # def lookup_vocab(self, tok):
-    #     if tok in self.vocab.keys():
-    #         return self.vocab[tok]
-    #     elif tok in self.copy_vocab.keys():
-    #         return self.copy_vocab[tok]
-    #     else:
-    #         return self.vocab[OOV]
 
     def ctxt_as_ids(self):
         id_list = [tok["id"] for tok in self._ctxt_doc]

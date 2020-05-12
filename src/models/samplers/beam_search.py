@@ -80,19 +80,12 @@ class BeamSearchSampler(nn.Module):
                 one_hot_prev = onehot(output_seq[:, :, -1], N=self.config.prepro.vocab_size)
                 new_logits[:, :, -1, :] = new_logits[:, :, -1, :] + (one_hot_prev * float("-1e-16"))
 
-            # print(output_done.shape)
-            # print(output_done.unsqueeze(-1).shape)
-            # print(pad_probs.shape)
-            # print(new_logits.shape)
             new_probs = torch.where(
                 output_done.unsqueeze(-1), pad_probs, torch.log_softmax(new_logits[:, :, -1, :], -1)
             )
 
             if seq_ix == 0:
                 top_expansions = torch.topk(new_probs, k=beam_width, dim=-1, largest=True)
-
-                # print(output_seq.shape)
-                # print(top_expansions.indices.shape)
 
                 # On first iteration, the beams are all the same! So spread the topk across beams
                 output_seq = torch.cat(
@@ -104,12 +97,6 @@ class BeamSearchSampler(nn.Module):
             else:
 
                 top_expansions = torch.topk(new_probs, k=beam_expansion, dim=-1, largest=True)
-
-                # print(new_probs.shape)
-                # print(output_seq.shape)
-                # print(scores.shape)
-                # print(top_expansions.indices.shape)
-                # print(top_expansions.values.shape)
 
                 expanded_beam_ixs = torch.cat(
                     [
@@ -138,17 +125,9 @@ class BeamSearchSampler(nn.Module):
 
                 expanded_beam_scores = expanded_beam_scores
 
-                # print(expanded_beam_ixs.shape)
-                # print(expanded_beam_scores)
-
                 beam_scores = torch.sum(expanded_beam_scores, dim=-1).to(scores) / length_penalty
 
-                # print(beam_scores.shape)
-
                 top_beams = torch.topk(beam_scores, k=beam_width, dim=-1)
-
-                # print(top_beams.indices.shape)
-                # print(expanded_beam_scores.shape)
 
                 scores = torch.gather(
                     expanded_beam_scores, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
@@ -157,21 +136,11 @@ class BeamSearchSampler(nn.Module):
                     expanded_beam_ixs, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
                 )
 
-                # print(new_output.shape)
-                # how to get token_ix and curr prob from the top beam?
-
                 # Use pad for the output for elements that have completed
                 output_done = (new_output[:, :, -2] == BPE.eos_id) | (new_output[:, :, -2] == BPE.pad_id)
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
 
-                # output_seq = torch.cat([output_seq, new_output], dim=-1)
                 output_seq = new_output
-                # scores = torch.cat([scores, new_scores], dim=-1)
-
-                # print(output_done)
-                # exit()
-
-                # exit()
 
             seq_ix += 1
 

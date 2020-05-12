@@ -21,7 +21,6 @@ class RerankingReducer(nn.Module):
                 self.qa_model = PreTrainedQA(device=self.device)
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, presorted=True, top1=True):
-        curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
 
         # Pass-through mode: take the top-1 from a pre-sorted set of candidates (eg beam search)
         if top1 and presorted and self.strategy is None:
@@ -57,20 +56,10 @@ class RerankingReducer(nn.Module):
                     for jx, ans in enumerate(answers)
                 ]
 
-                # if max(this_scores) > 0.75:
-                #     print(batch['c_text'][ix], "->", batch['q_text'][ix], batch['a_text'][ix])
-                #     print('***')
-                #     for j in range(len(q_batch)):
-                #         print(q_batch[j], "##", answers[j], this_scores[j])
-                #     print('***')
-                #     # exit()
-
                 qa_scores.append(this_scores)
 
             qa_scores = torch.FloatTensor(qa_scores).to(scores)
             scores = qa_scores
-
-            # scores = torch.tensor(qa_scores).to(self.device)
 
             sorted_scores, sorted_indices = torch.sort(scores, descending=True)
 

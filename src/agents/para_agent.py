@@ -36,7 +36,13 @@ class ParaphraseAgent(ModelAgent):
                     "models/squad-udep",
                     "models/squad-constituency",
                     "models/squad-udep-deptree",
-                    "models/qdmr-squad"
+                    "models/qdmr-squad",
+                    "models/nq_newsqa-udep",
+                    "models/nq_newsqa-udep-deptree",
+                    "models/naturalquestions-udep",
+                    "models/newsqa-udep",
+                    "models/naturalquestions-udep-deptree",
+                    "models/newsqa-udep-deptree",
                 ]
                 or self.config.training.dataset[:5] == "qdmr-"
                 or "kaggle-" in self.config.training.dataset
@@ -47,7 +53,13 @@ class ParaphraseAgent(ModelAgent):
                     if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
                     else "s1"
                 )
-            elif self.config.training.dataset in ["squad"]:
+            elif self.config.training.dataset in [
+                "squad",
+                "squad_nq_newsqa",
+                "nq_newsqa",
+                "newsqa",
+                "naturalquestions",
+            ]:
                 self.data_loader = SquadDataLoader(config=config)
                 self.src_field = "q"
                 self.tgt_field = "q"
@@ -80,36 +92,15 @@ class ParaphraseAgent(ModelAgent):
         this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
         if self.config.training.suppression_loss_weight > 0:
-            this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["s1"])
+            this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(
+                logits, batch[self.src_field]
+            )
 
         this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
-        loss_weight = torch.where(
-            batch["is_paraphrase"] > 0,
-            torch.full_like(this_loss, 1.0),
-            torch.full_like(this_loss, -1.0 * self.config.training.data.get("neg_sample_weight", 0)),
-        )
-
-        loss += torch.mean(loss_weight * this_loss, dim=0)
+        loss += torch.mean(this_loss, dim=0)
 
         return loss
-
-    # def pad_and_order_sequences(self, batch):
-    #     keys = batch[0].keys()
-    #     max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
-
-    #     for x in batch:
-    #         for k in keys:
-    #             if k == 'a_pos':
-    #                 x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=0)
-    #             else:
-    #                 x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.pad_id)
-
-    #     tensor_batch = {}
-    #     for k in keys:
-    #         tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(dim=1)
-
-    #     return tensor_batch
 
     def text_to_batch(self, x, device):
         if self.config.training.dataset in ["squad"]:

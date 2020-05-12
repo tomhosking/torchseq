@@ -105,10 +105,6 @@ class ParallelNucleusSampler(nn.Module):
             new_logits, memory, _ = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
             new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
             output_done = (output_seq[:, :, -1] == BPE.pad_id) | (output_seq[:, :, -1] == BPE.eos_id)
-            # print(output_done.shape)
-            # print(output_done.unsqueeze(-1).shape)
-            # print(pad_probs.shape)
-            # print(new_logits.shape)
 
             new_logits = top_k_top_p_filtering(logits=new_logits, top_p=prob_cutoff)
 
@@ -140,14 +136,12 @@ class ParallelNucleusSampler(nn.Module):
 
             seq_ix += 1
 
-        # Take top-1 beam
-
+        # Take top-1 beam:
         hypothesis_len = torch.sum(output_seq != BPE.pad_id, dim=-1)
+
         # Length penalty needs to be applied to *overall* score, not score for this token
         len_alpha = self.config.nucleus_sampling.length_alpha
         length_penalty = torch.pow((5 + hypothesis_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
-
-        # print(scores)
 
         beam_scores = (
             torch.log(scores).where(output_seq != BPE.pad_id, torch.FloatTensor([0.0]).to(self.device)).sum(-1)
@@ -156,11 +150,8 @@ class ParallelNucleusSampler(nn.Module):
 
         sorted_scores, sorted_indices = torch.sort(beam_scores, descending=True)
 
-        # top_beams = torch.topk(beam_scores, k=1, dim=-1)
-
         output_seq = torch.gather(output_seq, 1, sorted_indices.unsqueeze(-1).expand(-1, -1, output_seq.shape[2]))
 
-        # output = output_seq[:, 0, :]
         output = output_seq
 
         return output, sorted_scores, torch.sum(output_seq != BPE.pad_id, dim=-1)

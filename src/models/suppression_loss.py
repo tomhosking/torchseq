@@ -29,18 +29,12 @@ class SuppressionLoss(nn.Module):
         self.config = config
 
     def forward(self, logits, penalty_sequence):
-        curr_batch_size = logits.size()[0]
-        max_output_len = logits.size()[1]
 
         penalty_onehot = onehot(penalty_sequence, N=self.config.prepro.vocab_size, ignore_index=BPE.pad_id)
 
         penalty_mask = penalty_onehot.sum(dim=-2, keepdim=True)
         penalty_mask = torch.min(penalty_mask, torch.ones_like(penalty_mask))
         probs = nn.functional.softmax(logits, dim=-1)
-
-        # print(penalty_mask.shape)
-        # print(logits.shape)
-        # print(log_probs.shape)
 
         loss = penalty_mask * probs
 

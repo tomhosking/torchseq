@@ -19,7 +19,7 @@
 
 from __future__ import division
 
-import sys
+
 from collections import Counter
 
 

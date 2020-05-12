@@ -55,7 +55,7 @@ class AQAgent(ModelAgent):
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
             if (
-                self.config.training.dataset in ["squad", "newsqa", "msmarco", "naturalquestions", "drop"]
+                self.config.training.dataset in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa"]
                 or self.config.training.dataset[:5] == "squad"
             ):
                 self.data_loader = SquadDataLoader(config=config)
@@ -113,30 +113,3 @@ class AQAgent(ModelAgent):
                 ]
             ).items()
         }
-
-        # parsed_triple = CQATriple(x['c'], x['a'], x['a_pos'], "",
-        #     sent_window=self.config.prepro.sent_window,
-        #     tok_window=self.config.prepro.tok_window,
-        #     o_tag=2 if self.config.prepro.bio_tagging else 1,
-        #     concat_ctxt_ans=self.config.prepro.concat_ctxt_ans)
-
-        # if self.config.prepro.concat_ctxt_ans:
-        #     sample = {'c':  torch.LongTensor(parsed_triple.ctxt_as_ids() + [102] +  parsed_triple.ans_as_ids()).to(device),
-        #             # 'q': torch.LongTensor(parsed_triple.q_as_ids()),
-        #             'a': torch.LongTensor(parsed_triple.ans_as_ids()).to(device),
-        #             'a_pos': torch.LongTensor([0 for i in range(len(parsed_triple._ctxt_doc))] + [0] + [1 for i in range(len(parsed_triple._ans_doc))]).to(device),
-        #             'c_len': torch.LongTensor([len(parsed_triple._ctxt_doc) + len(parsed_triple._ans_doc) + 1]).to(device),
-        #             'a_len': torch.LongTensor([len(parsed_triple._ans_doc)]).to(device),
-        #             # 'q_len': torch.LongTensor([len(parsed_triple._q_doc)])
-        #             }
-        # else:
-        #     sample = {'c': torch.LongTensor(parsed_triple.ctxt_as_ids()).to(device),
-        #             # 'q': torch.LongTensor(parsed_triple.q_as_ids()),
-        #             'a': torch.LongTensor(parsed_triple.ans_as_ids()).to(device),
-        #             'a_pos': torch.LongTensor(parsed_triple.ctxt_as_bio()).to(device),
-        #             'c_len': torch.LongTensor([len(parsed_triple._ctxt_doc)]).to(device),
-        #             'a_len': torch.LongTensor([len(parsed_triple._ans_doc)]).to(device),
-        #             # 'q_len': torch.LongTensor([len(parsed_triple._q_doc)])
-        #             }
-
-        # return self.pad_and_order_sequences([sample])

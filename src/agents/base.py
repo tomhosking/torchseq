@@ -2,8 +2,6 @@ import logging
 
 import torch
 
-from utils.parallel import DataParallelCriterion, DataParallelModel
-
 
 class BaseAgent:
     """
@@ -22,39 +20,26 @@ class BaseAgent:
 
         self.cuda = self.is_cuda & self.config.env.cuda
 
-        # set the manual seed for torch
-        # self.manual_seed = self.config.seed
         if self.cuda:
-            # torch.cuda.manual_seed(self.manual_seed)
             self.device = torch.device("cuda")
-            # torch.cuda.set_device(self.config.env.gpu_device)
 
             self.logger.info("Program will run on *****GPU-CUDA***** ")
-            # print_cuda_statistics()
 
             if torch.cuda.device_count() > 1:
                 self.logger.info("Multi GPU available: using {:} GPUs!".format(torch.cuda.device_count()))
-
-            # self.model = DataParallelModel(self.model)
-            # self.loss = DataParallelCriterion(self.loss)
-
-            # self.model.module = self.model
 
             self.model.to(self.device)
             self.loss.to(self.device)
 
         else:
             self.device = torch.device("cpu")
-            # torch.manual_seed(self.manual_seed)
+
             self.logger.info("Program will run on *****CPU*****\n")
 
         if not self.model:
             raise Exception("You need to define your model before calling set_device!")
 
         self.model.device = self.device
-        # if torch.cuda.device_count() > 1 or True:
-        # #     # DataParallel hides the 'real' model, so we have to set it manually
-        #     self.model.module.device = self.device
 
     def load_checkpoint(self, file_name):
         """

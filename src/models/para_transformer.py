@@ -90,13 +90,8 @@ class TransformerParaphraseModel(nn.Module):
             if self.config.encdec.data.get("residual", False):
                 self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
-        # print(BPE.decode(batch['a'][0][:batch['a_len'][0]]), [BPE.instance().decode([x.item()])  for i,x in enumerate(batch['c'][0]) if batch['a_pos'][0][i].item() > 0], BPE.decode(batch['q'][0][:batch['q_len'][0]]))
-        # print([BPE.instance().decode([x.item()])+'/'+str(batch['a_pos'][0][i].item())  for i,x in enumerate(batch['c'][0])])
-        # exit()
-
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
-        # max_q_len = torch.max(batch['q_len'])
         curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
 
@@ -108,7 +103,6 @@ class TransformerParaphraseModel(nn.Module):
                 .to(self.device)
             )
             src_mask = torch.triu(src_mask, diagonal=1)
-            # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
             context_mask = (
                 torch.arange(max_ctxt_len)[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
@@ -124,7 +118,6 @@ class TransformerParaphraseModel(nn.Module):
 
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
 
-            # encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1,0,2).contiguous()
             #  Fwd pass through encoder
             if self.config.encdec.bert_encoder:
 
@@ -155,7 +148,7 @@ class TransformerParaphraseModel(nn.Module):
                     )
                 else:
                     encoding = self.bert_encoding
-                # print(encoding.shape)
+
             else:
                 encoding = (
                     self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask)

@@ -39,13 +39,6 @@ class GreedySampler(nn.Module):
 
             new_output = torch.argmax(new_logits, -1)
 
-            # print('tgt  ', batch[tgt_field])
-            # print('Dec in:', output_for_decoder)
-            # print('Dec out', new_output)
-
-            new_scores = torch.max(new_logits, -1).values
-            # print(new_scores)
-
             # Use pad for the output for elements that have completed
             new_output[:, -1] = torch.where(output_done, padding, new_output[:, -1])
 
@@ -53,15 +46,8 @@ class GreedySampler(nn.Module):
 
             logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
 
-            # print(output_done)
-            # print(output[:, -1])
-            # print(output[:, -1] == BPE.eos_id)
             output_done = output_done | (output[:, -1] == BPE.eos_id)
             seq_ix += 1
-        # exit()
-        # if seq_ix > 1:
-        #     exit()
-        # output.where(output == BPE.pad_id, torch.LongTensor(output.shape).fill_(-1).to(self.device))
 
         if BART_HACK:
             output = output[:, 1:]

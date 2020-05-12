@@ -18,11 +18,6 @@ from utils.tokenizer import BPE
 
 
 def main(_):
-
-    use_cuda = torch.cuda.is_available()
-    # kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
-    device = torch.device("cuda" if use_cuda else "cpu")
-
     print("** Running with config={:} **".format(FLAGS.config))
 
     with open(FLAGS.config) as f:

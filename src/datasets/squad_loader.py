@@ -72,20 +72,3 @@ class SquadDataLoader:
             collate_fn=SquadDataset.pad_and_order_sequences,
             worker_init_fn=init_worker,
         )
-
-    # def pad_and_order_sequences(self, batch):
-    #     keys = batch[0].keys()
-    #     max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
-
-    #     for x in batch:
-    #         for k in keys:
-    #             if k == 'a_pos':
-    #                 x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=0)
-    #             else:
-    #                 x[k] = F.pad(x[k], (0, max_lens[k]-len(x[k])), value=BPE.pad_id)
-
-    #     tensor_batch = {}
-    #     for k in keys:
-    #         tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
-
-    #     return tensor_batch

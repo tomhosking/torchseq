@@ -7,6 +7,7 @@ from transformers import BertModel
 from models.pooling import MultiHeadedPooling
 from models.positional_embeddings import PositionalEncoding
 from utils.tokenizer import BPE
+import models.transformer as custom_transformer
 
 # def combine_masks(key_padding_mask, attn_mask, targ_size):
 #     # targ_size = (bsz, tgt_len, src_len)
@@ -21,6 +22,7 @@ from utils.tokenizer import BPE
 #         # _check_shapes(attn_mask.shape, targ_size[-2:])
 #         b = attn_mask.cpu().unsqueeze(0).expand(*targ_size)
 #     return (a + b).unsqueeze(1).clamp(-1e-8,)
+
 
 # Helper Functions, mostly for making masks
 def _check_shapes(shape_1, shape2):
@@ -78,20 +80,30 @@ class PretrainedModularModel(nn.Module):
 
         if self.config.encdec.data.get("module", False):
 
-            encoder_layer = nn.TransformerEncoderLayer(
+            encoder_layer = custom_transformer.TransformerEncoderLayer(
                 config.embedding_dim,
                 nhead=config.encdec.num_heads,
                 dim_feedforward=config.encdec.dim_feedforward,
                 dropout=config.dropout,
                 activation=config.encdec.activation,
             )
-            encoder_norm = nn.LayerNorm(config.embedding_dim)
+            # encoder_norm = nn.LayerNorm(config.embedding_dim)
+            self.module = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, None)
 
-            self.module = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+            # encoder_layer = nn.TransformerEncoderLayer(
+            #     config.embedding_dim,
+            #     nhead=config.encdec.num_heads,
+            #     dim_feedforward=config.encdec.dim_feedforward,
+            #     dropout=config.dropout,
+            #     activation=config.encdec.activation,
+            # )
+            # encoder_norm = nn.LayerNorm(config.embedding_dim)
+
+            # self.module = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
             # for p in self.module.parameters():
             #     if p.dim() > 1:
-            #         nn.init.xavier_uniform_(p, gain=1e-1)
+            #         nn.init.xavier_uniform_(p, gain=1e-0)
 
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
@@ -132,7 +144,7 @@ class PretrainedModularModel(nn.Module):
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
         # max_q_len = torch.max(batch['q_len'])
-        curr_batch_size = batch[self.src_field].size()[0]
+        # curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
 
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()).to(
