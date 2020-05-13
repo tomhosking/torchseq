@@ -326,5 +326,4 @@ class TransformerAqModel(nn.Module):
 
         logits = self.output_projection(output)
 
-
         return logits, memory

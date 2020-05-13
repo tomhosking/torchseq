@@ -190,7 +190,6 @@ class PretrainedModularModel(nn.Module):
         output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() >= output_len[:, None].cpu()).to(self.device)[
             :, :output_max_len
         ]
-        
 
         output = self.decoder(
             output,
@@ -200,7 +199,6 @@ class PretrainedModularModel(nn.Module):
             decoder_causal_mask=tgt_mask,
             # tgt_key_padding_mask=output_pad_mask
         )
-
 
         logits = self.output_projection(output[0])
 

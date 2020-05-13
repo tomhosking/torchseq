@@ -104,14 +104,13 @@ class ParaphraseAgent(ModelAgent):
         if self.config.encdec.data.get("variational", False):
             kl_loss = torch.mean(get_kl(self.model.mu, self.model.logvar))
 
-            
-
-            kl_weight = 1 if self.global_step > 20000 else (0 if self.global_step < 10000 else float(self.global_step - 10000)/10000.0  )
+            kl_weight = (
+                1
+                if self.global_step > 20000
+                else (0 if self.global_step < 10000 else float(self.global_step - 10000) / 10000.0)
+            )
 
             loss += kl_loss * kl_weight
-
-
-        
 
         return loss
 

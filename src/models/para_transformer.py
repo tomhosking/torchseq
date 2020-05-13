@@ -102,7 +102,6 @@ class TransformerParaphraseModel(nn.Module):
 
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
-        curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
@@ -180,12 +179,11 @@ class TransformerParaphraseModel(nn.Module):
                 self.logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
                 def reparameterize(mu, logvar):
-                    std = torch.exp(0.5*logvar)
+                    std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
-                    return mu + eps*std
+                    return mu + eps * std
 
                 memory = reparameterize(self.mu, self.logvar)
-                
 
             # memory = encoding
 
@@ -214,6 +212,5 @@ class TransformerParaphraseModel(nn.Module):
         ).permute(1, 0, 2)
 
         logits = self.output_projection(output)
-
 
         return logits, memory
