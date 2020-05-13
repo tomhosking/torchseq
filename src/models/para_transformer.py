@@ -73,6 +73,16 @@ class TransformerParaphraseModel(nn.Module):
             use_final_linear=False,
         )
 
+        # Extra modules for a variational bottleneck
+        if self.config.encdec.data.get("variational", False):
+            self.encoder_logvar_pooling = MultiHeadedPooling(
+                config.encdec.num_heads,
+                config.embedding_dim,
+                dropout=config.dropout,
+                model_dim_out=config.embedding_dim,
+                use_final_linear=False,
+            )
+
         # Init output projection layer with embedding matrix
         if config.embedding_dim == config.raw_embedding_dim:
             self.output_projection.weight.data = self.embeddings.weight.data
@@ -165,6 +175,18 @@ class TransformerParaphraseModel(nn.Module):
                 else encoding
             )
 
+            if self.config.encdec.data.get("variational", False):
+                self.mu = memory
+                self.logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+
+                def reparameterize(mu, logvar):
+                    std = torch.exp(0.5*logvar)
+                    eps = torch.randn_like(std)
+                    return mu + eps*std
+
+                memory = reparameterize(self.mu, self.logvar)
+                
+
             # memory = encoding
 
         # Build some masks
@@ -193,16 +215,5 @@ class TransformerParaphraseModel(nn.Module):
 
         logits = self.output_projection(output)
 
-        if tgt_field is not None:
-            bos_logits = (
-                torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size)
-                .fill_(float("-1e18"))
-                .to(self.device)
-            )
-            bos_logits[:, :, BPE.bos_id] = float("1e18")
-            loss_logits = torch.cat([bos_logits, logits], dim=1)
-            loss = self.loss(loss_logits.permute(0, 2, 1), batch[tgt_field])
-        else:
-            loss = None
 
-        return logits, memory, loss
+        return logits, memory

@@ -190,31 +190,7 @@ class PretrainedModularModel(nn.Module):
         output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() >= output_len[:, None].cpu()).to(self.device)[
             :, :output_max_len
         ]
-        # output_pad_mask = (~output_pad_mask)
-
-        # tgt_mask = None
-
-        # bert_tgt_mask = combine_masks(output_pad_mask, tgt_mask, (curr_batch_size, output_max_len, output_max_len)).to(
-        #     self.device
-        # )
-
-        # bert_tgt_mask = None
-
-        # print(bert_tgt_mask)
-        # print(bert_tgt_mask.shape)
-        # print(memory.shape)
-        # print(bert_context_mask.shape)
-        # print(context_mask.shape)
-        # exit()
-        # bert_tgt_mask = (~tgt_mask).double()
-
-        # bert_tgt_mask = (1.0 - bert_tgt_mask.long()) * -10000.0
-
-        # memory = memory.transpose(0, 1)
-
-        # memory_mask = (
-        #     torch.arange(memory.shape[1])[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
-        # ).to(self.device)
+        
 
         output = self.decoder(
             output,
@@ -225,32 +201,7 @@ class PretrainedModularModel(nn.Module):
             # tgt_key_padding_mask=output_pad_mask
         )
 
-        # print(output[0].shape)
 
         logits = self.output_projection(output[0])
 
-        # print(torch.argmax(logits, dim=-1))
-        # print(batch[self.src_field])
-        # exit()
-        # logits = output[0]
-
-        # print(memory.shape)
-        # print(logits.shape)
-
-        # print('src  ', batch[self.src_field])
-
-        # print(output[0].shape)
-
-        loss = None
-
-        # if tgt_field is not None:
-        #     bos_logits = (
-        #         torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size)
-        #         .fill_(float("-1e18"))
-        #         .to(self.device)
-        #     )
-        #     bos_logits[:, :, BPE.bos_id] = float("1e18")
-        #     loss_logits = torch.cat([bos_logits, logits], dim=1)
-        #     loss = self.loss(loss_logits.permute(0, 2, 1), batch[tgt_field])
-
-        return logits, memory, loss
+        return logits, memory

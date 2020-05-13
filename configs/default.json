@@ -1,19 +1,18 @@
 {
-    "name": "finetune_constlr_1e-5",
-    "tag": "testing",
+    "name": "embeds",
+    "tag": "aq",
     "task": "aq",
     "env": {
         "cuda": true,
         "data_path": "./data",
         "gpu_device": 0
-
     },
     "training": {
         "dataset": "squad",
         "use_preprocessed_data": false,
         "log_interval": 10,
-        "lr_schedule": false,
-        "lr": 1e-5,
+        "lr_schedule": true,
+        "lr": 0.003,
         "beta1": 0.9,
         "beta2": 0.98,
         "batch_size": 8,
@@ -24,7 +23,7 @@
         "warmup_epochs": 5,
         "suppression_loss_weight": 0.1,
         "label_smoothing": 0.0,
-        "early_stopping_lag": 0
+        "early_stopping_lag": 1
     },
     "eval": {
         "eval_batch_size": 6,
@@ -32,7 +31,7 @@
     },
     "beam_search": {
         "beam_width": 8,
-        "beam_expansion": 4,
+        "beam_expansion": 8,
         "length_alpha": 2.0
     },
     "prepro": {
@@ -66,10 +65,9 @@
         "num_heads": 2,
         "dim_feedforward": 2048,
         "activation": "relu",
-        "bert_encoder": true,
+        "bert_encoder": false,
         "bert_model": "bert-base-uncased",
-        "bert_warmup_epochs": 0,
-        "bert_finetune": true,
-        "bert_typeids": false
+        "bert_warmup_epochs": 20,
+        "bert_finetune": false
     }
 }

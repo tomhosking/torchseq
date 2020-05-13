@@ -12,6 +12,7 @@ from datasets.squad_loader import SquadDataLoader
 from models.para_transformer import TransformerParaphraseModel
 from models.pretrained_modular import PretrainedModularModel
 from models.suppression_loss import SuppressionLoss
+from models.kl_divergence import get_kl
 from utils.tokenizer import BPE
 
 
@@ -99,6 +100,18 @@ class ParaphraseAgent(ModelAgent):
         this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         loss += torch.mean(this_loss, dim=0)
+
+        if self.config.encdec.data.get("variational", False):
+            kl_loss = torch.mean(get_kl(self.model.mu, self.model.logvar))
+
+            
+
+            kl_weight = 1 if self.global_step > 20000 else (0 if self.global_step < 10000 else float(self.global_step - 10000)/10000.0  )
+
+            loss += kl_loss * kl_weight
+
+
+        
 
         return loss
 
