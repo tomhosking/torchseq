@@ -104,10 +104,16 @@ class ParaphraseAgent(ModelAgent):
         if self.config.encdec.data.get("variational", False):
             kl_loss = torch.mean(get_kl(self.model.mu, self.model.logvar))
 
+            kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
+
             kl_weight = (
                 1
-                if self.global_step > 20000
-                else (0 if self.global_step < 10000 else float(self.global_step - 10000) / 10000.0)
+                if self.global_step >= 2 * kl_warmup_steps
+                else (
+                    0
+                    if self.global_step < kl_warmup_steps
+                    else float(self.global_step - kl_warmup_steps) / (1.0 * kl_warmup_steps)
+                )
             )
 
             loss += kl_loss * kl_weight

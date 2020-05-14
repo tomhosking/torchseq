@@ -276,9 +276,9 @@ class ModelAgent(BaseAgent):
                     print(BPE.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
                     print(BPE.decode(greedy_output.data[0][: output_lens[0]]))
 
-                    if self.config.encdec.data.get("variational", False):
-                        print(self.model.mu)
-                        print(self.model.logvar)
+                    # if self.config.encdec.data.get("variational", False):
+                    #     print(self.model.mu)
+                    #     print(self.model.logvar)
 
                 torch.cuda.empty_cache()
 

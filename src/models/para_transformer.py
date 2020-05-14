@@ -181,7 +181,7 @@ class TransformerParaphraseModel(nn.Module):
                 def reparameterize(mu, logvar):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
-                    return mu + eps * std
+                    return mu + eps * std * self.config.encdec.data.get("prior_var_weight", 1.0)
 
                 memory = reparameterize(self.mu, self.logvar)
 

@@ -1,14 +1,14 @@
 import json
 import sys
 
+sys.path.insert(0, "./src/")
+
 from absl import app as absl_app
 from flask import Flask, Response, current_app, redirect, request
 
 from agents.aq_agent import AQAgent
 
 from utils.config import Config
-
-sys.path.insert(0, "./src/")
 
 
 app = Flask(__name__)
