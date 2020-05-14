@@ -53,7 +53,7 @@ def init():
         cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "beam"
         cfg_dict["eval"]["topk"] = 32
-        cfg_dict['training']['dataset'] = "kaggle"
+        cfg_dict["training"]["dataset"] = "kaggle"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
         cfg_dict["reranker"] = {
@@ -66,7 +66,7 @@ def init():
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pth.tar"
 
-    app.agent = ParaphraseAgent(config=config, run_id=None, output_path='./runs/parademo/')
+    app.agent = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/")
 
     app.agent.load_checkpoint(checkpoint_path)
     app.agent.model.eval()
