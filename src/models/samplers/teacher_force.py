@@ -32,7 +32,11 @@ class TeacherForcedSampler(nn.Module):
 
             masked = torch.full_like(output, BPE.mask_id)
 
-            output = torch.where(rand < self.config.training.data.get("token_dropout", 0), masked, output)
+            output = torch.where(
+                torch.bitwise_and(rand < self.config.training.data.get("token_dropout", 0), output != BPE.pad_id),
+                masked,
+                output,
+            )
 
         if BART_HACK:
             dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(BPE.eos_id).to(self.device)
