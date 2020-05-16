@@ -27,7 +27,7 @@ class TeacherForcedSampler(nn.Module):
         # ..and then just do a single pass through the whole model using the gold output as input
         output = batch[tgt_field][:, : max_output_len - 1].to(self.device)
 
-        if self.config.training.data.get("token_dropout", 0) > 0:
+        if self.config.training.data.get("token_dropout", 0) > 0 and self.training:
             rand = torch.rand_like(output, dtype=torch.float)
 
             masked = torch.full_like(output, BPE.mask_id)
