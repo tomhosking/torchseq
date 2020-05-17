@@ -25,7 +25,6 @@ from models.suppression_loss import SuppressionLoss
 
 from utils.mckenzie import update_mckenzie
 from utils.metrics import bleu_corpus
-from utils.misc import print_cuda_statistics
 from utils.tokenizer import BPE
 
 
