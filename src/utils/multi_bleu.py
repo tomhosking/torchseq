@@ -23,7 +23,7 @@ evaluation metrics for machine translation. COLING 2004.
 """MultiBLEU adapts BLEU to handle multiple candidate translations. 
 References aren't usually unique, so it's weird that we evaluate a system based on a single point sample.
 The idea is that this should reward systems that are able to produce the reference *somewhere* in a set of outputs,
-rather than having to generate this as top-1.""" 
+rather than having to generate this as top-1."""
 
 import collections
 import math
@@ -70,33 +70,32 @@ def compute_multi_bleu(reference_corpus, translation_corpus, max_order=4, smooth
         merged_ref_ngram_counts = collections.Counter()
         for reference in references:
             merged_ref_ngram_counts |= _get_ngrams(reference, max_order)
-            
+
         translation_ngram_counts = collections.Counter()
         max_overlap = None
         best_trans_length = 0
         best_rank = 0
         for rank, translation in enumerate(translations):
             translation_ngram_counts = _get_ngrams(translation, max_order)
-        
+
             overlap = translation_ngram_counts & merged_ref_ngram_counts
             trans_length = len(translation)
-            overlap_score = sum([c*len(x) for x,c in overlap.items()])
-            max_overlap_score = sum([c*len(x) for x,c in max_overlap.items()]) if max_overlap is not None else None
-            if max_overlap is None or overlap_score/trans_length > max_overlap_score/best_trans_length:
+            overlap_score = sum([c * len(x) for x, c in overlap.items()])
+            max_overlap_score = sum([c * len(x) for x, c in max_overlap.items()]) if max_overlap is not None else None
+            if max_overlap is None or overlap_score / trans_length > max_overlap_score / best_trans_length:
                 max_overlap = overlap
                 best_trans_length = trans_length
-                best_rank = rank+1
-                
-                
+                best_rank = rank + 1
+
         reference_length += min(len(r) for r in references)
         translation_length += best_trans_length
         rank_cumul += best_rank
-                
-#         print(translations)
-#         print(references)
-#         print(max_overlap)
-#         return None
-                
+
+        #         print(translations)
+        #         print(references)
+        #         print(max_overlap)
+        #         return None
+
         for ngram in max_overlap:
             matches_by_order[len(ngram) - 1] += max_overlap[ngram]
         for order in range(1, max_order + 1):
@@ -127,10 +126,10 @@ def compute_multi_bleu(reference_corpus, translation_corpus, max_order=4, smooth
         bp = math.exp(1 - 1.0 / ratio)
 
     bleu = geo_mean * bp
-#     bleu = geo_mean * 1.0
+    #     bleu = geo_mean * 1.0
 
     mean_rank = rank_cumul / len(reference_corpus)
-    
+
     print(mean_rank)
 
     return (bleu, precisions, bp, ratio, translation_length, reference_length)
