@@ -20,7 +20,7 @@ Chin-Yew Lin, Franz Josef Och. ORANGE: a method for evaluating automatic
 evaluation metrics for machine translation. COLING 2004.
 """
 
-"""MultiBLEU adapts BLEU to handle multiple candidate translations. 
+"""MultiBLEU adapts BLEU to handle multiple candidate translations.
 References aren't usually unique, so it's weird that we evaluate a system based on a single point sample.
 The idea is that this should reward systems that are able to produce the reference *somewhere* in a set of outputs,
 rather than having to generate this as top-1."""
@@ -66,7 +66,6 @@ def compute_multi_bleu(reference_corpus, translation_corpus, max_order=4, smooth
     translation_length = 0
     rank_cumul = 0
     for (references, translations) in zip(reference_corpus, translation_corpus):
-
         merged_ref_ngram_counts = collections.Counter()
         for reference in references:
             merged_ref_ngram_counts |= _get_ngrams(reference, max_order)
