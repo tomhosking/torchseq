@@ -1,5 +1,5 @@
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
-from transformers import BartModel, BartTokenizer, BertModel
+from transformers import BartModel, BertModel, RobertaModel
 
 
 class BPE:
@@ -23,19 +23,18 @@ class BPE:
     @staticmethod
     def decode(token_id_tensor):
         return (
-            BPE.instance()
-            .decode(token_id_tensor.tolist(), skip_special_tokens=True)
-            .replace(" ##", "")
-            .replace("# ", "#")
+            BPE.instance().decode(token_id_tensor.tolist(), skip_special_tokens=True)
+            # .replace(" ##", "")
+            # .replace("# ", "#")
         )
 
     @staticmethod
     def instance():
         if BPE._instance is None:
-            if "bart" in BPE.model_slug:
+            if "bart-" in BPE.model_slug or "roberta-" in BPE.model_slug:
                 BPE._instance = ByteLevelBPETokenizer(
-                    "./data/bert-vocabs/{:}-vocab.json".format(BPE.model_slug),
-                    "./data/bert-vocabs/{:}-merges.txt".format(BPE.model_slug),
+                    "./data/pretrained-vocabs/{:}-vocab.json".format(BPE.model_slug),
+                    "./data/pretrained-vocabs/{:}-merges.txt".format(BPE.model_slug),
                     lowercase=False,
                 )
 
@@ -48,13 +47,19 @@ class BPE:
                 BPE.bos_id = BPE._instance.token_to_id("<s>")
                 BPE.eos_id = BPE._instance.token_to_id("</s>")
 
-                model = BartModel.from_pretrained(BPE.model_slug)
-                BPE._instance.embeddings = model.encoder.embed_tokens.weight.data
+                if "bart-" in BPE.model_slug:
+                    model = BartModel.from_pretrained(BPE.model_slug)
+                    BPE._instance.embeddings = model.encoder.embed_tokens.weight.data
 
-                del model
+                    del model
+                elif "roberta-" in BPE.model_slug:
+                    model = RobertaModel.from_pretrained(BPE.model_slug)
+                    BPE._instance.embeddings = model.embeddings.word_embeddings.weight.data
+
+                    del model
             else:
                 BPE._instance = BertWordPieceTokenizer(
-                    "./data/bert-vocabs/{:}-vocab.txt".format(BPE.model_slug),
+                    "./data/pretrained-vocabs/{:}-vocab.txt".format(BPE.model_slug),
                     lowercase=(BPE.model_slug[-8:] == "-uncased"),
                 )
 
@@ -80,20 +85,24 @@ class BPE:
         offsets = output.offsets
         token_texts = output.tokens
 
-        bos = [{"id": BPE.bos_id, "text": "[CLS]", "begin": 0, "end": 0}]
-        eos = [{"id": BPE.eos_id, "text": "[SEP]", "begin": len(text), "end": len(text)}]
+        bos_str = "[CLS]" if "bert" in BPE.model_slug else "<s>"
+        eos_str = "[SEP]" if "bert" in BPE.model_slug else "</s>"
 
-        if "bart" in BPE.model_slug:
-            tokenised = [
-                {"id": token_ids[ix], "text": token_texts[ix], "begin": offsets[ix][0], "end": offsets[ix][1]}
-                for ix in range(len(output.tokens))
-            ]
-        else:
+        bos = [{"id": BPE.bos_id, "text": bos_str, "begin": 0, "end": 0}]
+        eos = [{"id": BPE.eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
+
+        if "bert-" in BPE.model_slug:
             # NOTE: HF tokenizers automatically adds CLS/SEP tokens for BERT, so we have to fudge the indices to skip these
             tokenised = [
                 {"id": token_ids[ix], "text": token_texts[ix], "begin": offsets[ix][0], "end": offsets[ix][1]}
                 for ix in range(1, len(output.tokens) - 1)
             ]
+        else:
+            tokenised = [
+                {"id": token_ids[ix], "text": token_texts[ix], "begin": offsets[ix][0], "end": offsets[ix][1]}
+                for ix in range(len(output.tokens))
+            ]
+
         if add_bos_eos:
             return bos + tokenised + eos
         else:

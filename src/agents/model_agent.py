@@ -13,7 +13,10 @@ from models.lr_schedule import get_lr
 from models.samplers.beam_search import BeamSearchSampler
 from models.samplers.greedy import GreedySampler
 from models.samplers.parallel_nucleus import ParallelNucleusSampler
-from models.samplers.reranking_reducer import RerankingReducer
+from models.rerankers.qa_reranker import QaReranker
+from models.rerankers.topk import TopkReducer
+from models.rerankers.ngram_reranker import NgramReranker
+from models.rerankers.backtranslate_reranker import BacktranslateReranker
 from models.samplers.teacher_force import TeacherForcedSampler
 from utils.logging import add_to_log
 from utils.mckenzie import update_mckenzie
@@ -75,7 +78,16 @@ class ModelAgent(BaseAgent):
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
-        self.reranker = RerankingReducer(self.config, self.device)
+        if self.config.data.get("reranker", None) == "qa":
+            self.reranker = QaReranker(self.config, self.device)
+        elif self.config.data.get("reranker", None) == "ngram":
+            self.reranker = NgramReranker(self.config, self.device, self.src_field)
+        elif self.config.data.get("reranker", None) == "backtranslate":
+            self.reranker = BacktranslateReranker(
+                self.config, self.device, self.src_field, self.model, self.decode_teacher_force, self.loss
+            )
+        else:
+            self.reranker = TopkReducer(self.config, self.device)
 
     def load_checkpoint(self, file_name):
         """
