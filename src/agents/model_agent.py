@@ -11,6 +11,7 @@ from agents.base import BaseAgent
 
 from models.lr_schedule import get_lr
 from models.samplers.beam_search import BeamSearchSampler
+from models.samplers.diverse_beam import DiverseBeamSearchSampler
 from models.samplers.greedy import GreedySampler
 from models.samplers.parallel_nucleus import ParallelNucleusSampler
 from models.rerankers.qa_reranker import QaReranker
@@ -75,6 +76,7 @@ class ModelAgent(BaseAgent):
     def create_samplers(self):
         self.decode_greedy = GreedySampler(self.config, self.device)
         self.decode_beam = BeamSearchSampler(self.config, self.device)
+        self.decode_dbs = DiverseBeamSearchSampler(self.config, self.device)
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
@@ -317,6 +319,9 @@ class ModelAgent(BaseAgent):
 
         elif self.config.eval.sampler == "beam":
             beam_output, beam_scores, beam_lens = self.decode_beam(self.model, batch, tgt_field)
+
+        elif self.config.eval.sampler == "diverse_beam":
+            beam_output, beam_scores, beam_lens = self.decode_dbs(self.model, batch, tgt_field)
 
         elif self.config.eval.sampler == "greedy":
             greedy_output, greedy_scores, greedy_lens = self.decode_greedy(self.model, batch, tgt_field)

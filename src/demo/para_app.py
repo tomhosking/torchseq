@@ -46,21 +46,28 @@ def ping():
 def init():
     # Get the config
     MODEL_PATH = "./runs/vae/20200517_141657_squad_lr1e-2_tokdrop04"
+    # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
-    # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)
         cfg_dict["env"]["data_path"] = "./data/"
-        cfg_dict["eval"]["sampler"] = "beam"
+        cfg_dict["eval"]["sampler"] = "diverse_beam"
         cfg_dict["eval"]["topk"] = 32
         cfg_dict["training"]["dataset"] = "kaggle"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
-        cfg_dict["reranker"] = {
-            # 'strategy': 'qa'
-            "strategy": "ngram"
+        cfg_dict["diverse_beam"] = {
+            "beam_width": 16,
+            "beam_expansion": 8,
+            "length_alpha": 0.0,
+            "num_groups": 16,
+            "penalty_weight": 0.5,
         }
-        cfg_dict["encdec"]["prior_var_weight"] = 1.8
+        # cfg_dict["reranker"] = {
+        #     # 'strategy': 'qa'
+        #     "strategy": "ngram"
+        # }
+        cfg_dict["encdec"]["prior_var_weight"] = 1.1
         config = Config(cfg_dict)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
