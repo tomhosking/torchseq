@@ -78,7 +78,7 @@ class ModelAgent(BaseAgent):
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
-        if self.config.data.get("reranker", None) != None:
+        if self.config.data.get("reranker", None) is not None:
             if self.config.reranker.data.get("strategy", None) == "qa":
                 self.reranker = QaReranker(self.config, self.device)
             elif self.config.reranker.data.get("strategy", None) == "ngram":
