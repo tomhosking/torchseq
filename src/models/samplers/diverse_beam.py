@@ -21,6 +21,12 @@ def onehot(indexes, N=None, ignore_index=None):
     return output
 
 
+"""
+Based on https://arxiv.org/pdf/1610.02424.pdf
+When extending each hypothesis, consider the predictions made by previous elements in the beam, and enforce a diversity penalty.
+"""
+
+
 class DiverseBeamSearchSampler(nn.Module):
     def __init__(self, config, device):
         super(DiverseBeamSearchSampler, self).__init__()
