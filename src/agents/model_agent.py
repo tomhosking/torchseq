@@ -78,14 +78,15 @@ class ModelAgent(BaseAgent):
         self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
         self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
 
-        if self.config.data.get("reranker", None) == "qa":
-            self.reranker = QaReranker(self.config, self.device)
-        elif self.config.data.get("reranker", None) == "ngram":
-            self.reranker = NgramReranker(self.config, self.device, self.src_field)
-        elif self.config.data.get("reranker", None) == "backtranslate":
-            self.reranker = BacktranslateReranker(
-                self.config, self.device, self.src_field, self.model, self.decode_teacher_force, self.loss
-            )
+        if self.config.data.get("reranker", None) != None:
+            if self.config.reranker.data.get("strategy", None) == "qa":
+                self.reranker = QaReranker(self.config, self.device)
+            elif self.config.reranker.data.get("strategy", None) == "ngram":
+                self.reranker = NgramReranker(self.config, self.device, self.src_field)
+            elif self.config.reranker.data.get("strategy", None) == "backtranslate":
+                self.reranker = BacktranslateReranker(
+                    self.config, self.device, self.src_field, self.model, self.decode_teacher_force, self.loss
+                )
         else:
             self.reranker = TopkReducer(self.config, self.device)
 
@@ -397,9 +398,11 @@ class ModelAgent(BaseAgent):
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(BPE.decode(pred[: dev_output_lens[ix]]))
                     for ix, gold in enumerate(batch[self.tgt_field]):
-                        gold_output.append(BPE.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        # gold_output.append(BPE.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        gold_output.append(batch[self.tgt_field + "_text"][ix])
                     for ix, gold in enumerate(batch[self.src_field]):
-                        gold_input.append(BPE.decode(gold[: batch[self.src_field + "_len"][ix]]))
+                        # gold_input.append(BPE.decode(gold[: batch[self.src_field + "_len"][ix]]))
+                        gold_input.append(batch[self.src_field + "_text"][ix])
 
                     if batch_idx % 200 == 0 and not self.silent:
                         print(gold_output[-2:])
@@ -415,7 +418,8 @@ class ModelAgent(BaseAgent):
                             [BPE.decode(pred[jx][: dev_output_lens[ix][jx]]) for jx in range(min(len(pred), topk))]
                         )
                     for ix, gold in enumerate(batch[self.tgt_field]):
-                        gold_output.append(BPE.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        # gold_output.append(BPE.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        gold_output.append(batch[self.tgt_field + "_text"][ix])
 
                     # if batch_idx > 20:
                     #     break

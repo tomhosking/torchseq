@@ -45,7 +45,7 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/vae/20200513_202837_nqnewsqa_lr3e-3"
+    MODEL_PATH = "./runs/vae/20200517_141657_squad_lr1e-2_tokdrop04"
 
     # with open('./runs/paraphrase/20200110_112727_kaggle_3x3/config.json') as f:
     with open(MODEL_PATH + "/config.json") as f:
@@ -58,9 +58,9 @@ def init():
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
         cfg_dict["reranker"] = {
             # 'strategy': 'qa'
-            "strategy": None
+            "strategy": "ngram"
         }
-        cfg_dict["encdec"]["prior_var_weight"] = 1.2
+        cfg_dict["encdec"]["prior_var_weight"] = 1.8
         config = Config(cfg_dict)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
