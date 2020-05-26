@@ -91,83 +91,95 @@ class DiverseBeamSearchSampler(nn.Module):
                 output_done.unsqueeze(-1), pad_probs, torch.log_softmax(new_logits[:, :, -1, :], -1)
             )
 
-            scores_by_group = list(scores.chunk(num_groups, dim=1))
-            output_by_group = list(output_seq.chunk(num_groups, dim=1))
-            new_log_probs_by_group = list(new_log_probs.chunk(num_groups, dim=1))
-            new_output = [None] * num_groups
+            if seq_ix == 0:
+                top_expansions = torch.topk(new_log_probs, k=beam_width, dim=-1, largest=True)
 
-            for gix in range(num_groups):
-                if gix > 0:
-                    # augment scores with diversity penalty
-                    # which tokens have already been output at this step by other groups
-                    used_ids = torch.cat([seq[:, :, -1] for seq in new_output[:gix]], dim=1)
-
-                    used_ids_onehot = onehot(used_ids, N=self.config.prepro.vocab_size, ignore_index=BPE.pad_id)
-
-                    # build a mask of the already used tokens
-                    penalty_mask = torch.sum(used_ids_onehot, dim=1, keepdim=True).float()
-
-                    # subtract the penalty from the log probs
-                    new_log_probs_by_group[gix] -= penalty_mask * penalty_weight
-
-                # Generate expanded hypotheses
-                top_expansions = torch.topk(new_log_probs_by_group[gix], k=beam_expansion, dim=-1, largest=True)
-
-                # Concat with previous seqs
-                expanded_beam_ixs = torch.cat(
-                    [
-                        output_by_group[gix].unsqueeze(-2).expand(-1, -1, beam_expansion, -1),
-                        top_expansions.indices.unsqueeze(-1),
-                    ],
-                    dim=-1,
+                # On first iteration, the beams are all the same! So spread the topk across beams
+                output_seq = torch.cat(
+                    [output_seq, top_expansions.indices.unsqueeze(2)[:, 0, :, :].permute(0, 2, 1)], dim=-1
                 )
-                expanded_beam_scores = torch.cat(
-                    [
-                        scores_by_group[gix].unsqueeze(-2).expand(-1, -1, beam_expansion, -1),
-                        top_expansions.values.unsqueeze(-1),
-                    ],
-                    dim=-1,
-                )
+                scores = torch.cat([scores, top_expansions.values.unsqueeze(2)[:, 0, :, :].permute(0, 2, 1)], dim=-1)
+                # print(scores)
+                # exit()
+            else:
 
-                curr_seq_len = expanded_beam_ixs.shape[3]
+                scores_by_group = list(scores.chunk(num_groups, dim=1))
+                output_by_group = list(output_seq.chunk(num_groups, dim=1))
+                new_log_probs_by_group = list(new_log_probs.chunk(num_groups, dim=1))
+                new_output = [None] * num_groups
 
-                # Reshape to bsz x (beam*beam) x seq
-                expanded_beam_ixs = expanded_beam_ixs.view(
-                    curr_batch_size, beam_width * beam_expansion // num_groups, curr_seq_len
-                )
+                for gix in range(num_groups):
+                    if gix > 0:
+                        # augment scores with diversity penalty
+                        # which tokens have already been output at this step by other groups
+                        used_ids = torch.cat([seq[:, :, -1] for seq in new_output[:gix]], dim=1)
 
-                # Calculate length penalty
-                hypothesis_len = torch.sum(expanded_beam_ixs != BPE.pad_id, dim=-1)
-                len_alpha = self.config.diverse_beam.length_alpha
-                length_penalty = torch.pow((5 + hypothesis_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
+                        used_ids_onehot = onehot(used_ids, N=self.config.prepro.vocab_size, ignore_index=BPE.pad_id)
 
-                # Find top beams
-                expanded_beam_scores = expanded_beam_scores.view(
-                    curr_batch_size, beam_width * beam_expansion // num_groups, curr_seq_len
-                )
+                        # build a mask of the already used tokens
+                        penalty_mask = torch.sum(used_ids_onehot, dim=1, keepdim=True).float()
 
-                # Length penalty needs to be applied to *overall* score, not score for this token
-                beam_scores = torch.sum(expanded_beam_scores, dim=-1).to(scores_by_group[gix]) / length_penalty
+                        # subtract the penalty from the log probs
+                        new_log_probs_by_group[gix] -= penalty_mask * penalty_weight
 
-                top_beams = torch.topk(beam_scores, k=beam_width // num_groups, dim=-1)
+                    # Generate expanded hypotheses
+                    top_expansions = torch.topk(new_log_probs_by_group[gix], k=beam_expansion, dim=-1, largest=True)
 
-                # Reduce to just the best hypotheses
-                scores_by_group[gix] = torch.gather(
-                    expanded_beam_scores, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
-                )
-                new_output[gix] = torch.gather(
-                    expanded_beam_ixs, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
-                )
+                    # Concat with previous seqs
+                    expanded_beam_ixs = torch.cat(
+                        [
+                            output_by_group[gix].unsqueeze(-2).expand(-1, -1, beam_expansion, -1),
+                            top_expansions.indices.unsqueeze(-1),
+                        ],
+                        dim=-1,
+                    )
+                    expanded_beam_scores = torch.cat(
+                        [
+                            scores_by_group[gix].unsqueeze(-2).expand(-1, -1, beam_expansion, -1),
+                            top_expansions.values.unsqueeze(-1),
+                        ],
+                        dim=-1,
+                    )
 
-            # recombine the group outputs
-            new_output = torch.cat(new_output, dim=1)
-            scores = torch.cat(scores_by_group, dim=1)
+                    curr_seq_len = expanded_beam_ixs.shape[3]
 
-            # Use pad for the output for elements that have completed
-            output_done = (new_output[:, :, -2] == BPE.eos_id) | (new_output[:, :, -2] == BPE.pad_id)
-            new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
+                    # Reshape to bsz x (beam*beam) x seq
+                    expanded_beam_ixs = expanded_beam_ixs.view(
+                        curr_batch_size, beam_width * beam_expansion // num_groups, curr_seq_len
+                    )
 
-            output_seq = new_output
+                    # Calculate length penalty
+                    hypothesis_len = torch.sum(expanded_beam_ixs != BPE.pad_id, dim=-1)
+                    len_alpha = self.config.diverse_beam.length_alpha
+                    length_penalty = torch.pow((5 + hypothesis_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
+
+                    # Find top beams
+                    expanded_beam_scores = expanded_beam_scores.view(
+                        curr_batch_size, beam_width * beam_expansion // num_groups, curr_seq_len
+                    )
+
+                    # Length penalty needs to be applied to *overall* score, not score for this token
+                    beam_scores = torch.sum(expanded_beam_scores, dim=-1).to(scores_by_group[gix]) / length_penalty
+
+                    top_beams = torch.topk(beam_scores, k=beam_width // num_groups, dim=-1)
+
+                    # Reduce to just the best hypotheses
+                    scores_by_group[gix] = torch.gather(
+                        expanded_beam_scores, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
+                    )
+                    new_output[gix] = torch.gather(
+                        expanded_beam_ixs, 1, top_beams.indices.unsqueeze(-1).expand(-1, -1, curr_seq_len)
+                    )
+
+                # recombine the group outputs
+                new_output = torch.cat(new_output, dim=1)
+                scores = torch.cat(scores_by_group, dim=1)
+
+                # Use pad for the output for elements that have completed
+                output_done = (new_output[:, :, -2] == BPE.eos_id) | (new_output[:, :, -2] == BPE.pad_id)
+                new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
+
+                output_seq = new_output
 
             seq_ix += 1
 
