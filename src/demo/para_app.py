@@ -50,6 +50,7 @@ def init():
 
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)
+        # cfg_dict["task"] = "autoencoder"
         cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "diverse_beam"
         cfg_dict["eval"]["topk"] = 32
@@ -60,14 +61,14 @@ def init():
             "beam_width": 16,
             "beam_expansion": 8,
             "length_alpha": 0.0,
-            "num_groups": 16,
+            "num_groups": 8,
             "penalty_weight": 0.5,
         }
-        # cfg_dict["reranker"] = {
-        #     # 'strategy': 'qa'
-        #     "strategy": "ngram"
-        # }
-        cfg_dict["encdec"]["prior_var_weight"] = 1.1
+        cfg_dict["reranker"] = {
+            # 'strategy': 'qa'
+            "strategy": "ngram"
+        }
+        cfg_dict["encdec"]["prior_var_weight"] = 1.0
         config = Config(cfg_dict)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'

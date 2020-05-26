@@ -42,7 +42,9 @@ class NgramReranker(nn.Module):
 
         # take dot product to find token overlap between ref and candidates
         scores = torch.matmul(refs_k_hot, candidates_k_hot.transpose(-1, -2))
-        scores = scores.sum(-1).sum(-1)
+        scores = scores.squeeze(-1).squeeze(-1) / (
+            refs_k_hot.squeeze(-2).norm(dim=-1) * candidates_k_hot.squeeze(-2).norm(dim=-1)
+        )
 
         # Sort with lowest scores first - we want to minimise overlap
         sorted_scores, sorted_indices = torch.sort(scores, descending=False)
