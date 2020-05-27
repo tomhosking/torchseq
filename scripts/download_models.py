@@ -1,4 +1,4 @@
-from transformers import BartModel, BertModel, BertTokenizer, RobertaModel
+from transformers import BartModel, BertModel, BertTokenizer, RobertaModel, BertForQuestionAnswering
 
 mod = BartModel.from_pretrained('bart-large')
 
@@ -9,3 +9,5 @@ mod = BertModel.from_pretrained('bert-base-cased')
 
 mod = BertTokenizer.from_pretrained('bert-base-uncased')
 mod = BertTokenizer.from_pretrained('bert-base-cased')
+
+mod = BertForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")

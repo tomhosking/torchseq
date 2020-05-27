@@ -18,6 +18,7 @@ from models.rerankers.qa_reranker import QaReranker
 from models.rerankers.topk import TopkReducer
 from models.rerankers.ngram_reranker import NgramReranker
 from models.rerankers.backtranslate_reranker import BacktranslateReranker
+from models.rerankers.combo import CombinationReranker
 from models.samplers.teacher_force import TeacherForcedSampler
 from utils.logging import add_to_log
 from utils.mckenzie import update_mckenzie
@@ -86,9 +87,9 @@ class ModelAgent(BaseAgent):
             elif self.config.reranker.data.get("strategy", None) == "ngram":
                 self.reranker = NgramReranker(self.config, self.device, self.src_field)
             elif self.config.reranker.data.get("strategy", None) == "backtranslate":
-                self.reranker = BacktranslateReranker(
-                    self.config, self.device, self.src_field, self.model, self.decode_teacher_force, self.loss
-                )
+                self.reranker = BacktranslateReranker(self.config, self.device, self.src_field, self.model)
+            elif self.config.reranker.data.get("strategy", None) == "combo":
+                self.reranker = CombinationReranker(self.config, self.device, self.src_field, self.model)
         else:
             self.reranker = TopkReducer(self.config, self.device)
 
@@ -335,11 +336,11 @@ class ModelAgent(BaseAgent):
         # Rerank (or just select top-1)
         if sample_outputs and reduce_outputs:
             dev_output, dev_output_lens, dev_scores = self.reranker(
-                beam_output, beam_lens, batch, tgt_field, scores=beam_scores, presorted=True
+                beam_output, beam_lens, batch, tgt_field, scores=beam_scores, sort=True
             )
         elif sample_outputs:
             dev_output, dev_output_lens, dev_scores = self.reranker(
-                beam_output, beam_lens, batch, tgt_field, scores=beam_scores, presorted=True, top1=False
+                beam_output, beam_lens, batch, tgt_field, scores=beam_scores, sort=True, top1=False
             )
 
         if calculate_loss:
