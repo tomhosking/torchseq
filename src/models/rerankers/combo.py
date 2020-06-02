@@ -24,6 +24,9 @@ class CombinationReranker(nn.Module):
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
 
+        # store the original seq probs
+        nll_scores = scores
+
         # ngram scores are fraction of overlapping toks (lower is better)
         _, _, ngram_scores = self.ngram_reranker(candidates, lengths, batch, tgt_field, top1=False, sort=False)
 
@@ -36,7 +39,7 @@ class CombinationReranker(nn.Module):
         _, _, qa_scores = self.qa_reranker(candidates, lengths, batch, tgt_field, top1=False, sort=False)
 
         # QA score should dominate - but if all candidates are unanswerable, then fall back on other scores
-        scores = (ngram_scores + backtrans_scores) * (qa_scores * 0.9 + 0.1)
+        scores = (ngram_scores * 1.5 + (backtrans_scores + nll_scores) / 2) * (qa_scores * 0.9 + 0.1)
 
         if sort:
             sorted_scores, sorted_indices = torch.sort(scores, descending=True)

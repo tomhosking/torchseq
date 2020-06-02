@@ -6,6 +6,7 @@ from transformers import BartModel, BertModel, RobertaModel
 
 from models.pooling import MultiHeadedPooling
 from models.positional_embeddings import PositionalEncoding
+from models.multihead_output import MultiHeadOutput
 from utils.tokenizer import BPE
 
 
