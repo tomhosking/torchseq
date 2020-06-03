@@ -14,7 +14,7 @@ syntax:
 
 # Run tests for the library
 test:
-	pytest
+	pytest --cov
 
 # Run tests for the library
 testall:

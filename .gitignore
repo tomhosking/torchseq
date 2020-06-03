@@ -17,3 +17,6 @@
 /src/external
 .vscode
 /notebooks
+
+.coverage
+coverage.xml
