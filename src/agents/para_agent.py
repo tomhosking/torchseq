@@ -101,7 +101,7 @@ class ParaphraseAgent(ModelAgent):
 
         loss += torch.mean(this_loss, dim=0)
 
-        if self.config.encdec.data.get("variational", False):
+        if self.config.encdec.data.get("variational", False) or self.config.data.get("variational_projection", False):
             kl_loss = torch.mean(get_kl(self.model.mu, self.model.logvar))
 
             kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)

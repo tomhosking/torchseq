@@ -75,6 +75,7 @@ class TransformerParaphraseModel(nn.Module):
             num_heads=config.data.get("output_projection_heads", 1),
             projection_init=projection_init,
             freeze_projection=config.freeze_projection,
+            variational=self.config.data.get("variational_projection", False)
         )
 
         self.encoder_pooling = MultiHeadedPooling(
@@ -223,6 +224,10 @@ class TransformerParaphraseModel(nn.Module):
             output_embedded, memory.permute(1, 0, 2), tgt_mask=tgt_mask, tgt_key_padding_mask=output_pad_mask
         ).permute(1, 0, 2)
 
+
         logits = self.output_projection(output)
+
+        if self.config.data.get("variational_projection", False):
+            self.mu, self.logvar = self.output_projection.mu, self.output_projection.logvar
 
         return logits, memory
