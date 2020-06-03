@@ -16,7 +16,7 @@ def test_qa():
 
     use_cuda = torch.cuda.is_available()
 
-    instance = PreTrainedQA(device="cpu")
+    instance = PreTrainedQA(device=("cuda" if use_cuda else "cpu"))
 
     preds = instance.infer_batch(
         ["Who was the oldest cat?", "Who was a nice puppet?"],
