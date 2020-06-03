@@ -36,7 +36,7 @@ jobs:
         pip install pytest pytest-cov codecov
         make test
     - name: Upload coverage
-        run: |
+      run: |
         CODECOV_TOKEN="28535f9f-825a-435e-bb4e-e1de2aa63da3" codecov
 
         
