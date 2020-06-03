@@ -3,7 +3,9 @@ import torch.nn as nn
 
 
 class MultiHeadOutput(nn.Module):
-    def __init__(self, embedding_dim, vocab_size, num_heads=1, projection_init=None, freeze_projection=False, variational=False):
+    def __init__(
+        self, embedding_dim, vocab_size, num_heads=1, projection_init=None, freeze_projection=False, variational=False
+    ):
         super(MultiHeadOutput, self).__init__()
 
         assert embedding_dim % num_heads == 0, "Embedding dim must be divisible by num heads!"
@@ -13,7 +15,6 @@ class MultiHeadOutput(nn.Module):
         self.variational = variational
 
         self.embeds_to_logits = nn.Linear(self.dim_per_head, vocab_size, bias=False).cpu()
-        
 
         if variational:
             self.embeds_to_logvars = nn.Linear(self.dim_per_head, vocab_size, bias=False).cpu()
@@ -31,7 +32,7 @@ class MultiHeadOutput(nn.Module):
             bsz = embeds.shape[0]
             # Split embeds into num_heads smaller embeddings
             embeds_chunked = embeds.view(bsz, -1, self.num_heads, self.dim_per_head)
-            
+
             # Project each head
             logits_split = self.embeds_to_logits(embeds_chunked)
 
@@ -45,6 +46,7 @@ class MultiHeadOutput(nn.Module):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
                     return mu + eps * std
+
                 print("var")
                 logits_split = reparameterize(self.mu, self.logvar)
 
@@ -61,9 +63,7 @@ class MultiHeadOutput(nn.Module):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
                     return mu + eps * std
-                
-                logits = reparameterize(self.mu, self.logvar)
 
-            
+                logits = reparameterize(self.mu, self.logvar)
 
         return logits
