@@ -14,10 +14,12 @@ syntax:
 
 # Run tests for the library
 test:
-	pytest --cov
+	pytest --cov=./src
 
 # Run tests for the library
 testall:
-	RUN_SLOW=1 pytest
+	RUN_SLOW=1 pytest --cov=./src
 
-
+# Send coverage report to codecov
+coverage:
+	CODECOV_TOKEN="28535f9f-825a-435e-bb4e-e1de2aa63da3" codecov

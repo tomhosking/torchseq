@@ -37,6 +37,6 @@ jobs:
         make test
     - name: Upload coverage
       run: |
-        CODECOV_TOKEN="28535f9f-825a-435e-bb4e-e1de2aa63da3" codecov
+        make coverage
 
         

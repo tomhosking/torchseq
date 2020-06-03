@@ -2,8 +2,7 @@
 
 Seq2Seq framework built in Pytorch
 
-[![codecov](https://codecov.io/gh/tomhosking/torchseq/branch/master/graph/badge.svg?token=GK9W2LMJDU)](https://codecov.io/gh/tomhosking/torchseq)
-
+[![codecov](https://codecov.io/gh/tomhosking/torchseq/branch/master/graph/badge.svg?token=GK9W2LMJDU)](https://codecov.io/gh/tomhosking/torchseq)  ![TorchSeq](https://github.com/tomhosking/torchseq/workflows/TorchSeq/badge.svg)
 
 ## Demo
 
