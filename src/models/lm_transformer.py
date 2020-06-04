@@ -71,7 +71,7 @@ class TransformerLanguageModel(nn.Module):
 
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
-        output_max_len = output.size()[-1]
+        # output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
 
