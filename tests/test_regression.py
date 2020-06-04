@@ -57,4 +57,4 @@ def test_bert_embeds():
     # Now check the output
     assert abs(loss.item() - 2.5665) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 17.308) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 17.338) < 1e-2, "BLEU score is different to expected!"

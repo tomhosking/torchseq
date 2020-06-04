@@ -436,7 +436,7 @@ class ModelAgent(BaseAgent):
         add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
         if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
-            dev_bleu = 100 * bleu_corpus(gold_output, pred_output)
+            dev_bleu = bleu_corpus(gold_output, pred_output)
 
             dev_sari = 100 * np.mean(
                 [SARIsent(gold_input[ix], pred_output[ix], [gold_output[ix]]) for ix in range(len(pred_output))]

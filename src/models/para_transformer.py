@@ -64,24 +64,24 @@ class TransformerParaphraseModel(nn.Module):
         decoder_norm = nn.LayerNorm(config.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
-        self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
-        # Init output projection layer with embedding matrix
-        if config.embedding_dim == config.raw_embedding_dim:
-            self.output_projection.weight.data = self.embeddings.weight.data
-        self.output_projection.weight.requires_grad = not config.freeze_projection
+        # self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+        # # Init output projection layer with embedding matrix
+        # if config.embedding_dim == config.raw_embedding_dim:
+        #     self.output_projection.weight.data = self.embeddings.weight.data
+        # self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        # if config.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
-        #     projection_init = self.embeddings.weight.data
-        # else:
-        #     projection_init = None
-        # self.output_projection = MultiHeadOutput(
-        #     config.embedding_dim,
-        #     config.prepro.vocab_size,
-        #     num_heads=config.data.get("output_projection_heads", 1),
-        #     projection_init=projection_init,
-        #     freeze_projection=config.freeze_projection,
-        #     variational=self.config.data.get("variational_projection", False),
-        # )
+        if config.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
+            projection_init = self.embeddings.weight.data
+        else:
+            projection_init = None
+        self.output_projection = MultiHeadOutput(
+            config.embedding_dim,
+            config.prepro.vocab_size,
+            num_heads=config.data.get("output_projection_heads", 1),
+            projection_init=projection_init,
+            freeze_projection=config.freeze_projection,
+            variational=self.config.data.get("variational_projection", False),
+        )
 
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,

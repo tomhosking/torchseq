@@ -7,6 +7,8 @@ from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
 from utils.bleu import compute_bleu
 from utils.sari import SARIsent
 
+import sacrebleu
+
 
 def tokenize(text):
     # return text.split(' ')
@@ -22,9 +24,10 @@ def bleu(gold, prediction, order=4):
 
 # takes a list of untokenized strings as inputs
 def bleu_corpus(golds, preds, order=4):
-    return compute_bleu(
-        [[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order
-    )[0]
+    return sacrebleu.corpus_bleu([p.lower() for p in preds], [[g.lower() for g in golds]], smooth_method=None).score
+    # return compute_bleu(
+    #     [[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order
+    # )[0]
 
 
 def ibleu_corpus(golds, preds, inputs, alpha=0.8):
