@@ -44,7 +44,7 @@ class PretrainedLM:
         return log_probs
 
     def get_batch(self, str_in):
-        tok_unpadded = [self.tokenizer.encode(x) for x in str_in]
+        tok_unpadded = [self.tokenizer.encode(x, add_prefix_space=True) for x in str_in]
         max_len = max([len(x) for x in tok_unpadded])
         tok_batch = [x + [0 for i in range(max_len - len(x))] for x in tok_unpadded]
         mask_batch = [[1 for i in range(len(x))] + [0 for i in range(max_len - len(x))] for x in tok_unpadded]
@@ -65,8 +65,8 @@ class PretrainedLM:
 
         # Predict all tokens
         with torch.no_grad():
-            predictions, _ = self.model(tokens_tensor)
-        all_probs = torch.softmax(predictions, -1)
+            loss, logits = self.model(tokens_tensor, labels=tokens_tensor, attention_mask=mask_tensor)[:2]
+        all_probs = torch.softmax(logits, -1)
 
         torch.cuda.empty_cache()
 
@@ -76,5 +76,12 @@ class PretrainedLM:
         probs = torch.gather(all_probs, 2, tokens_tensor.unsqueeze(-1)).squeeze(-1)
 
         log_probs = torch.log(probs)
-        nll = -1 * torch.mean(log_probs * mask_tensor, -1)
+
+        # print(loss)
+        # print(log_probs, mask_tensor)
+
+        # print(self.tokenizer.decode(tokens_tensor[0].tolist()))
+        # print(self.tokenizer.decode(tokens_tensor[1].tolist()))
+
+        nll = -1 * torch.sum(log_probs * mask_tensor, -1) / torch.sum(mask_tensor, -1)
         return nll.tolist()
