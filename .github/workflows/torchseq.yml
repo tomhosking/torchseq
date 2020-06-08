@@ -35,8 +35,8 @@ jobs:
       run: |
         pip install pytest pytest-cov codecov
         make test
-    - name: Upload coverage
-      run: |
-        make coverage
+    # - name: Upload coverage
+    #   run: |
+    #     make coverage
 
         
