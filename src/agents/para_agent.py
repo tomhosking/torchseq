@@ -40,6 +40,8 @@ class ParaphraseAgent(ModelAgent):
                     "models/qdmr-squad",
                     "models/nq_newsqa-udep",
                     "models/nq_newsqa-udep-deptree",
+                    "models/squad_nq_newsqa-udep",
+                    "models/squad_nq_newsqa-udep-deptree",
                     "models/naturalquestions-udep",
                     "models/newsqa-udep",
                     "models/naturalquestions-udep-deptree",

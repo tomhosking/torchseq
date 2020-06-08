@@ -54,7 +54,8 @@ class AQAgent(ModelAgent):
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
             if (
-                self.config.training.dataset in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa"]
+                self.config.training.dataset
+                in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa", "squad_nq_newsqa"]
                 or self.config.training.dataset[:5] == "squad"
             ):
                 self.data_loader = SquadDataLoader(config=config)
