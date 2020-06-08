@@ -23,3 +23,5 @@ testall:
 # Send coverage report to codecov
 coverage:
 	CODECOV_TOKEN="28535f9f-825a-435e-bb4e-e1de2aa63da3" codecov
+	rm .coverage
+	rm coverage.xml

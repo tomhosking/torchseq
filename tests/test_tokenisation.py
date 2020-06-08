@@ -52,3 +52,28 @@ def test_bert_cased_basic():
         102,
     ], "BERT cased tok ids are wrong for basic example!"
     assert decoded == TEST_STRING, "BERT cased tokenisation isn't reversible for basic example!"
+
+
+def test_roberta_basic():
+    BPE.pad_id = 1
+    BPE.embedding_dim = 512
+    BPE.model_slug = "roberta-base"
+
+    TEST_STRING = "This is a test sentence."
+
+    BPE.reload()
+
+    tokenized = BPE.tokenise(TEST_STRING)
+    decoded = BPE.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+
+    assert [tok["id"] for tok in tokenized] == [
+        0,
+        713,
+        16,
+        10,
+        1296,
+        3645,
+        4,
+        2,
+    ], "RoBERTa tok ids are wrong for basic example!"
+    assert decoded == TEST_STRING, "RoBERTa tokenisation isn't reversible for basic example!"

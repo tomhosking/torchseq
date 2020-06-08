@@ -4,7 +4,7 @@ from collections import Counter
 
 from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
 
-from utils.bleu import compute_bleu
+# from utils.bleu import compute_bleu
 from utils.sari import SARIsent
 
 import sacrebleu
@@ -17,9 +17,9 @@ def tokenize(text):
     return tokens
 
 
-# takes a single untokenised string as input
-def bleu(gold, prediction, order=4):
-    return compute_bleu([[tokenize(gold)]], [tokenize(prediction)], smooth=False, max_order=order)[0]
+# # takes a single untokenised string as input
+# def bleu(gold, prediction, order=4):
+#     return compute_bleu([[tokenize(gold)]], [tokenize(prediction)], smooth=False, max_order=order)[0]
 
 
 # takes a list of untokenized strings as inputs
