@@ -24,7 +24,7 @@ def test_config():
     assert cfg_obj.int == 1
     assert cfg_obj.float == 0.2
     assert cfg_obj.str == "hello"
-    assert cfg_obj.bool == True
+    assert cfg_obj.bool is True
     assert cfg_obj.nested.value == "present"
 
     assert merged_obj.int == 2
