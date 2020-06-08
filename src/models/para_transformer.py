@@ -126,6 +126,9 @@ class TransformerParaphraseModel(nn.Module):
             )
             src_mask = torch.triu(src_mask, diagonal=1)
 
+            if self.config.encdec.data.get("attention_limit", None) is not None:
+                src_mask = torch.tril(src_mask, diagonal=self.config.encdec.data.get("attention_limit", 0))
+
             context_mask = (
                 torch.arange(max_ctxt_len)[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()
             ).to(self.device)
@@ -203,6 +206,9 @@ class TransformerParaphraseModel(nn.Module):
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-inf")).to(self.device)
         tgt_mask = torch.triu(tgt_mask, diagonal=1)
+
+        if self.config.encdec.data.get("attention_limit", None) is not None:
+            tgt_mask = torch.tril(tgt_mask, diagonal=self.config.encdec.data.get("attention_limit", 0))
 
         # ie how many indices are non-pad
         output_len = torch.sum(torch.ne(output, BPE.pad_id), dim=-1)
