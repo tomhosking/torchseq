@@ -13,23 +13,9 @@ from utils.config import Config, merge_cfg_dicts
 
 def test_config():
 
-    main_cfg_dict = {
-        "int": 1,
-        "float": 0.2,
-        "str": "hello",
-        "bool": True,
-        "nested": {
-            "value": "present"
-        }
-    }
+    main_cfg_dict = {"int": 1, "float": 0.2, "str": "hello", "bool": True, "nested": {"value": "present"}}
 
-    mask_cfg_dict = {
-        "int": 2,
-        "nested": {
-            "value": "overwritten",
-            "newval": "added"
-        }
-    }
+    mask_cfg_dict = {"int": 2, "nested": {"value": "overwritten", "newval": "added"}}
 
     cfg_obj = Config(main_cfg_dict)
 
