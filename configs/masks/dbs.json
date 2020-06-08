@@ -1,0 +1,12 @@
+{
+    "eval": {
+        "sampler": "diverse_beam"
+    },
+    "diverse_beam": {
+        "beam_width": 16,
+        "beam_expansion": 8,
+        "length_alpha": 2.0,
+        "num_groups": 8,
+        "penalty_weight": 0.5
+    }
+}

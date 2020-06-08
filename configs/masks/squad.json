@@ -1,0 +1,5 @@
+{
+    "training": {
+        "dataset": "squad"
+    }
+}

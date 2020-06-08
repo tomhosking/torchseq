@@ -12,7 +12,7 @@ from agents.para_agent import ParaphraseAgent
 from agents.prepro_agent import PreprocessorAgent
 from args import FLAGS as FLAGS
 from datasets import cqa_triple, loaders
-from utils.config import Config
+from utils.config import Config, merge_cfg_dicts
 from utils.seed import set_seed
 from utils.tokenizer import BPE
 
@@ -25,7 +25,16 @@ def main(_):
         if FLAGS.data_path is not None:
             cfg_dict["env"]["data_path"] = FLAGS.data_path
 
-        config = Config(cfg_dict)
+    if FLAGS.config_mask is not None and len(FLAGS.config_mask) > 0:
+        for mask_path in FLAGS.config_mask:
+            with open(mask_path) as f:
+                cfg_mask = json.load(f)
+            cfg_dict = merge_cfg_dicts(cfg_dict, cfg_mask)
+
+    if FLAGS.validate_train:
+        cfg_dict["training"]["shuffle_data"] = False
+
+    config = Config(cfg_dict)
 
     set_seed(FLAGS.seed)
 

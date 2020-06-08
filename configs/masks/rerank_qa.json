@@ -1,0 +1,5 @@
+{
+    "reranker": {
+        "strategy": "qa"
+    }
+}
