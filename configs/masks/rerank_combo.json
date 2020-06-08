@@ -1,4 +1,5 @@
 {
+    "name": "%_rerankcombo",
     "reranker": {
         "strategy": "combo"
     }

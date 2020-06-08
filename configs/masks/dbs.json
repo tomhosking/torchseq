@@ -1,4 +1,5 @@
 {
+    "name": "%_diversebeam16x8_8g",
     "eval": {
         "sampler": "diverse_beam"
     },

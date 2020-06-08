@@ -1,0 +1,11 @@
+{
+    "name": "%_beam16x2",
+    "eval": {
+        "sampler": "beam"
+    },
+    "diverse_beam": {
+        "beam_width": 16,
+        "beam_expansion": 2,
+        "length_alpha": 2.0,
+    }
+}

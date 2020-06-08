@@ -74,14 +74,22 @@ class TransformerParaphraseModel(nn.Module):
             projection_init = self.embeddings.weight.data
         else:
             projection_init = None
-        self.output_projection = MultiHeadOutput(
-            config.embedding_dim,
-            config.prepro.vocab_size,
-            num_heads=config.data.get("output_projection_heads", 1),
-            projection_init=projection_init,
-            freeze_projection=config.freeze_projection,
-            variational=self.config.data.get("variational_projection", False),
-        )
+
+        if config.data.get("output_projection_heads", 1) > 1 or self.config.data.get("variational_projection", False):
+            self.output_projection = MultiHeadOutput(
+                config.embedding_dim,
+                config.prepro.vocab_size,
+                num_heads=config.data.get("output_projection_heads", 1),
+                projection_init=projection_init,
+                freeze_projection=config.freeze_projection,
+                variational=self.config.data.get("variational_projection", False),
+            )
+        else:
+            self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+            # Init output projection layer with embedding matrix
+            if projection_init is not None:
+                self.output_projection.weight.data = projection_init
+            self.output_projection.weight.requires_grad = not config.freeze_projection
 
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
