@@ -77,7 +77,9 @@ class SquadDataset(Dataset):
                     parsed_triple.ctxt_as_ids() + [Tokenizer().eos_id] * 2 + parsed_triple.ans_as_ids()[1:]
                 )
             else:
-                ctxt = torch.LongTensor(parsed_triple.ans_as_ids() + [Tokenizer().eos_id] + parsed_triple.ctxt_as_ids())
+                ctxt = torch.LongTensor(
+                    parsed_triple.ans_as_ids() + [Tokenizer().eos_id] + parsed_triple.ctxt_as_ids()
+                )
             sample = {
                 "c": ctxt,
                 "q": torch.LongTensor(parsed_triple.q_as_ids()),

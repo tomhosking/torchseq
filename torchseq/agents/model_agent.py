@@ -421,7 +421,10 @@ class ModelAgent(BaseAgent):
                     topk = self.config.eval.data.get("topk", 1)
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(
-                            [Tokenizer().decode(pred[jx][: dev_output_lens[ix][jx]]) for jx in range(min(len(pred), topk))]
+                            [
+                                Tokenizer().decode(pred[jx][: dev_output_lens[ix][jx]])
+                                for jx in range(min(len(pred), topk))
+                            ]
                         )
                     for ix, gold in enumerate(batch[self.tgt_field]):
                         # gold_output.append(Tokenizer().decode(gold[: batch[self.tgt_field + "_len"][ix]]))

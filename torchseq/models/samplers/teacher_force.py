@@ -33,7 +33,9 @@ class TeacherForcedSampler(nn.Module):
             masked = torch.full_like(output, Tokenizer().mask_id)
 
             output = torch.where(
-                torch.bitwise_and(rand < self.config.training.data.get("token_dropout", 0), output != Tokenizer().pad_id),
+                torch.bitwise_and(
+                    rand < self.config.training.data.get("token_dropout", 0), output != Tokenizer().pad_id
+                ),
                 masked,
                 output,
             )

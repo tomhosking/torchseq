@@ -53,7 +53,6 @@ def test_roberta_basic():
 
     TEST_STRING = "This is a test sentence."
 
-
     tokenized = Tokenizer().tokenise(TEST_STRING)
     decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 

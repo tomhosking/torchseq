@@ -114,7 +114,9 @@ class DiverseBeamSearchSampler(nn.Module):
                         # which tokens have already been output at this step by other groups
                         used_ids = torch.cat([seq[:, :, -1] for seq in new_output[:gix]], dim=1)
 
-                        used_ids_onehot = onehot(used_ids, N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id)
+                        used_ids_onehot = onehot(
+                            used_ids, N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
+                        )
 
                         # build a mask of the already used tokens
                         penalty_mask = torch.sum(used_ids_onehot, dim=1, keepdim=True).float()
@@ -176,7 +178,9 @@ class DiverseBeamSearchSampler(nn.Module):
                 scores = torch.cat(scores_by_group, dim=1)
 
                 # Use pad for the output for elements that have completed
-                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (new_output[:, :, -2] == Tokenizer().pad_id)
+                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (
+                    new_output[:, :, -2] == Tokenizer().pad_id
+                )
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
 
                 output_seq = new_output

@@ -6,10 +6,12 @@ from transformers import BartModel, BertModel, RobertaModel
 
 class Singleton(type):
     _instances = {}
+
     def __call__(cls, *args, **kwargs):
         if cls not in cls._instances:
             cls._instances[cls] = super(Singleton, cls).__call__(*args, **kwargs)
         return cls._instances[cls]
+
 
 class Tokenizer(metaclass=Singleton):
 
@@ -49,8 +51,7 @@ class Tokenizer(metaclass=Singleton):
 
         else:
             self.engine = BertWordPieceTokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.txt".format(model_slug),
-                lowercase=(model_slug[-8:] == "-uncased"),
+                "./data/pretrained-vocabs/{:}-vocab.txt".format(model_slug), lowercase=(model_slug[-8:] == "-uncased"),
             )
 
             self.pad_id = self.engine.token_to_id("[PAD]")
@@ -63,24 +64,21 @@ class Tokenizer(metaclass=Singleton):
             print(self.model_slug)
             print(self.bos_id)
 
-    
     # instance = None
     # def __init__(self, model_slug=None):
     #     if not Tokenizer.instance and model_slug is not None:
     #         Tokenizer.instance = Tokenizer.__Tokenizer(model_slug)
     #     elif model_slug is None:
     #         raise Exception("Tokenizer needs to be initialized with a model name before use!")
-        
+
     # def __getattr__(self, name):
     #     print(name)
     #     return getattr(Tokenizer.instance, name)
 
-    
     def reload(self, model_slug):
         del Tokenizer._instances[Tokenizer]
         Tokenizer(model_slug)
 
-    
     def decode(self, token_id_tensor):
         return (
             Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
@@ -88,7 +86,6 @@ class Tokenizer(metaclass=Singleton):
             # .replace("# ", "#")
         )
 
-    
     def get_embeddings(self, model_slug):
         return torch.load("./data/pretrained-vocabs/{:}.embeddings.pt".format(model_slug))
 

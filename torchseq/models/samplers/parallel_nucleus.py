@@ -129,7 +129,9 @@ class ParallelNucleusSampler(nn.Module):
 
             # Use pad for the output for elements that have completed
             if seq_ix > 0:
-                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (new_output[:, :, -2] == Tokenizer().pad_id)
+                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (
+                    new_output[:, :, -2] == Tokenizer().pad_id
+                )
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
 
             output_seq = new_output
