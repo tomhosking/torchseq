@@ -9,6 +9,7 @@ from absl import app
 from . import utils as test_utils
 
 from torchseq.utils.config import Config, merge_cfg_dicts
+from torchseq.utils.singleton import Singleton
 
 
 def test_config():
@@ -33,3 +34,16 @@ def test_config():
     assert merged_obj.int == 2
     assert merged_obj.nested.value == "overwritten"
     assert merged_obj.nested.newval == "added"
+
+
+def test_singleton():
+
+    class TestClass(metaclass=Singleton):
+        def __init__(self, val):
+            self.val = val
+
+    x = TestClass('x')
+    y = TestClass('y')
+
+    assert x.val == 'x'
+    assert x.val == y.val
