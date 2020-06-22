@@ -1,20 +1,17 @@
 import torch
 
-from tests import utils as test_utils
-from utils.tokenizer import BPE
+from . import utils as test_utils
+from torchseq.utils.tokenizer import Tokenizer
 
 
 def test_bert_uncased_basic():
-    BPE.pad_id = 30522
-    BPE.embedding_dim = 512
-    BPE.model_slug = "bert-base-uncased"
 
     TEST_STRING = "This is a test sentence."
 
-    BPE.reload()
+    Tokenizer("bert-base-uncased").reload("bert-base-uncased")
 
-    tokenized = BPE.tokenise(TEST_STRING)
-    decoded = BPE.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = Tokenizer().tokenise(TEST_STRING)
+    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         101,
@@ -30,16 +27,13 @@ def test_bert_uncased_basic():
 
 
 def test_bert_cased_basic():
-    BPE.pad_id = 28996
-    BPE.embedding_dim = 512
-    BPE.model_slug = "bert-base-cased"
 
     TEST_STRING = "This is a test sentence."
 
-    BPE.reload()
+    Tokenizer("bert-base-cased").reload("bert-base-cased")
 
-    tokenized = BPE.tokenise(TEST_STRING)
-    decoded = BPE.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = Tokenizer().tokenise(TEST_STRING)
+    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         101,
@@ -55,16 +49,13 @@ def test_bert_cased_basic():
 
 
 def test_roberta_basic():
-    BPE.pad_id = 1
-    BPE.embedding_dim = 512
-    BPE.model_slug = "roberta-base"
+    Tokenizer("roberta-base").reload("roberta-base")
 
     TEST_STRING = "This is a test sentence."
 
-    BPE.reload()
 
-    tokenized = BPE.tokenise(TEST_STRING)
-    decoded = BPE.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = Tokenizer().tokenise(TEST_STRING)
+    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         0,

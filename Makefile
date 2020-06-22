@@ -1,24 +1,24 @@
 # Check that source code meets quality standards
 check:
-	black --check --line-length 119 --target-version py36 tests src
-	flake8  --config .flake8 tests src
+	black --check --line-length 119 --target-version py36 tests torchseq
+	flake8  --config .flake8 tests torchseq
 
 
 # Format source code automatically
 format:
-	black --line-length 119 --target-version py36 tests src
+	black --line-length 119 --target-version py36 tests torchseq
 
 # Check syntax
 syntax:
-	flake8 ./src --count --select=E9,F63,F7,F82 --show-source --statistics
+	flake8 ./torchseq --count --select=E9,F63,F7,F82 --show-source --statistics
 
 # Run tests for the library
 test:
-	pytest --cov=./src
+	pytest --cov=./torchseq
 
 # Run tests for the library
 testall:
-	RUN_SLOW=1 pytest --cov=./src
+	RUN_SLOW=1 pytest --cov=./torchseq
 
 # Send coverage report to codecov
 coverage:

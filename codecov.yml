@@ -6,6 +6,6 @@ coverage:
         target: auto
         threshold: 5%
         paths: 
-          - "src"
+          - "torchseq"
 ignore:
   - ".aqenv/*"

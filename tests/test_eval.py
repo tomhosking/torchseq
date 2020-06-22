@@ -6,11 +6,12 @@ import torch
 from absl import app
 
 
-from tests import utils as test_utils
+from . import utils as test_utils
 
-from utils import metrics
+from torchseq.utils import metrics
 
-from utils.fleiss import fleiss
+from torchseq.utils.fleiss import fleiss
+
 import numpy as np
 
 

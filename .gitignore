@@ -4,6 +4,7 @@
 /runs_bak
 /models
 /data
+/data_bak
 /configs
 /scripts
 
@@ -14,9 +15,11 @@
 *.sh
 
 /aqenv
-/src/external
+/torchseq/external
 .vscode
 /notebooks
 
 .coverage
 coverage.xml
+
+*.egg-info/

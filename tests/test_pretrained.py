@@ -6,10 +6,10 @@ import torch
 from absl import app
 
 
-from tests import utils as test_utils
+from . import utils as test_utils
 
-from pretrained.qa import PreTrainedQA
-from pretrained.lm import PretrainedLM
+from torchseq.pretrained.qa import PreTrainedQA
+from torchseq.pretrained.lm import PretrainedLM
 
 
 @test_utils.slow

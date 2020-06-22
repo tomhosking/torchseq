@@ -1,6 +1,0 @@
-{
-    "name": "%_rerankqa",
-    "reranker": {
-        "strategy": "qa"
-    }
-}

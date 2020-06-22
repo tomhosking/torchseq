@@ -2,7 +2,7 @@ absl-py==0.9.0
 tensorboard==2.2.2
 torch==1.5.0
 tqdm
-# bpemb
+# Tokenizermb
 nltk==3.5.0
 transformers==2.9.0
 tokenizers==0.7.0

@@ -6,9 +6,9 @@ import torch
 from absl import app
 
 
-from tests import utils as test_utils
+from . import utils as test_utils
 
-from utils.config import Config, merge_cfg_dicts
+from torchseq.utils.config import Config, merge_cfg_dicts
 
 
 def test_config():
@@ -26,6 +26,9 @@ def test_config():
     assert cfg_obj.str == "hello"
     assert cfg_obj.bool is True
     assert cfg_obj.nested.value == "present"
+
+    assert cfg_obj.get("str", "not hello") == "hello"
+    assert cfg_obj.get("missing", "default_val") == "default_val"
 
     assert merged_obj.int == 2
     assert merged_obj.nested.value == "overwritten"

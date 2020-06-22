@@ -6,14 +6,14 @@ import torch
 from absl import app
 
 
-from tests import utils as test_utils
+from . import utils as test_utils
 
-from agents.aq_agent import AQAgent
-from agents.para_agent import ParaphraseAgent
-from datasets import cqa_triple, loaders
-from utils.config import Config
-from utils.seed import set_seed
-from utils.tokenizer import BPE
+from torchseq.agents.aq_agent import AQAgent
+from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.datasets import cqa_triple, loaders
+from torchseq.utils.config import Config
+from torchseq.utils.seed import set_seed
+from torchseq.utils.tokenizer import Tokenizer
 
 
 @test_utils.slow
@@ -40,9 +40,7 @@ def test_bert_embeds():
     set_seed(SEED)
 
     # This is not a good way of passing this value in
-    BPE.pad_id = config.prepro.vocab_size
-    BPE.embedding_dim = config.embedding_dim
-    BPE.model_slug = config.encdec.bert_model
+    Tokenizer(config.encdec.bert_model).reload(config.encdec.bert_model)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + config.name + "_REGRESSION"
 

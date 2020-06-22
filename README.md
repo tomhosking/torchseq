@@ -6,7 +6,7 @@ Seq2Seq framework built in Pytorch
 
 ## Demo
 
-Run `./src/demo/app.py`
+Run `./torchseq/demo/app.py`
 
 ## Features
 
