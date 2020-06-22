@@ -37,13 +37,12 @@ def test_config():
 
 
 def test_singleton():
-
     class TestClass(metaclass=Singleton):
         def __init__(self, val):
             self.val = val
 
-    x = TestClass('x')
-    y = TestClass('y')
+    x = TestClass("x")
+    y = TestClass("y")
 
-    assert x.val == 'x'
+    assert x.val == "x"
     assert x.val == y.val
