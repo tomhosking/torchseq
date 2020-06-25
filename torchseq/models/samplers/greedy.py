@@ -17,8 +17,6 @@ class GreedySampler(nn.Module):
 
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
 
-        print(Tokenizer().bos_id)
-
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().bos_id).to(self.device)
         logits = (

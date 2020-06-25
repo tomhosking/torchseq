@@ -1,6 +1,6 @@
 from transformers import BartModel, BertModel, BertTokenizer, RobertaModel, BertForQuestionAnswering
 
-mod = BartModel.from_pretrained('bart-large')
+mod = BartModel.from_pretrained('facebook/bart-large')
 
 mod = RobertaModel.from_pretrained('roberta-base')
 

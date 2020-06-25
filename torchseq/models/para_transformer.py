@@ -74,15 +74,22 @@ class TransformerParaphraseModel(nn.Module):
         else:
             projection_init = None
 
-        if config.data.get("output_projection_heads", 1) > 1 or self.config.data.get("variational_projection", False):
+        if (
+            config.data.get("output_projection_heads", 1) > 1
+            or config.data.get("variational_projection", False)
+            or config.data.get("normed_projection", False)
+            or config.data.get("output_projection_embeddings", 1) > 1
+        ):
             self.output_projection = MultiHeadOutput(
                 config.embedding_dim,
                 config.prepro.vocab_size,
                 num_heads=config.data.get("output_projection_heads", 1),
+                num_projections=config.data.get("output_projection_embeddings", 1),
                 projection_init=projection_init,
                 freeze_projection=config.freeze_projection,
                 variational=self.config.data.get("variational_projection", False),
-            )
+                normed=self.config.data.get("normed_projection", False),
+            ).cpu()
         else:
             self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
             # Init output projection layer with embedding matrix
@@ -236,6 +243,8 @@ class TransformerParaphraseModel(nn.Module):
         output = self.decoder(
             output_embedded, memory.permute(1, 0, 2), tgt_mask=tgt_mask, tgt_key_padding_mask=output_pad_mask
         ).permute(1, 0, 2)
+
+        
 
         logits = self.output_projection(output)
 
