@@ -244,8 +244,6 @@ class TransformerParaphraseModel(nn.Module):
             output_embedded, memory.permute(1, 0, 2), tgt_mask=tgt_mask, tgt_key_padding_mask=output_pad_mask
         ).permute(1, 0, 2)
 
-        
-
         logits = self.output_projection(output)
 
         if self.config.data.get("variational_projection", False):

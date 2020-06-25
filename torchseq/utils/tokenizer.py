@@ -28,8 +28,8 @@ class Tokenizer(metaclass=Singleton):
 
         if "bart-" in model_slug or "roberta-" in model_slug:
             self.engine = ByteLevelBPETokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.json".format(model_slug.split('/')[-1]),
-                "./data/pretrained-vocabs/{:}-merges.txt".format(model_slug.split('/')[-1]),
+                "./data/pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]),
+                "./data/pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1]),
                 lowercase=False,
             )
 
@@ -44,7 +44,8 @@ class Tokenizer(metaclass=Singleton):
 
         else:
             self.engine = BertWordPieceTokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.txt".format(model_slug.split('/')[-1]), lowercase=(model_slug[-8:] == "-uncased"),
+                "./data/pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1]),
+                lowercase=(model_slug[-8:] == "-uncased"),
             )
 
             self.pad_id = self.engine.token_to_id("[PAD]")
@@ -77,7 +78,7 @@ class Tokenizer(metaclass=Singleton):
         )
 
     def get_embeddings(self, model_slug):
-        return torch.load("./data/pretrained-vocabs/{:}.embeddings.pt".format(model_slug.split('/')[-1]))
+        return torch.load("./data/pretrained-vocabs/{:}.embeddings.pt".format(model_slug.split("/")[-1]))
 
     def tokenise(self, text, add_bos_eos=True):
         output = Tokenizer().engine.encode(text)
