@@ -44,7 +44,7 @@ class TeacherForcedSampler(nn.Module):
             dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
             output = torch.cat([dummy_token, output], dim=1)
 
-        pred_logits, _ = model(batch, output, tgt_field=tgt_field)
+        pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=None)
 
         if BART_HACK:
             output = output[:, 1:]
@@ -53,4 +53,4 @@ class TeacherForcedSampler(nn.Module):
 
         logits = torch.cat([logits, pred_logits], dim=1)
 
-        return output, logits, None
+        return output, logits, None, memory

@@ -69,7 +69,7 @@ class BeamSearchSampler(nn.Module):
         batch_tiled = {k: _tile_batch(x) for k, x in batch.items() if k[-5:] != "_text"}
 
         seq_ix = 0
-        memory = None
+        memory = {}
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
@@ -160,4 +160,4 @@ class BeamSearchSampler(nn.Module):
 
         output_seq = torch.gather(output_seq, 1, sorted_indices.unsqueeze(-1).expand(-1, -1, output_seq.shape[2]))
 
-        return output_seq, sorted_scores, output_len
+        return output_seq, sorted_scores, output_len, {}

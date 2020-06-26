@@ -120,6 +120,8 @@ class TransformerParaphraseModel(nn.Module):
         self.positional_embeddings_dec = PositionalEncoding(config.embedding_dim)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
+        if memory is None:
+            memory = dict()
 
         # Re-normalise the projections...
         with torch.no_grad():
@@ -132,7 +134,7 @@ class TransformerParaphraseModel(nn.Module):
         output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
-        if memory is None:
+        if "encoding" not in memory:
             src_mask = (
                 torch.FloatTensor(max_ctxt_len, max_ctxt_len)
                 .fill_(float("-inf") if self.config.directional_masks else 0.0)
@@ -198,24 +200,24 @@ class TransformerParaphraseModel(nn.Module):
             if self.config.encdec.data.get("residual", False):
                 encoding = self.encoder_projection(torch.cat([encoding, ctxt_embedded.permute(1, 0, 2)], dim=-1))
 
-            memory = (
+            encoding = (
                 self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
                 if self.config.encdec.data.get("pooling", True)
                 else encoding
             )
 
             if self.config.encdec.data.get("variational", False):
-                self.mu = memory
-                self.logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+                memory["mu"] = encoding
+                memory["logvar"] = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
                 def reparameterize(mu, logvar):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
                     return mu + eps * std * self.config.encdec.data.get("prior_var_weight", 1.0)
 
-                memory = reparameterize(self.mu, self.logvar)
+                encoding = reparameterize(memory["mu"], memory["logvar"])
 
-            # memory = encoding
+            memory["encoding"] = encoding
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-inf")).to(self.device)
@@ -241,12 +243,15 @@ class TransformerParaphraseModel(nn.Module):
         output_embedded = self.positional_embeddings_dec(output_embedded.permute(1, 0, 2))
 
         output = self.decoder(
-            output_embedded, memory.permute(1, 0, 2), tgt_mask=tgt_mask, tgt_key_padding_mask=output_pad_mask
+            output_embedded,
+            memory["encoding"].permute(1, 0, 2),
+            tgt_mask=tgt_mask,
+            tgt_key_padding_mask=output_pad_mask,
         ).permute(1, 0, 2)
 
-        logits = self.output_projection(output)
-
         if self.config.data.get("variational_projection", False):
-            self.mu, self.logvar = self.output_projection.mu, self.output_projection.logvar
+            logits, memory["mu"], memory["logvar"] = self.output_projection(output)
+        else:
+            logits = self.output_projection(output)
 
         return logits, memory

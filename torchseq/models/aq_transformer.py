@@ -186,6 +186,8 @@ class TransformerAqModel(nn.Module):
         self.positional_embeddings_dec = PositionalEncoding(config.embedding_dim)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
+        if memory is None:
+            memory = dict()
 
         # Re-normalise the projections...
         with torch.no_grad():
@@ -201,7 +203,7 @@ class TransformerAqModel(nn.Module):
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch["c_len"][:, None].cpu()).to(self.device)
 
         # First pass? Construct the encoding
-        if memory is None:
+        if "encoding" not in memory:
             src_mask = (
                 torch.FloatTensor(max_ctxt_len, max_ctxt_len)
                 .fill_(float("-inf") if self.config.directional_masks else 0.0)
@@ -315,9 +317,11 @@ class TransformerAqModel(nn.Module):
             )  # , encoding, ctxt_embedded.permute(1,0,2), memory_pooled.expand(-1, max_ctxt_len, -1)
 
             if len(memory_elements) > 1 or True:
-                memory = self.encoder_projection(memory_full)
+                memory["encoding"] = self.encoder_projection(memory_full)
             else:
-                memory = memory_full
+                memory["encoding"] = memory_full
+
+            memory["enc_len"] = batch["c"].shape[1]
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-inf")).to(self.device)
@@ -341,7 +345,7 @@ class TransformerAqModel(nn.Module):
 
         output = self.decoder(
             output_embedded,
-            memory.permute(1, 0, 2),
+            memory["encoding"].permute(1, 0, 2),
             tgt_mask=tgt_mask,
             tgt_key_padding_mask=output_pad_mask,
             memory_key_padding_mask=context_mask,

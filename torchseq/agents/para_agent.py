@@ -90,7 +90,7 @@ class ParaphraseAgent(ModelAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
 
-        output, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
+        output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
 
         this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
@@ -104,7 +104,7 @@ class ParaphraseAgent(ModelAgent):
         loss += torch.mean(this_loss, dim=0)
 
         if self.config.encdec.data.get("variational", False) or self.config.data.get("variational_projection", False):
-            kl_loss = torch.mean(get_kl(self.model.mu, self.model.logvar))
+            kl_loss = torch.mean(get_kl(memory["mu"], memory["logvar"]))
 
             kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
 

@@ -99,7 +99,7 @@ class ParallelNucleusSampler(nn.Module):
         batch_tiled = {k: _tile_batch(x) for k, x in batch.items() if k[-5:] != "_text"}
 
         seq_ix = 0
-        memory = None
+        memory = {}
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
@@ -156,4 +156,4 @@ class ParallelNucleusSampler(nn.Module):
 
         output = output_seq
 
-        return output, sorted_scores, torch.sum(output_seq != Tokenizer().pad_id, dim=-1)
+        return output, sorted_scores, torch.sum(output_seq != Tokenizer().pad_id, dim=-1), memory

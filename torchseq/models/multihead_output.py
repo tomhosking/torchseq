@@ -68,8 +68,8 @@ class MultiHeadOutput(nn.Module):
             logits_weights = torch.softmax(self.head_weight(embeds), dim=-1).unsqueeze(-1)
 
             if self.variational:
-                self.mu = logits_split
-                self.logvar = self.embeds_to_logvars(embeds_chunked).unsqueeze(1)
+                mu = logits_split
+                logvar = self.embeds_to_logvars(embeds_chunked).unsqueeze(1)
 
                 def reparameterize(mu, logvar):
                     std = torch.exp(0.5 * logvar)
@@ -77,7 +77,7 @@ class MultiHeadOutput(nn.Module):
                     return mu + eps * std
 
                 print("var")
-                logits_split = reparameterize(self.mu, self.logvar)
+                logits_split = reparameterize(mu, logvar)
 
             # Combine logits from each head
             logits = torch.sum(logits_split * logits_weights, dim=2)
@@ -87,14 +87,17 @@ class MultiHeadOutput(nn.Module):
             logits = self.embeds_to_logits(embeds)
 
             if self.variational:
-                self.mu = logits
-                self.logvar = self.embeds_to_logvars(embeds)
+                mu = logits
+                logvar = self.embeds_to_logvars(embeds)
 
                 def reparameterize(mu, logvar):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
                     return mu + eps * std
 
-                logits = reparameterize(self.mu, self.logvar)
+                logits = reparameterize(mu, logvar)
 
-        return logits
+        if self.variational:
+            return logits, mu, logvar
+        else:
+            return logits

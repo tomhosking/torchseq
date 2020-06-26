@@ -32,7 +32,7 @@ class GreedySampler(nn.Module):
             output = torch.cat([dummy_token, output], dim=1)
 
         seq_ix = 0
-        memory = None
+        memory = {}
         while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
 
             new_logits, memory = model(batch, output, memory)
@@ -52,4 +52,4 @@ class GreedySampler(nn.Module):
         if BART_HACK:
             output = output[:, 1:]
 
-        return output, logits, torch.sum(output != Tokenizer().pad_id, dim=-1)
+        return output, logits, torch.sum(output != Tokenizer().pad_id, dim=-1), memory

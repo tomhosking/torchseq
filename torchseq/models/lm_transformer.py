@@ -62,6 +62,9 @@ class TransformerLanguageModel(nn.Module):
 
     def forward(self, batch, output, memory=None, tgt_field=None):
 
+        if memory is None:
+            memory = dict()
+
         # Re-normalise the projections...
         with torch.no_grad():
             self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)

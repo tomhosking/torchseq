@@ -155,7 +155,7 @@ class PretrainedModularModel(nn.Module):
         # bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
 
         # First pass? Construct the encoding
-        if memory is None:
+        if memory["encoding"] is None:
             src_mask = (
                 torch.FloatTensor(max_ctxt_len, max_ctxt_len)
                 .fill_(float("-inf") if self.config.directional_masks else 0.0)
@@ -171,10 +171,11 @@ class PretrainedModularModel(nn.Module):
             # encoding = encoding.permute(1, 0, 2)  # -> bsz x seq x dim
 
             # memory = self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
-            memory = encoding
 
             if self.config.encdec.data.get("module", False):
-                memory = self.module(memory.transpose(0, 1)).transpose(0, 1)
+                encoding = self.module(encoding.transpose(0, 1)).transpose(0, 1)
+
+            memory["encoding"] = encoding
 
             # memory = self.encoder_projection(memory)
 
@@ -192,7 +193,7 @@ class PretrainedModularModel(nn.Module):
 
         output = self.decoder(
             output,
-            memory,
+            memory["encoding"],
             ~context_mask,
             output_pad_mask,
             decoder_causal_mask=tgt_mask,

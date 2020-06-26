@@ -179,7 +179,7 @@ class ModelAgent(BaseAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
 
-        output, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
+        output, logits, _, _ = self.decode_teacher_force(self.model, batch, tgt_field)
 
         this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
@@ -286,7 +286,7 @@ class ModelAgent(BaseAgent):
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and not self.silent:
 
                     with torch.no_grad():
-                        greedy_output, _, output_lens = self.decode_greedy(self.model, batch, self.tgt_field)
+                        greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
 
                     print(Tokenizer().decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
                     print(Tokenizer().decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
@@ -316,16 +316,16 @@ class ModelAgent(BaseAgent):
             dev_output_lens = None
             dev_scores = None
         elif self.config.eval.sampler == "nucleus":
-            beam_output, beam_scores, beam_lens = self.decode_nucleus(self.model, batch, tgt_field)
+            beam_output, beam_scores, beam_lens, _ = self.decode_nucleus(self.model, batch, tgt_field)
 
         elif self.config.eval.sampler == "beam":
-            beam_output, beam_scores, beam_lens = self.decode_beam(self.model, batch, tgt_field)
+            beam_output, beam_scores, beam_lens, _ = self.decode_beam(self.model, batch, tgt_field)
 
         elif self.config.eval.sampler == "diverse_beam":
-            beam_output, beam_scores, beam_lens = self.decode_dbs(self.model, batch, tgt_field)
+            beam_output, beam_scores, beam_lens, _ = self.decode_dbs(self.model, batch, tgt_field)
 
         elif self.config.eval.sampler == "greedy":
-            greedy_output, greedy_scores, greedy_lens = self.decode_greedy(self.model, batch, tgt_field)
+            greedy_output, greedy_scores, greedy_lens, _ = self.decode_greedy(self.model, batch, tgt_field)
             # Greedy returns a single estimate, so expand to create a fake "beam"
             beam_output = greedy_output.unsqueeze(1)
             beam_scores = greedy_scores.unsqueeze(1)
@@ -344,7 +344,7 @@ class ModelAgent(BaseAgent):
             )
 
         if calculate_loss:
-            _, logits, _ = self.decode_teacher_force(self.model, batch, tgt_field)
+            _, logits, _, _ = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
             normed_loss = torch.mean(
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0

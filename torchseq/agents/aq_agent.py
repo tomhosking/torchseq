@@ -84,7 +84,7 @@ class AQAgent(ModelAgent):
     def step_train(self, batch, tgt_field):
         loss = 0
 
-        output, logits, _ = self.decode_teacher_force(self.model, batch, "q")  # bsd
+        output, logits, _, _ = self.decode_teacher_force(self.model, batch, "q")  # bsd
 
         this_loss = self.loss(logits.permute(0, 2, 1), batch["q"])
 
