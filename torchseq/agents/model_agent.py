@@ -46,7 +46,7 @@ class ModelAgent(BaseAgent):
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
-            os.makedirs(os.path.join(self.output_path, self.config.tag, self.run_id, "model"))
+            os.makedirs(os.path.join(self.output_path, self.config.tag, self.run_id))
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "config.json"), "w") as f:
                 json.dump(config.data, f, indent=4)
 
@@ -124,6 +124,11 @@ class ModelAgent(BaseAgent):
                 if "dampening" not in param_group:
                     param_group["dampening"] = 0
 
+        pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")
+
+        with open(pointer_filepath, "w") as f:
+            f.write(file_name)
+
     def save_checkpoint(self, file_name="checkpoint.pth.tar"):
         """
         Checkpoint saver
@@ -131,7 +136,8 @@ class ModelAgent(BaseAgent):
         :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
         :return:
         """
-
+        save_path = os.path.join(self.output_path, self.config.tag, self.run_id, "model")
+        os.makedirs(save_path, exist_ok=True)
         torch.save(
             {
                 "global_step": self.global_step,
@@ -140,7 +146,7 @@ class ModelAgent(BaseAgent):
                 "loss": self.loss,
                 "best_metric": self.best_metric,
             },
-            os.path.join(self.output_path, self.config.tag, self.run_id, "model", file_name),
+            os.path.join(save_path, file_name),
         )
 
     def begin_epoch_hook(self):
@@ -161,7 +167,7 @@ class ModelAgent(BaseAgent):
         """
         batch = self.text_to_batch(input, self.device)
 
-        _, output, output_lens, scores = self.step_validate(
+        _, output, output_lens, scores, qg_metric = self.step_validate(
             batch, tgt_field=self.tgt_field, sample_outputs=True, calculate_loss=False, reduce_outputs=reduce_outputs
         )
 
@@ -349,9 +355,29 @@ class ModelAgent(BaseAgent):
             normed_loss = torch.mean(
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
+
+            # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
+            omega = 0.7
+            if self.config.get("nucleus_sampling", None) is not None:
+                top_p = self.config.nucleus_sampling.cutoff
+            else:
+                top_p = 0.9
+
+            from torchseq.models.samplers.parallel_nucleus import top_k_top_p_filtering, onehot
+
+            nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
+            gt_onehot = onehot(batch[tgt_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id)
+            accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (batch[tgt_field + "_len"] - 1)
+
+            diversity = torch.sum(torch.sum(torch.gt(nucleus_prob * gt_onehot, 0) * 1.0, dim=-1), dim=-1) / (
+                batch[tgt_field + "_len"] - 1
+            )
+
+            qg_metric = omega * accuracy + (1 - omega) * diversity
+
         else:
             normed_loss = None
-        return normed_loss, dev_output, dev_output_lens, dev_scores
+        return normed_loss, dev_output, dev_output_lens, dev_scores, qg_metric
 
     def validate(self, save=False, force_save_output=False, use_test=False, use_train=False):
         """
@@ -365,6 +391,8 @@ class ModelAgent(BaseAgent):
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()
         test_loss = 0
+
+        qg_metric = []
 
         pred_output = []
         gold_output = []
@@ -388,7 +416,7 @@ class ModelAgent(BaseAgent):
 
                 curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
 
-                this_loss, dev_output, dev_output_lens, dev_scores = self.step_validate(
+                this_loss, dev_output, dev_output_lens, dev_scores, dev_qg_metric = self.step_validate(
                     batch,
                     self.tgt_field,
                     sample_outputs=self.config.eval.data.get("sample_outputs", True),
@@ -396,6 +424,8 @@ class ModelAgent(BaseAgent):
                 )
 
                 test_loss += this_loss * curr_batch_size
+
+                qg_metric.extend(dev_qg_metric.tolist())
 
                 num_samples += curr_batch_size
 
@@ -438,6 +468,8 @@ class ModelAgent(BaseAgent):
 
         add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
+        qg_metric = sum(qg_metric) / len(qg_metric)
+
         if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
             dev_bleu = bleu_corpus(gold_output, pred_output)
 
@@ -470,7 +502,7 @@ class ModelAgent(BaseAgent):
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
                 f.write("\n".join([json.dumps(pred) for pred in pred_output]))
 
-            self.all_metrics_at_best = {"nll": test_loss.item()}
+            self.all_metrics_at_best = {"nll": test_loss.item(), "qg_metric": qg_metric}
 
             if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
                 self.all_metrics_at_best = {

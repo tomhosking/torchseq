@@ -24,7 +24,6 @@ from torchseq.models.cross_entropy import CrossEntropyLossWithLS
 from torchseq.models.suppression_loss import SuppressionLoss
 
 from torchseq.utils.mckenzie import update_mckenzie
-from torchseq.utils.metrics import bleu_corpus
 from torchseq.utils.tokenizer import Tokenizer
 
 
