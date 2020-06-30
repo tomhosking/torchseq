@@ -4,7 +4,7 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from torchseq.datasets.squad_dataset import SquadDataset
+from torchseq.datasets.qa_dataset import QADataset
 from torchseq.utils.seed import init_worker
 from torchseq.utils.tokenizer import Tokenizer
 

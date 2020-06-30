@@ -12,12 +12,12 @@ from tqdm import tqdm
 
 from torchseq.agents.model_agent import ModelAgent
 
-from torchseq.datasets.cqa_triple import CQATriple
+from torchseq.datasets.qa_triple import QATriple
 
-from torchseq.datasets.newsqa_loader import NewsqaDataLoader
+
 from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
-from torchseq.datasets.squad_dataset import SquadDataset
-from torchseq.datasets.squad_loader import SquadDataLoader
+from torchseq.datasets.qa_dataset import QADataset
+from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.aq_transformer import TransformerAqModel
 from torchseq.models.pretrained_modular import PretrainedModularModel
 from torchseq.models.cross_entropy import CrossEntropyLossWithLS
@@ -57,7 +57,7 @@ class AQAgent(ModelAgent):
                 in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa", "squad_nq_newsqa"]
                 or self.config.training.dataset[:5] == "squad"
             ):
-                self.data_loader = SquadDataLoader(config=config)
+                self.data_loader = QADataLoader(config=config)
             # elif self.config.training.dataset == 'newsqa':
             #     self.data_loader = NewsqaDataLoader(config=config)
             else:
@@ -100,9 +100,9 @@ class AQAgent(ModelAgent):
 
         return {
             k: (v.to(self.device) if k[-5:] != "_text" else v)
-            for k, v in SquadDataset.pad_and_order_sequences(
+            for k, v in QADataset.pad_and_order_sequences(
                 [
-                    SquadDataset.to_tensor(
+                    QADataset.to_tensor(
                         x,
                         sent_window=self.config.prepro.sent_window,
                         tok_window=self.config.prepro.tok_window,

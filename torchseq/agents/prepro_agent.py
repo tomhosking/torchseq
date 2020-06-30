@@ -5,7 +5,7 @@ import torch
 
 from torchseq.agents.base import BaseAgent
 from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
-from torchseq.datasets.squad_dataset import SquadDataset
+from torchseq.datasets.qa_dataset import QADataset
 
 
 class PreprocessorAgent(BaseAgent):
@@ -13,9 +13,9 @@ class PreprocessorAgent(BaseAgent):
         super().__init__(config)
 
         if self.config.training.dataset == "squad":
-            self.train = SquadDataset(os.path.join(config.env.data_path, "squad/"), config, dev=False, test=False)
-            self.valid = SquadDataset(os.path.join(config.env.data_path, "squad/"), config, dev=True, test=False)
-            self.test = SquadDataset(os.path.join(config.env.data_path, "squad/"), config, dev=False, test=True)
+            self.train = QADataset(os.path.join(config.env.data_path, "squad/"), config, dev=False, test=False)
+            self.valid = QADataset(os.path.join(config.env.data_path, "squad/"), config, dev=True, test=False)
+            self.test = QADataset(os.path.join(config.env.data_path, "squad/"), config, dev=False, test=True)
 
         elif self.config.training.dataset == "paranmt":
             self.train = ParaphraseDataset(
@@ -24,9 +24,7 @@ class PreprocessorAgent(BaseAgent):
             self.valid = ParaphraseDataset(
                 os.path.join(config.env.data_path, "paranmt/"), config, dev=True, test=False
             )
-            self.test = (
-                []
-            )  # SquadDataset(os.path.join(config.env.data_path, 'paranmt/'), config, dev=False, test=True)
+            self.test = []  # QADataset(os.path.join(config.env.data_path, 'paranmt/'), config, dev=False, test=True)
 
         else:
             raise Exception("Unrecognised dataset passed to preprocessor: {:}".format(self.config.training.dataset))

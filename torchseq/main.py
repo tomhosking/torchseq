@@ -10,8 +10,9 @@ from absl import app
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.para_agent import ParaphraseAgent
 from torchseq.agents.prepro_agent import PreprocessorAgent
+from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import FLAGS as FLAGS
-from torchseq.datasets import cqa_triple, loaders
+from torchseq.datasets import qa_triple, loaders
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.seed import set_seed
 from torchseq.utils.tokenizer import Tokenizer
@@ -69,10 +70,9 @@ def main(_):
         preprocessor.logger.info("...done!")
         return
 
-    if config.task == "aq":
-        agent = AQAgent(config, run_id, FLAGS.output_path, silent=FLAGS.silent, training_mode=FLAGS.train)
-    elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, run_id, FLAGS.output_path, silent=FLAGS.silent)
+    agents = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
+
+    agent = agents[config.task](config, run_id, FLAGS.output_path, silent=FLAGS.silent, training_mode=FLAGS.train)
 
     if FLAGS.load_chkpt is not None:
         agent.logger.info("Loading from checkpoint...")

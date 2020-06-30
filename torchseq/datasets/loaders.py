@@ -8,7 +8,7 @@ import numpy as np
 # import spacy
 
 
-def load_squad_dataset(path, dev=False, test=False, v2=False):
+def load_qa_dataset(path, dev=False, test=False, v2=False):
     expected_version = "v2.0" if v2 else "1.1"
     if v2:
         filename = "train-v2.0.json" if not dev else "dev-v2.0.json"
@@ -25,7 +25,7 @@ def load_squad_dataset(path, dev=False, test=False, v2=False):
 
 
 def load_squad_triples(path, dev=False, test=False, v2=False, as_dict=False, ans_list=False):
-    raw_data = load_squad_dataset(path, dev=dev, test=test, v2=v2)
+    raw_data = load_qa_dataset(path, dev=dev, test=test, v2=v2)
     triples = [] if not as_dict else {}
     for doc in raw_data:
         for para in doc["paragraphs"]:

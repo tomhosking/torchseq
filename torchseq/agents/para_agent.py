@@ -7,8 +7,8 @@ from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
 from torchseq.datasets.paraphrase_loader import ParaphraseDataLoader
 from torchseq.datasets.paraphrase_pair import ParaphrasePair
 from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
-from torchseq.datasets.squad_dataset import SquadDataset
-from torchseq.datasets.squad_loader import SquadDataLoader
+from torchseq.datasets.qa_dataset import QADataset
+from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.para_transformer import TransformerParaphraseModel
 from torchseq.models.pretrained_modular import PretrainedModularModel
 from torchseq.models.suppression_loss import SuppressionLoss
@@ -63,7 +63,7 @@ class ParaphraseAgent(ModelAgent):
                 "newsqa",
                 "naturalquestions",
             ]:
-                self.data_loader = SquadDataLoader(config=config)
+                self.data_loader = QADataLoader(config=config)
                 self.src_field = "q"
                 self.tgt_field = "q"
             else:
@@ -131,8 +131,8 @@ class ParaphraseAgent(ModelAgent):
 
             return {
                 k: (v.to(self.device) if k[-5:] != "_text" else v)
-                for k, v in SquadDataset.pad_and_order_sequences(
-                    [SquadDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
+                for k, v in QADataset.pad_and_order_sequences(
+                    [QADataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
                 ).items()
             }
         else:

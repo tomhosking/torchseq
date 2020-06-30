@@ -49,7 +49,7 @@ class ParaphraseDataLoader:
         self.train_loader = DataLoader(
             train,
             batch_size=config.training.batch_size,
-            shuffle=False,
+            shuffle=self.config.training.data.get("shuffle_data", True),
             num_workers=0,
             collate_fn=ParaphraseDataset.pad_and_order_sequences,
             worker_init_fn=init_worker,

@@ -3,13 +3,14 @@ from itertools import cycle
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import IterableDataset
+from torch.utils.data import IterableDataset, Dataset
 
 
 from torchseq.utils.tokenizer import Tokenizer
 
 
-class LangmodellingDataset(IterableDataset):
+# class LangmodellingDataset(IterableDataset):
+class LangmodellingDataset(Dataset):
     def __init__(self, path, config, dev=False, test=False, repeat=False):
         self.config = config
 
@@ -22,41 +23,45 @@ class LangmodellingDataset(IterableDataset):
 
         self.length = 0
 
-        if test and not os.path.exists(os.path.join(self.path, "samples.{:}.txt".format(self.variant))):
+        if test and not os.path.exists(os.path.join(self.path, "sentences.{:}.txt".format(self.variant))):
             self.exists = False
         else:
 
             # TODO: Can we get the length without reading the whole file?
-            with open(os.path.join(self.path, "samples.{:}.txt".format(self.variant))) as f:
-                for line in f:
-                    self.length += 1
+            with open(os.path.join(self.path, "sentences.{:}.txt".format(self.variant))) as f:
+                # for line in f:
+                #     self.length += 1
+                self.samples = [x.strip() for x in f.readlines()]
 
     def __len__(self):
-        return self.length
+        return len(self.samples)
 
-    def __iter__(self):
-        return self.generator()
+    # def __iter__(self):
+    #     return self.generator()
 
-    def generator(self):
-        worker_info = torch.utils.data.get_worker_info()
-        if not worker_info:
-            worker_id = 0
-            num_workers = 1
-        else:
-            worker_id = worker_info.id
-            num_workers = worker_info.num_workers
+    # def generator(self):
+    #     worker_info = torch.utils.data.get_worker_info()
+    #     if not worker_info:
+    #         worker_id = 0
+    #         num_workers = 1
+    #     else:
+    #         worker_id = worker_info.id
+    #         num_workers = worker_info.num_workers
 
-        with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
-            num_repeats = 0
-            while self.repeat or num_repeats < 1:
-                num_repeats += 1
-                for ix, line in enumerate(f):
-                    if num_workers > 1 and ix % num_workers != worker_id:
-                        continue
-                    x = line.strip("\n")
+    #     with open(os.path.join(self.path, "sentences.{:}.txt".format(self.variant))) as f:
+    #         num_repeats = 0
+    #         while self.repeat or num_repeats < 1:
+    #             num_repeats += 1
+    #             for ix, line in enumerate(f):
+    #                 if num_workers > 1 and ix % num_workers != worker_id:
+    #                     continue
+    #                 x = line.strip("\n")
 
-                    sample = {"sent": x}
-                    yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
+    #                 sample = {"sent": x}
+    #                 yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
+
+    def __getitem__(self, idx):
+        return LangmodellingDataset.to_tensor({"sent": self.samples[idx]}, tok_window=self.config.prepro.tok_window)
 
     @staticmethod
     def to_tensor(x, tok_window=64):

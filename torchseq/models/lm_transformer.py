@@ -19,7 +19,7 @@ class TransformerLanguageModel(nn.Module):
 
         # Embedding layers
         self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-        self.embeddings.weight.data = Tokenizer().get_embeddings(config.encdec.bert_model)
+        # self.embeddings.weight.data = Tokenizer().get_embeddings(config.encdec.bert_model)
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
@@ -72,7 +72,7 @@ class TransformerLanguageModel(nn.Module):
                 self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # Get some sizes
-        max_ctxt_len = batch[self.src_field].shape[1]
+        max_ctxt_len = output.shape[1]
         # output_max_len = output.size()[-1]
 
         # First pass? Construct the encoding
@@ -88,7 +88,7 @@ class TransformerLanguageModel(nn.Module):
             self.device
         )
 
-        ctxt_toks_embedded = self.embeddings(batch[self.src_field]).to(self.device)
+        ctxt_toks_embedded = self.embeddings(output).to(self.device)
 
         # Build the context
         if self.config.raw_embedding_dim != self.config.embedding_dim:

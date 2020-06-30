@@ -25,6 +25,7 @@ from torchseq.utils.mckenzie import update_mckenzie
 from torchseq.utils.metrics import bleu_corpus
 from torchseq.utils.sari import SARIsent
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.perplexity import get_perplexity
 
 from torchseq.models.ranger import Ranger
 
@@ -356,28 +357,9 @@ class ModelAgent(BaseAgent):
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
 
-            # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
-            omega = 0.7
-            if self.config.get("nucleus_sampling", None) is not None:
-                top_p = self.config.nucleus_sampling.cutoff
-            else:
-                top_p = 0.9
-
-            from torchseq.models.samplers.parallel_nucleus import top_k_top_p_filtering, onehot
-
-            nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
-            gt_onehot = onehot(batch[tgt_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id)
-            accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (batch[tgt_field + "_len"] - 1)
-
-            diversity = torch.sum(torch.sum(torch.gt(nucleus_prob * gt_onehot, 0) * 1.0, dim=-1), dim=-1) / (
-                batch[tgt_field + "_len"] - 1
-            )
-
-            qg_metric = omega * accuracy + (1 - omega) * diversity
-
         else:
             normed_loss = None
-        return normed_loss, dev_output, dev_output_lens, dev_scores, qg_metric
+        return normed_loss, dev_output, dev_output_lens, dev_scores, logits
 
     def validate(self, save=False, force_save_output=False, use_test=False, use_train=False, save_model=True):
         """
@@ -393,6 +375,7 @@ class ModelAgent(BaseAgent):
         test_loss = 0
 
         qg_metric = []
+        perplexities = []
 
         pred_output = []
         gold_output = []
@@ -416,7 +399,7 @@ class ModelAgent(BaseAgent):
 
                 curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
 
-                this_loss, dev_output, dev_output_lens, dev_scores, dev_qg_metric = self.step_validate(
+                this_loss, dev_output, dev_output_lens, dev_scores, logits = self.step_validate(
                     batch,
                     self.tgt_field,
                     sample_outputs=self.config.eval.data.get("sample_outputs", True),
@@ -425,9 +408,37 @@ class ModelAgent(BaseAgent):
 
                 test_loss += this_loss * curr_batch_size
 
+                # Calc QG metric
+                # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
+                omega = 0.7
+                if self.config.get("nucleus_sampling", None) is not None:
+                    top_p = self.config.nucleus_sampling.cutoff
+                else:
+                    top_p = 0.9
+                from torchseq.models.samplers.parallel_nucleus import top_k_top_p_filtering, onehot
+
+                nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
+                gt_onehot = onehot(
+                    batch[self.tgt_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
+                )
+                accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (
+                    batch[self.tgt_field + "_len"] - 1
+                )
+
+                diversity = torch.sum(torch.sum(torch.gt(nucleus_prob * gt_onehot, 0) * 1.0, dim=-1), dim=-1) / (
+                    batch[self.tgt_field + "_len"] - 1
+                )
+
+                dev_qg_metric = omega * accuracy + (1 - omega) * diversity
                 qg_metric.extend(dev_qg_metric.tolist())
 
                 num_samples += curr_batch_size
+
+                # Calc perplexity
+                this_ppl = get_perplexity(
+                    logits, batch[self.tgt_field], vocab_size=self.config.vocab_size, ignore_index=Tokenizer().pad_id
+                )
+                perplexities.extend(this_ppl)
 
                 #  Handle top-1 sampling
                 if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
@@ -469,6 +480,7 @@ class ModelAgent(BaseAgent):
         add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
         qg_metric = sum(qg_metric) / len(qg_metric)
+        ppl = sum(perplexities) / len(perplexities)
 
         if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
             dev_bleu = bleu_corpus(gold_output, pred_output)
@@ -484,6 +496,7 @@ class ModelAgent(BaseAgent):
             self.logger.info("BLEU: {:}".format(dev_bleu))
             self.logger.info("EM: {:}".format(dev_em))
             self.logger.info("SARI: {:}".format(dev_sari))
+            self.logger.info("PPL: {:}".format(ppl))
 
         else:
             dev_bleu = "n/a"
@@ -502,7 +515,7 @@ class ModelAgent(BaseAgent):
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
                 f.write("\n".join([json.dumps(pred) for pred in pred_output]))
 
-            self.all_metrics_at_best = {"nll": test_loss.item(), "qg_metric": qg_metric}
+            self.all_metrics_at_best = {"nll": test_loss.item(), "qg_metric": qg_metric, "ppl": ppl}
 
             if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
                 self.all_metrics_at_best = {

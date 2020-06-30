@@ -6,12 +6,12 @@ import torch
 import torch.nn.functional as F
 from torch.utils.data import Dataset
 
-from torchseq.datasets.cqa_triple import CQATriple
+from torchseq.datasets.qa_triple import QATriple
 from torchseq.datasets.loaders import load_squad_triples
 from torchseq.utils.tokenizer import Tokenizer
 
 
-class SquadDataset(Dataset):
+class QADataset(Dataset):
     def __init__(self, path, config, dev=False, test=False):
         self.config = config
 
@@ -54,7 +54,7 @@ class SquadDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return SquadDataset.to_tensor(
+        return QADataset.to_tensor(
             self.samples[idx],
             sent_window=self.config.prepro.sent_window,
             tok_window=self.config.prepro.tok_window,
@@ -66,7 +66,7 @@ class SquadDataset(Dataset):
     @staticmethod
     def to_tensor(x, sent_window=0, tok_window=300, o_tag=2, concat_ctxt_ans=False, roberta_style_encoding=False):
 
-        parsed_triple = CQATriple(
+        parsed_triple = QATriple(
             x["c"], x["a"], x["a_pos"], x["q"], sent_window=sent_window, tok_window=tok_window, o_tag=o_tag
         )
 

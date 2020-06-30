@@ -18,7 +18,7 @@ def get_byte_offsets(text, character_offset):
 
 
 # Convert a text context-question-answer triple to a cropped tokenised encoding
-class CQATriple:
+class QATriple:
     def __init__(self, context, answer, a_pos, question=None, sent_window=0, tok_window=300, o_tag=1):
 
         self.o_tag = o_tag

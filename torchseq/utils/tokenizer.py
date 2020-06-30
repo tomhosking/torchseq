@@ -4,6 +4,7 @@ from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
 from transformers import BartModel, BertModel, RobertaModel
 
 from torchseq.utils.singleton import Singleton
+from torchseq.utils.tokenizer_wordlevel import WordLevelTokenizer
 
 
 class Tokenizer(metaclass=Singleton):
@@ -34,6 +35,18 @@ class Tokenizer(metaclass=Singleton):
             )
 
             self.engine.add_special_tokens(["<s>", "</s>", "<pad>", "<mask>", "<unk>"])
+
+            self.pad_id = self.engine.token_to_id("<pad>")
+            self.mask_id = self.engine.token_to_id("<mask>")
+            self.unk_id = self.engine.token_to_id("<unk>")
+
+            self.bos_id = self.engine.token_to_id("<s>")
+            self.eos_id = self.engine.token_to_id("</s>")
+
+        elif "ptb" in model_slug:
+            self.engine = WordLevelTokenizer(
+                "./data/pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])
+            )
 
             self.pad_id = self.engine.token_to_id("<pad>")
             self.mask_id = self.engine.token_to_id("<mask>")
