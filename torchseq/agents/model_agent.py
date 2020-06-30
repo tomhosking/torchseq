@@ -379,7 +379,7 @@ class ModelAgent(BaseAgent):
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, qg_metric
 
-    def validate(self, save=False, force_save_output=False, use_test=False, use_train=False):
+    def validate(self, save=False, force_save_output=False, use_test=False, use_train=False, save_model=True):
         """
         One cycle of model validation
         :return:
@@ -535,7 +535,8 @@ class ModelAgent(BaseAgent):
             else:
                 self.logger.info("Early stopping lag active: saving...")
 
-            self.save_checkpoint()
+            if save_model:
+                self.save_checkpoint()
 
         self.update_dashboard()
 

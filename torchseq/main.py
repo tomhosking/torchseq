@@ -18,6 +18,17 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 def main(_):
+
+    if FLAGS.load is not None:
+        FLAGS.config = os.path.join(FLAGS.load, "config.json")
+
+        if os.path.exists(os.path.join(FLAGS.load, "orig_model.txt")):
+            with open(os.path.join(FLAGS.load, "orig_model.txt")) as f:
+                chkpt_pth = f.readlines()[0]
+            FLAGS.load_chkpt = chkpt_pth
+        else:
+            FLAGS.load_chkpt = os.path.join(FLAGS.load, "model", "checkpoint.pth.tar")
+
     print("** Running with config={:} **".format(FLAGS.config))
 
     with open(FLAGS.config) as f:
@@ -75,17 +86,17 @@ def main(_):
 
     if FLAGS.validate_train:
         agent.logger.info("Starting validation (on training set)...")
-        agent.validate(save=False, force_save_output=True, use_train=True)
+        agent.validate(save=False, force_save_output=True, use_train=True, save_model=False)
         agent.logger.info("...validation done!")
 
     if FLAGS.validate:
         agent.logger.info("Starting validation...")
-        agent.validate(save=False, force_save_output=True)
+        agent.validate(save=False, force_save_output=True, save_model=False)
         agent.logger.info("...validation done!")
 
     if FLAGS.test:
         agent.logger.info("Starting testing...")
-        agent.validate(save=False, force_save_output=True, use_test=True)
+        agent.validate(save=False, force_save_output=True, use_test=True, save_model=False)
         agent.logger.info("...testing done!")
 
 

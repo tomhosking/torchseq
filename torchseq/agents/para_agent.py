@@ -99,6 +99,9 @@ class ParaphraseAgent(ModelAgent):
                 logits, batch[self.src_field]
             )
 
+        if self.config.encdec.vector_quantized:
+            this_loss += memory["vq_loss"]
+
         this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         loss += torch.mean(this_loss, dim=0)

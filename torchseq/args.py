@@ -13,6 +13,7 @@ flags.DEFINE_bool("preprocess", False, "Run preprocessing on data")
 flags.DEFINE_bool("silent", False, "Hide verbose output (useful when running on scheduler)")
 
 flags.DEFINE_string("load_chkpt", None, "Path to chkpt file")
+flags.DEFINE_string("load", None, "Path to model")
 
 # Environment setup
 flags.DEFINE_string("data_path", "./data/", "Path to data sources")

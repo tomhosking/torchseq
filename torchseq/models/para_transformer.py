@@ -8,6 +8,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA
 
 
 class TransformerParaphraseModel(nn.Module):
@@ -115,6 +116,11 @@ class TransformerParaphraseModel(nn.Module):
                 use_final_linear=False,
             )
 
+        if self.config.encdec.data.get("vector_quantized", False):
+            self.quantizer = VectorQuantizerEMA(
+                self.config.encdec.codebook_size, self.config.embedding_dim, commitment_cost=0.25, decay=0.99
+            )
+
         # Position encoding
         self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim)
         self.positional_embeddings_dec = PositionalEncoding(config.embedding_dim)
@@ -205,6 +211,10 @@ class TransformerParaphraseModel(nn.Module):
                 if self.config.encdec.data.get("pooling", True)
                 else encoding
             )
+
+            if self.config.encdec.data.get("vector_quantized", False):
+                vq_loss, encoding, _, _ = self.quantizer(encoding)
+                memory["vq_loss"] = vq_loss
 
             if self.config.encdec.data.get("variational", False):
                 memory["mu"] = encoding
