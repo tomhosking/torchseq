@@ -436,9 +436,13 @@ class ModelAgent(BaseAgent):
 
                 # Calc perplexity
                 this_ppl = get_perplexity(
-                    logits, batch[self.tgt_field], vocab_size=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
+                    logits,
+                    batch[self.tgt_field],
+                    vocab_size=self.config.prepro.vocab_size,
+                    ignore_index=Tokenizer().pad_id,
                 )
-                perplexities.extend(this_ppl)
+
+                perplexities.extend(this_ppl.tolist())
 
                 #  Handle top-1 sampling
                 if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
@@ -492,6 +496,7 @@ class ModelAgent(BaseAgent):
             dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
 
             add_to_log("dev/bleu", dev_bleu, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
+            add_to_log("dev/ppl", ppl, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
 
             self.logger.info("BLEU: {:}".format(dev_bleu))
             self.logger.info("EM: {:}".format(dev_em))

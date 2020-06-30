@@ -67,9 +67,9 @@ class WordLevelTokenizer(BaseTokenizer):
             if eos_token_id is None:
                 raise TypeError("eos_token not found in the vocabulary")
 
-            tokenizer.post_processor = tokenizers.processors.BertProcessing(
-                (str(bos_token), bos_token_id), (str(eos_token), eos_token_id)
-            )
+            # tokenizer.post_processor = tokenizers.processors.BertProcessing(
+            #     (str(bos_token), bos_token_id), (str(eos_token), eos_token_id)
+            # )
 
         parameters = {
             "model": "WordLevel",
