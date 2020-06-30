@@ -436,7 +436,7 @@ class ModelAgent(BaseAgent):
 
                 # Calc perplexity
                 this_ppl = get_perplexity(
-                    logits, batch[self.tgt_field], vocab_size=self.config.vocab_size, ignore_index=Tokenizer().pad_id
+                    logits, batch[self.tgt_field], vocab_size=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
                 )
                 perplexities.extend(this_ppl)
 
