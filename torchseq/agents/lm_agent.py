@@ -19,7 +19,7 @@ class LangModelAgent(ModelAgent):
         self.tgt_field = "sent"
 
         # define data_loader
-        if self.config.training.dataset in ["ptb"]:
+        if self.config.training.dataset in ["ptb", "wikitext103"]:
             self.data_loader = LangmodellingDataLoader(config=config)
             self.src_field = "sent"
         else:

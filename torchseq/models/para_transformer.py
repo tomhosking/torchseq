@@ -118,7 +118,11 @@ class TransformerParaphraseModel(nn.Module):
 
         if self.config.encdec.data.get("vector_quantized", False):
             self.quantizer = VectorQuantizerEMA(
-                self.config.encdec.codebook_size, self.config.embedding_dim, commitment_cost=0.25, decay=0.99
+                self.config.encdec.codebook_size,
+                self.config.embedding_dim,
+                commitment_cost=0.25,
+                decay=0.99,
+                num_heads=self.config.encdec.get("quantizer_heads", 1),
             )
 
         # Position encoding
@@ -213,7 +217,7 @@ class TransformerParaphraseModel(nn.Module):
             )
 
             if self.config.encdec.data.get("vector_quantized", False):
-                vq_loss, encoding, _, _ = self.quantizer(encoding)
+                vq_loss, encoding = self.quantizer(encoding)
                 memory["vq_loss"] = vq_loss
 
             if self.config.encdec.data.get("variational", False):
