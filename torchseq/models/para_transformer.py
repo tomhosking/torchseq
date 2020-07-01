@@ -123,6 +123,7 @@ class TransformerParaphraseModel(nn.Module):
                 commitment_cost=0.25,
                 decay=0.99,
                 num_heads=self.config.encdec.get("quantizer_heads", 1),
+                residual=self.config.encdec.get("quantizer_residual", False),
             )
 
         # Position encoding
@@ -210,18 +211,18 @@ class TransformerParaphraseModel(nn.Module):
             if self.config.encdec.data.get("residual", False):
                 encoding = self.encoder_projection(torch.cat([encoding, ctxt_embedded.permute(1, 0, 2)], dim=-1))
 
-            encoding = (
+            encoding_pooled = (
                 self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
                 if self.config.encdec.data.get("pooling", True)
                 else encoding
             )
 
             if self.config.encdec.data.get("vector_quantized", False):
-                vq_loss, encoding = self.quantizer(encoding)
+                vq_loss, encoding_pooled = self.quantizer(encoding_pooled)
                 memory["vq_loss"] = vq_loss
 
             if self.config.encdec.data.get("variational", False):
-                memory["mu"] = encoding
+                memory["mu"] = encoding_pooled
                 memory["logvar"] = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
                 def reparameterize(mu, logvar):
@@ -229,9 +230,9 @@ class TransformerParaphraseModel(nn.Module):
                     eps = torch.randn_like(std)
                     return mu + eps * std * self.config.encdec.data.get("prior_var_weight", 1.0)
 
-                encoding = reparameterize(memory["mu"], memory["logvar"])
+                encoding_pooled = reparameterize(memory["mu"], memory["logvar"])
 
-            memory["encoding"] = encoding
+            memory["encoding"] = encoding_pooled
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-inf")).to(self.device)

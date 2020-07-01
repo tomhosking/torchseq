@@ -5,7 +5,9 @@ import torch.nn as nn
 
 
 class VectorQuantizerEMA(nn.Module):
-    def __init__(self, num_embeddings, embedding_dim, commitment_cost, decay, epsilon=1e-5, num_heads=1):
+    def __init__(
+        self, num_embeddings, embedding_dim, commitment_cost, decay, epsilon=1e-5, num_heads=1, residual=False
+    ):
         super(VectorQuantizerEMA, self).__init__()
 
         self._num_embeddings = num_embeddings
@@ -28,6 +30,7 @@ class VectorQuantizerEMA(nn.Module):
 
         self._decay = decay
         self._epsilon = epsilon
+        self._residual = residual
 
     def forward(self, inputs):
         # convert inputs from BCHW -> BHWC
@@ -81,7 +84,10 @@ class VectorQuantizerEMA(nn.Module):
         loss = self._commitment_cost * e_latent_loss
 
         # Straight Through Estimator
-        quantized = inputs + (quantized - inputs).detach()
+        if self._residual:
+            quantized = inputs + quantized.detach()
+        else:
+            quantized = inputs + (quantized - inputs).detach()
 
         return loss, quantized
 
