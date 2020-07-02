@@ -8,7 +8,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
-from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA
+from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
 
 
 class TransformerParaphraseModel(nn.Module):
@@ -117,7 +117,7 @@ class TransformerParaphraseModel(nn.Module):
             )
 
         if self.config.encdec.data.get("vector_quantized", False):
-            self.quantizer = VectorQuantizerEMA(
+            self.quantizer = VectorQuantizerMultiHead(
                 self.config.encdec.codebook_size,
                 self.config.embedding_dim,
                 commitment_cost=0.25,
