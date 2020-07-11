@@ -24,7 +24,7 @@ def tokenize(text):
 
 # takes a list of untokenized strings as inputs
 def bleu_corpus(golds, preds, order=4):
-    return sacrebleu.corpus_bleu([p.lower() for p in preds], [[g.lower() for g in golds]], smooth_method=None).score
+    return sacrebleu.corpus_bleu([p.lower() for p in preds], [[g.lower() for g in golds]]).score
     # return compute_bleu(
     #     [[tokenize(gold)] for gold in golds], [tokenize(pred) for pred in preds], smooth=False, max_order=order
     # )[0]
