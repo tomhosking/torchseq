@@ -101,8 +101,16 @@ class VectorQuantizerMultiHead(nn.Module):
 
         # Straight Through Estimator
         if self._residual:
-            # TODO: weight by alpha, add penalty to loss
-            quantized = inputs + quantized.detach()
+            # Calculate residual weightings
+            resid_weight = torch.sigmoid(self._alpha).unsqueeze(-1)
+
+            alpha_loss = torch.sum(torch.square(resid_weight))
+            loss += alpha_loss
+
+            quantized = (
+                inputs.view(-1, self._num_heads, self._embedding_dim) * resid_weight
+                + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
+            ).view(input_shape)
         else:
             quantized = inputs + (quantized - inputs).detach()
 

@@ -25,6 +25,7 @@ from torchseq.models.suppression_loss import SuppressionLoss
 
 from torchseq.utils.mckenzie import update_mckenzie
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.loss_dropper import LossDropper
 
 
 class AQAgent(ModelAgent):
@@ -41,6 +42,9 @@ class AQAgent(ModelAgent):
             )
         else:
             self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
+
+        if self.config.training.get("loss_dropping", 0) > 0:
+            self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
 
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_modular":
@@ -90,7 +94,13 @@ class AQAgent(ModelAgent):
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["a"])
 
-        loss += torch.mean(torch.sum(this_loss, dim=1) / (batch["q_len"] - 1).to(this_loss), dim=0)
+        this_loss_by_seq = torch.sum(this_loss, dim=1) / (batch["q_len"] - 1).to(this_loss)
+
+        if self.config.training.get("loss_dropping", False):
+            mask = self.dropper(this_loss_by_seq)  # The dropper returns a mask of 0s where data should be dropped.
+            this_loss_by_seq *= mask  # Mask out the high losses')
+
+        loss += torch.mean(this_loss_by_seq, dim=0)
 
         return loss
 
