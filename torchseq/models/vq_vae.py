@@ -52,6 +52,7 @@ class VectorQuantizerMultiHead(nn.Module):
         flat_input = inputs.view(-1, self._num_heads, self._embedding_dim)
 
         quantized_list = []
+        vq_codes = []
         for head_ix, embedding in enumerate(self._embedding):
 
             this_input = flat_input[:, head_ix, :]
@@ -67,6 +68,7 @@ class VectorQuantizerMultiHead(nn.Module):
             encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
             encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
             encodings.scatter_(1, encoding_indices, 1)
+            vq_codes.append(encoding_indices)
 
             # Quantize and unflatten
             this_quantized = torch.matmul(encodings, embedding.weight)
@@ -114,7 +116,7 @@ class VectorQuantizerMultiHead(nn.Module):
         else:
             quantized = inputs + (quantized - inputs).detach()
 
-        return loss, quantized
+        return loss, quantized, vq_codes
 
 
 class VectorQuantizerEMA(nn.Module):

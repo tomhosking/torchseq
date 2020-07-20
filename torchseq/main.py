@@ -16,6 +16,7 @@ from torchseq.datasets import qa_triple, loaders
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.seed import set_seed
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.logging import Logger
 
 
 def main(_):

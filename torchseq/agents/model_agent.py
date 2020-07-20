@@ -20,7 +20,7 @@ from torchseq.models.rerankers.ngram_reranker import NgramReranker
 from torchseq.models.rerankers.backtranslate_reranker import BacktranslateReranker
 from torchseq.models.rerankers.combo import CombinationReranker
 from torchseq.models.samplers.teacher_force import TeacherForcedSampler
-from torchseq.utils.logging import add_to_log
+from torchseq.utils.logging import Logger
 from torchseq.utils.mckenzie import update_mckenzie
 from torchseq.utils.metrics import bleu_corpus
 from torchseq.utils.sari import SARIsent
@@ -50,6 +50,8 @@ class ModelAgent(BaseAgent):
             os.makedirs(os.path.join(self.output_path, self.config.tag, self.run_id))
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "config.json"), "w") as f:
                 json.dump(config.data, f, indent=4)
+
+            Logger(log_path=self.output_path + "/" + self.config.tag + "/" + self.run_id + "/logs")
 
         # initialize counter
         self.best_metric = None
@@ -268,7 +270,7 @@ class ModelAgent(BaseAgent):
                 self.config.training.data.get("lr_warmup", True),
             )
 
-            add_to_log("train/lr", lr, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
+            Logger().log_scalar("train/lr", lr, self.global_step)
             for param_group in self.optimizer.param_groups:
                 param_group["lr"] = lr
 
@@ -281,12 +283,10 @@ class ModelAgent(BaseAgent):
 
             if batch_idx % self.config.training.log_interval == 0:
                 # Loss is weighted for grad accumulation - unweight it for reporting
-                add_to_log(
+                Logger().log_scalar(
                     "train/loss",
                     loss * float(self.config.training.optim_batch_size) / float(curr_batch_size),
                     self.global_step,
-                    self.config.tag + "/" + self.run_id,
-                    self.output_path,
                 )
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
@@ -351,11 +351,16 @@ class ModelAgent(BaseAgent):
             )
 
         if calculate_loss:
-            _, logits, _, _ = self.decode_teacher_force(self.model, batch, tgt_field)
+            _, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
             normed_loss = torch.mean(
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
+
+            if self.config.encdec.vector_quantized:
+
+                for h_ix, vq_codes in enumerate(memory["vq_codes"]):
+                    Logger().log_histogram("vq_codes/h" + str(h_ix), vq_codes, self.global_step)
 
         else:
             normed_loss = None
@@ -481,7 +486,7 @@ class ModelAgent(BaseAgent):
             test_loss /= num_samples
             self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
-        add_to_log("dev/loss", test_loss, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
+        Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
         qg_metric = sum(qg_metric) / len(qg_metric)
         ppl = sum(perplexities) / len(perplexities)
@@ -495,8 +500,8 @@ class ModelAgent(BaseAgent):
 
             dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
 
-            add_to_log("dev/bleu", dev_bleu, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
-            add_to_log("dev/ppl", ppl, self.global_step, self.config.tag + "/" + self.run_id, self.output_path)
+            Logger().log_scalar("dev/bleu", dev_bleu, self.global_step)
+            Logger().log_scalar("dev/ppl", ppl, self.global_step)
 
             self.logger.info("BLEU: {:}".format(dev_bleu))
             self.logger.info("EM: {:}".format(dev_em))

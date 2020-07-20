@@ -218,8 +218,9 @@ class TransformerParaphraseModel(nn.Module):
             )
 
             if self.config.encdec.data.get("vector_quantized", False):
-                vq_loss, encoding_pooled = self.quantizer(encoding_pooled)
+                vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled)
                 memory["vq_loss"] = vq_loss
+                memory["vq_codes"] = quantizer_indices
 
             if self.config.encdec.data.get("variational", False):
                 memory["mu"] = encoding_pooled

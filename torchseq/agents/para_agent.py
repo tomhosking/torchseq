@@ -14,6 +14,7 @@ from torchseq.models.pretrained_modular import PretrainedModularModel
 from torchseq.models.suppression_loss import SuppressionLoss
 from torchseq.models.kl_divergence import get_kl
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.logging import Logger
 
 
 class ParaphraseAgent(ModelAgent):
@@ -101,6 +102,8 @@ class ParaphraseAgent(ModelAgent):
 
         if self.config.encdec.vector_quantized:
             this_loss += memory["vq_loss"]
+            for h_ix, vq_codes in enumerate(memory["vq_codes"]):
+                Logger().log_histogram("vq_codes/h" + str(h_ix), vq_codes, self.global_step)
 
         this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
