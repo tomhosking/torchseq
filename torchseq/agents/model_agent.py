@@ -127,10 +127,11 @@ class ModelAgent(BaseAgent):
                 if "dampening" not in param_group:
                     param_group["dampening"] = 0
 
-        pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")
+        if self.run_id is not None:
+            pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")
 
-        with open(pointer_filepath, "w") as f:
-            f.write(file_name)
+            with open(pointer_filepath, "w") as f:
+                f.write(file_name)
 
     def save_checkpoint(self, file_name="checkpoint.pth.tar"):
         """
@@ -363,6 +364,7 @@ class ModelAgent(BaseAgent):
                     Logger().log_histogram("vq_codes/h" + str(h_ix), vq_codes, self.global_step)
 
         else:
+            logits = None
             normed_loss = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits
 

@@ -9,6 +9,7 @@ from flask import Flask, Response, current_app, redirect, request
 from torchseq.agents.aq_agent import AQAgent
 
 from torchseq.utils.config import Config
+from torchseq.utils.tokenizer import Tokenizer
 
 
 app = Flask(__name__)
@@ -64,6 +65,8 @@ def init():
     config = Config(cfg_dict)
 
     checkpoint_path = MODEL_PATH + "model/checkpoint.pth.tar"
+
+    Tokenizer(config.encdec.bert_model)
 
     app.agent = AQAgent(config=config, run_id=None)
 

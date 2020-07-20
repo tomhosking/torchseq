@@ -124,6 +124,7 @@ class TransformerParaphraseModel(nn.Module):
                 decay=0.99,
                 num_heads=self.config.encdec.get("quantizer_heads", 1),
                 residual=self.config.encdec.get("quantizer_residual", False),
+                code_offset=self.config.encdec.get("code_offset", 0),
             )
 
         # Position encoding
@@ -229,7 +230,16 @@ class TransformerParaphraseModel(nn.Module):
                 def reparameterize(mu, logvar):
                     std = torch.exp(0.5 * logvar)
                     eps = torch.randn_like(std)
-                    return mu + eps * std * self.config.encdec.data.get("prior_var_weight", 1.0)
+
+                    var_weight = self.config.encdec.data.get("prior_var_weight", 1.0)
+                    if not isinstance(var_weight, float) and len(var_weight) > 1:
+                        assert len(var_weight) == self.config.encdec.num_heads
+                        var_weight = torch.Tensor(var_weight).to(self.device)
+                        var_weight = torch.repeat_interleave(
+                            var_weight, self.config.embedding_dim // self.config.encdec.num_heads
+                        )
+
+                    return mu + eps * std * var_weight
 
                 encoding_pooled = reparameterize(memory["mu"], memory["logvar"])
 

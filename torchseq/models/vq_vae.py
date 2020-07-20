@@ -15,6 +15,7 @@ class VectorQuantizerMultiHead(nn.Module):
         num_heads=1,
         residual=False,
         ema=True,
+        code_offset=0,
     ):
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -23,6 +24,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._embedding_dim = embedding_dim // self._num_heads
 
         self._ema = ema
+        self._code_offset = code_offset
 
         self._embedding = nn.ModuleList(
             [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
@@ -65,7 +67,16 @@ class VectorQuantizerMultiHead(nn.Module):
             )
 
             # Encoding
-            encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+            if not isinstance(self._code_offset, int) or self._code_offset > 0:
+                # Allow for nudging the encodings away from nearest
+                this_offset = (
+                    self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
+                )
+                min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
+                encoding_indices = min_k[:, this_offset].unsqueeze(1)
+            else:
+                encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+
             encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
             encodings.scatter_(1, encoding_indices, 1)
             vq_codes.append(encoding_indices)

@@ -9,6 +9,7 @@ from flask import Flask, Response, current_app, redirect, request
 from torchseq.agents.para_agent import ParaphraseAgent
 
 from torchseq.utils.config import Config
+from torchseq.utils.tokenizer import Tokenizer
 
 
 app = Flask(__name__)
@@ -45,16 +46,16 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/vae/20200517_141657_squad_lr1e-2_tokdrop04"
+    MODEL_PATH = "./runs/vqvae/20200702_163038_squad_para_1024_4h"
     # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)
         # cfg_dict["task"] = "autoencoder"
         cfg_dict["env"]["data_path"] = "./data/"
-        cfg_dict["eval"]["sampler"] = "diverse_beam"
+        cfg_dict["eval"]["sampler"] = "nucleus"
         cfg_dict["eval"]["topk"] = 32
-        cfg_dict["training"]["dataset"] = "kaggle"
+        cfg_dict["training"]["dataset"] = "squad"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
         cfg_dict["diverse_beam"] = {
@@ -64,12 +65,20 @@ def init():
             "num_groups": 8,
             "penalty_weight": 0.5,
         }
-        cfg_dict["reranker"] = {
-            # 'strategy': 'qa'
-            "strategy": "ngram"
-        }
-        cfg_dict["encdec"]["prior_var_weight"] = 1.0
+        # cfg_dict["reranker"] = {
+        #     # 'strategy': 'qa'
+        #     "strategy": "ngram"
+        # }
+        var_offset = 3
+        cfg_dict["encdec"]["prior_var_weight"] = (
+            [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
+        )
+        cfg_dict["encdec"]["code_offset"] = (
+            [0] * var_offset + [2] + [0] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
+        )
         config = Config(cfg_dict)
+
+    Tokenizer(config.encdec.bert_model)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pth.tar"
