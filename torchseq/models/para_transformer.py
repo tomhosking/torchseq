@@ -125,6 +125,7 @@ class TransformerParaphraseModel(nn.Module):
                 num_heads=self.config.encdec.get("quantizer_heads", 1),
                 residual=self.config.encdec.get("quantizer_residual", False),
                 code_offset=self.config.encdec.get("code_offset", 0),
+                num_residual=self.config.encdec.get("quantizer_num_residual", 0),
             )
 
         # Position encoding

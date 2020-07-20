@@ -16,6 +16,7 @@ class VectorQuantizerMultiHead(nn.Module):
         residual=False,
         ema=True,
         code_offset=0,
+        num_residual=0,
     ):
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -25,6 +26,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._ema = ema
         self._code_offset = code_offset
+        self._num_residual = num_residual
 
         self._embedding = nn.ModuleList(
             [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
@@ -58,49 +60,57 @@ class VectorQuantizerMultiHead(nn.Module):
         for head_ix, embedding in enumerate(self._embedding):
 
             this_input = flat_input[:, head_ix, :]
+            if head_ix >= self._num_residual:
 
-            # Calculate distances
-            distances = (
-                torch.sum(flat_input[:, head_ix, :] ** 2, dim=1, keepdim=True)
-                + torch.sum(embedding.weight ** 2, dim=1)
-                - 2 * torch.matmul(flat_input[:, head_ix, :], embedding.weight.t())
-            )
+                this_input = flat_input[:, head_ix, :]
 
-            # Encoding
-            if not isinstance(self._code_offset, int) or self._code_offset > 0:
-                # Allow for nudging the encodings away from nearest
-                this_offset = (
-                    self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
+                # Calculate distances
+                distances = (
+                    torch.sum(flat_input[:, head_ix, :] ** 2, dim=1, keepdim=True)
+                    + torch.sum(embedding.weight ** 2, dim=1)
+                    - 2 * torch.matmul(flat_input[:, head_ix, :], embedding.weight.t())
                 )
-                min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
-                encoding_indices = min_k[:, this_offset].unsqueeze(1)
+
+                # Encoding
+                if not isinstance(self._code_offset, int) or self._code_offset > 0:
+                    # Allow for nudging the encodings away from nearest
+                    this_offset = (
+                        self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
+                    )
+                    min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
+                    encoding_indices = min_k[:, this_offset].unsqueeze(1)
+                else:
+                    encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
+
+                encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+                encodings.scatter_(1, encoding_indices, 1)
+                vq_codes.append(encoding_indices)
+
+                # Quantize and unflatten
+                this_quantized = torch.matmul(encodings, embedding.weight)
+                quantized_list.append(this_quantized)
+
+                # Use EMA to update the embedding vectors
+                if self.training and self._ema:
+                    _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
+                    _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(encodings, 0)
+
+                    # Laplace smoothing of the cluster size
+                    n = torch.sum(_ema_cluster_size.data)
+                    _ema_cluster_size = (
+                        (_ema_cluster_size + self._epsilon) / (n + self._num_embeddings * self._epsilon) * n
+                    )
+                    setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
+
+                    dw = torch.matmul(encodings.t(), this_input)
+                    self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
+
+                    self._embedding[head_ix].weight = nn.Parameter(
+                        self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1)
+                    )
             else:
-                encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
 
-            encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
-            encodings.scatter_(1, encoding_indices, 1)
-            vq_codes.append(encoding_indices)
-
-            # Quantize and unflatten
-            this_quantized = torch.matmul(encodings, embedding.weight)
-            quantized_list.append(this_quantized)
-
-            # Use EMA to update the embedding vectors
-            if self.training and self._ema:
-                _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
-                _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(encodings, 0)
-
-                # Laplace smoothing of the cluster size
-                n = torch.sum(_ema_cluster_size.data)
-                _ema_cluster_size = (
-                    (_ema_cluster_size + self._epsilon) / (n + self._num_embeddings * self._epsilon) * n
-                )
-                setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
-
-                dw = torch.matmul(encodings.t(), this_input)
-                self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
-
-                self._embedding[head_ix].weight = nn.Parameter(self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1))
+                quantized_list.append(this_input)
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
 
