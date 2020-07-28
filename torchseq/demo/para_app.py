@@ -30,6 +30,9 @@ def generate():
     # ans = request.args['ans']
 
     query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "is_para": True}
+    if "template" in request.args:
+        template = request.args["template"]
+        query["template"] = template
     res, scores = app.agent.infer(query, reduce_outputs=False)
 
     scores = scores.tolist()
@@ -55,7 +58,7 @@ def init():
         cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "nucleus"
         cfg_dict["eval"]["topk"] = 32
-        cfg_dict["training"]["dataset"] = "squad"
+        cfg_dict["training"]["dataset"] = "kaggle"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
         cfg_dict["diverse_beam"] = {
@@ -78,7 +81,7 @@ def init():
         )
         config = Config(cfg_dict)
 
-    Tokenizer(config.encdec.bert_model)
+    Tokenizer(config.prepro.tokenizer)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pth.tar"

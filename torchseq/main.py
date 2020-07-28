@@ -49,7 +49,7 @@ def main(_):
 
     config = Config(cfg_dict)
 
-    Tokenizer(config.encdec.bert_model)
+    Tokenizer(config.prepro.tokenizer)
 
     set_seed(FLAGS.seed)
 

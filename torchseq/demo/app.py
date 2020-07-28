@@ -66,7 +66,7 @@ def init():
 
     checkpoint_path = MODEL_PATH + "model/checkpoint.pth.tar"
 
-    Tokenizer(config.encdec.bert_model)
+    Tokenizer(config.prepro.tokenizer)
 
     app.agent = AQAgent(config=config, run_id=None)
 

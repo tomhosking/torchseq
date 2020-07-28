@@ -49,7 +49,7 @@ class ParaphraseDataLoader:
         self.train_loader = DataLoader(
             train,
             batch_size=config.training.batch_size,
-            shuffle=self.config.training.data.get("shuffle_data", True),
+            # shuffle=self.config.training.data.get("shuffle_data", True),
             num_workers=0,
             collate_fn=ParaphraseDataset.pad_and_order_sequences,
             worker_init_fn=init_worker,
@@ -58,7 +58,7 @@ class ParaphraseDataLoader:
         self.valid_loader = DataLoader(
             valid,
             batch_size=config.eval.eval_batch_size,
-            shuffle=False,
+            # shuffle=False,
             num_workers=0,
             collate_fn=ParaphraseDataset.pad_and_order_sequences,
             worker_init_fn=init_worker,
@@ -67,7 +67,7 @@ class ParaphraseDataLoader:
             self.test_loader = DataLoader(
                 test,
                 batch_size=config.eval.eval_batch_size,
-                shuffle=False,
+                # shuffle=False,
                 num_workers=0,
                 collate_fn=ParaphraseDataset.pad_and_order_sequences,
                 worker_init_fn=init_worker,

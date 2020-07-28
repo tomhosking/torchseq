@@ -40,7 +40,7 @@ def test_bert_embeds():
     set_seed(SEED)
 
     # This is not a good way of passing this value in
-    Tokenizer(config.encdec.bert_model).reload(config.encdec.bert_model)
+    Tokenizer(config.prepro.tokenizer).reload(config.prepro.tokenizer)
 
     run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + config.name + "_REGRESSION"
 

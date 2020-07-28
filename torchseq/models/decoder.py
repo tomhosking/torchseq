@@ -21,7 +21,7 @@ class SequenceDecoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = Tokenizer().get_embeddings(config.encdec.bert_model)
+            self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -35,7 +35,7 @@ class SequenceDecoder(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
         if config.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
-            projection_init = Tokenizer().get_embeddings(config.encdec.bert_model)
+            projection_init = Tokenizer().get_embeddings(config.prepro.tokenizer)
         else:
             projection_init = None
 

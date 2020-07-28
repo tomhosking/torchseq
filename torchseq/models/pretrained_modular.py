@@ -64,7 +64,7 @@ class PretrainedModularModel(nn.Module):
 
         # Embedding layers
         self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-        self.embeddings.weight.data = Tokenizer().get_embeddings(config.encdec.bert_model)
+        self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(

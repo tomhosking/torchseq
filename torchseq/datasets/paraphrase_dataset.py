@@ -64,7 +64,9 @@ class ParaphraseDataset(IterableDataset):
 
     @staticmethod
     def to_tensor(x, tok_window=64):
-        parsed_triple = ParaphrasePair(x["s1"], x["s2"], is_paraphrase=x["is_para"], tok_window=tok_window)
+        parsed_triple = ParaphrasePair(
+            x["s1"], x["s2"], x.get("template", None), is_paraphrase=x["is_para"], tok_window=tok_window
+        )
 
         sample = {
             "s1": torch.LongTensor(parsed_triple.s1_as_ids()),
@@ -75,6 +77,11 @@ class ParaphraseDataset(IterableDataset):
             "s2_text": x["s2"],
             "is_paraphrase": torch.LongTensor([1 * parsed_triple.is_paraphrase]),
         }
+
+        if "template" in x:
+            sample["template"] = torch.LongTensor(parsed_triple.template_as_ids())
+            sample["template_len"] = torch.LongTensor([len(parsed_triple._template_doc)])
+            sample["template_text"] = x["template"]
 
         return sample
 
