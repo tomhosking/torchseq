@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+from collections import defaultdict
 from tqdm import tqdm
 
 from torchseq.agents.base import BaseAgent
@@ -358,10 +359,10 @@ class ModelAgent(BaseAgent):
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
 
-            if self.config.encdec.vector_quantized:
+            if self.config.encdec.get('vector_quantized', False):
 
                 for h_ix, vq_codes in enumerate(memory["vq_codes"]):
-                    Logger().log_histogram("vq_codes/h" + str(h_ix), vq_codes, self.global_step)
+                    self.vq_codes[h_ix].extend(vq_codes.tolist())
 
         else:
             logits = None
@@ -387,6 +388,8 @@ class ModelAgent(BaseAgent):
         pred_output = []
         gold_output = []
         gold_input = []  # needed for SARI
+
+        self.vq_codes = defaultdict(lambda: [])
 
         if use_test:
             print("***** USING TEST SET ******")
@@ -489,6 +492,9 @@ class ModelAgent(BaseAgent):
             self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
         Logger().log_scalar("dev/loss", test_loss, self.global_step)
+
+        for h_ix, codes in self.vq_codes.items():
+            Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
 
         qg_metric = sum(qg_metric) / len(qg_metric)
         ppl = sum(perplexities) / len(perplexities)
