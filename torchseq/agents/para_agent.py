@@ -77,7 +77,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_modular":
             self.model = PretrainedModularModel(self.config, src_field=self.src_field, loss=self.loss)
         else:
-            self.model = TransformerParaphraseModel(self.config, src_field=self.src_field, loss=self.loss)
+            self.model = TransformerParaphraseModel(self.config, src_field=self.src_field)
 
         self.suppression_loss = SuppressionLoss(self.config)
 

@@ -359,7 +359,7 @@ class ModelAgent(BaseAgent):
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
 
-            if self.config.encdec.get('vector_quantized', False):
+            if self.config.encdec.get("vector_quantized", False):
 
                 for h_ix, vq_codes in enumerate(memory["vq_codes"]):
                     self.vq_codes[h_ix].extend(vq_codes.tolist())
