@@ -12,6 +12,7 @@ from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQu
 
 from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
+from torchseq.models.bottleneck import PoolingBottleneck
 
 
 class TransformerParaphraseModel(nn.Module):
@@ -22,6 +23,7 @@ class TransformerParaphraseModel(nn.Module):
         self.src_field = src_field
 
         self.seq_encoder = SequenceEncoder(config)
+        self.bottleneck = PoolingBottleneck(config)
         self.seq_decoder = SequenceDecoder(config, embeddings=self.seq_encoder.embeddings)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
@@ -30,7 +32,8 @@ class TransformerParaphraseModel(nn.Module):
 
         # First pass? Construct the encoding
         if "encoding" not in memory:
-            encoding_pooled, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
+            encoding, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
+            encoding_pooled, memory = self.bottleneck(encoding, memory)
             memory["encoding"] = encoding_pooled
 
         # Build some masks

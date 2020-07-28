@@ -81,7 +81,7 @@ class SequenceDecoder(nn.Module):
             output_seq.device
         )[:, :output_max_len]
 
-        # Embed the output so far, then do a decoder fwd pass
+        # Embed the output so far
         output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(self.config.embedding_dim)
 
         if self.config.raw_embedding_dim != self.config.embedding_dim:
@@ -90,6 +90,7 @@ class SequenceDecoder(nn.Module):
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
         output_embedded = self.positional_embeddings(output_embedded.permute(1, 0, 2))
 
+        # Decoder block fwd pass
         output_seq = self.decoder(
             output_embedded,
             memory["encoding"].permute(1, 0, 2),
@@ -97,6 +98,7 @@ class SequenceDecoder(nn.Module):
             tgt_key_padding_mask=output_pad_mask,
         ).permute(1, 0, 2)
 
+        # Embeddings -> logits
         if self.config.data.get("variational_projection", False):
             logits, memory["mu"], memory["logvar"] = self.output_projection(output_seq)
         else:

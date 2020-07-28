@@ -53,36 +53,6 @@ class SequenceEncoder(nn.Module):
         encoder_norm = nn.LayerNorm(config.embedding_dim)
         self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
-        self.encoder_pooling = MultiHeadedPooling(
-            config.encdec.num_heads,
-            config.embedding_dim,
-            dropout=config.dropout,
-            model_dim_out=config.embedding_dim,
-            use_final_linear=False,
-        )
-
-        # Extra modules for a variational bottleneck
-        if self.config.encdec.data.get("variational", False):
-            self.encoder_logvar_pooling = MultiHeadedPooling(
-                config.encdec.num_heads,
-                config.embedding_dim,
-                dropout=config.dropout,
-                model_dim_out=config.embedding_dim,
-                use_final_linear=False,
-            )
-
-        if self.config.encdec.data.get("vector_quantized", False):
-            self.quantizer = VectorQuantizerMultiHead(
-                self.config.encdec.codebook_size,
-                self.config.embedding_dim,
-                commitment_cost=0.25,
-                decay=0.99,
-                num_heads=self.config.encdec.get("quantizer_heads", 1),
-                residual=self.config.encdec.get("quantizer_residual", False),
-                code_offset=self.config.encdec.get("code_offset", 0),
-                num_residual=self.config.encdec.get("quantizer_num_residual", 0),
-            )
-
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.embedding_dim)
 
@@ -95,6 +65,7 @@ class SequenceEncoder(nn.Module):
             if self.config.encdec.data.get("residual", False):
                 self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
+        # Set up some masks
         src_mask = (
             torch.FloatTensor(max_input_len, max_input_len)
             .fill_(float("-inf") if self.config.directional_masks else 0.0)
@@ -109,9 +80,9 @@ class SequenceEncoder(nn.Module):
             input_seq.device
         )
 
+        # Embed the input
         input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
 
-        # Build the context
         if self.config.raw_embedding_dim != self.config.embedding_dim:
             input_toks_embedded = self.embedding_projection(input_toks_embedded)
 
@@ -153,38 +124,8 @@ class SequenceEncoder(nn.Module):
                 .contiguous()
             )
 
+        # Include original input?
         if self.config.encdec.data.get("residual", False):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded.permute(1, 0, 2)], dim=-1))
 
-        encoding_pooled = (
-            self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
-            if self.config.encdec.data.get("pooling", True)
-            else encoding
-        )
-
-        if self.config.encdec.data.get("vector_quantized", False):
-            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled)
-            memory["vq_loss"] = vq_loss
-            memory["vq_codes"] = quantizer_indices
-
-        if self.config.encdec.data.get("variational", False):
-            memory["mu"] = encoding_pooled
-            memory["logvar"] = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
-
-            def reparameterize(mu, logvar):
-                std = torch.exp(0.5 * logvar)
-                eps = torch.randn_like(std)
-
-                var_weight = self.config.encdec.data.get("prior_var_weight", 1.0)
-                if not isinstance(var_weight, float) and len(var_weight) > 1:
-                    assert len(var_weight) == self.config.encdec.num_heads
-                    var_weight = torch.Tensor(var_weight).to(input_seq.device)
-                    var_weight = torch.repeat_interleave(
-                        var_weight, self.config.embedding_dim // self.config.encdec.num_heads
-                    )
-
-                return mu + eps * std * var_weight
-
-            encoding_pooled = reparameterize(memory["mu"], memory["logvar"])
-
-        return encoding_pooled, memory
+        return encoding, memory
