@@ -59,7 +59,9 @@ class PoolingBottleneck(nn.Module):
         # Quantize
         if self.config.encdec.data.get("vector_quantized", False):
             vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled)
-            memory["vq_loss"] = vq_loss
+            if "loss" not in memory:
+                memory["loss"] = 0
+            memory["loss"] += vq_loss
             memory["vq_codes"] = quantizer_indices
 
         # Reparameterise for VAE

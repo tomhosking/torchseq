@@ -49,7 +49,7 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/vqvae/20200722_100223_squad_para_256_32h_2r"
+    MODEL_PATH = "./runs/vqvae/20200728_193617_squad_para_256_32h_2r"
     # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
     with open(MODEL_PATH + "/config.json") as f:
@@ -77,7 +77,7 @@ def init():
             [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         )
         cfg_dict["encdec"]["code_offset"] = (
-            [0] * var_offset + [80] + [80] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
+            [0] * var_offset + [0] + [0] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
         )
         config = Config(cfg_dict)
 

@@ -50,10 +50,10 @@ class TransformerParaphraseModel(nn.Module):
                     * self.config.encdec.get("quantizer_num_residual", 0)
                 )
 
-                seq_encoding = encoding_pooled[:, :, :splice_ix]
-                template_encoding = encoding_pooled[:, :, splice_ix:]
+                resid_heads = template_encoding_pooled[:, :, :splice_ix]
+                quant_heads = encoding_pooled[:, :, splice_ix:]
 
-                encoding_pooled = torch.cat([seq_encoding, template_encoding], dim=-1)
+                encoding_pooled = torch.cat([resid_heads, quant_heads], dim=-1)
 
             memory["encoding"] = encoding_pooled
             memory["encoding_mask"] = None
