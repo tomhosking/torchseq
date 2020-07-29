@@ -2,13 +2,14 @@ import math
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel
 
-from torchseq.models.pooling import MultiHeadedPooling
-from torchseq.models.positional_embeddings import PositionalEncoding
-from torchseq.models.multihead_output import MultiHeadOutput
-from torchseq.utils.tokenizer import Tokenizer
-from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
+# from transformers import BartModel, BertModel
+
+# from torchseq.models.pooling import MultiHeadedPooling
+# from torchseq.models.positional_embeddings import PositionalEncoding
+# from torchseq.models.multihead_output import MultiHeadOutput
+# from torchseq.utils.tokenizer import Tokenizer
+# from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
 
 from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
@@ -43,9 +44,21 @@ class TransformerParaphraseModel(nn.Module):
                 template_encoding_pooled, template_memory = self.bottleneck(template_encoding, template_memory)
                 # TODO: splice the template encoding into the input
 
-            memory["encoding"] = encoding_pooled
+                splice_ix = (
+                    self.config.embedding_dim
+                    // self.config.encdec.get("quantizer_heads", 1)
+                    * self.config.encdec.get("quantizer_num_residual", 0)
+                )
 
-        # Build some masks
+                seq_encoding = encoding_pooled[:, :, :splice_ix]
+                template_encoding = encoding_pooled[:, :, splice_ix:]
+
+                encoding_pooled = torch.cat([seq_encoding, template_encoding], dim=-1)
+
+            memory["encoding"] = encoding_pooled
+            memory["encoding_mask"] = None
+
+        # Fwd pass through decoder block
         logits, memory = self.seq_decoder(output, memory)
 
         return logits, memory

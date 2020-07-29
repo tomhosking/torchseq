@@ -2,13 +2,15 @@ import math
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel
+from transformers import BartModel, BertModel, RobertaModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
+
+import torchseq.models.transformer as custom_transformer
 
 
 class SequenceEncoder(nn.Module):
@@ -129,3 +131,247 @@ class SequenceEncoder(nn.Module):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded.permute(1, 0, 2)], dim=-1))
 
         return encoding, memory
+
+
+class ContextAnswerEncoder(nn.Module):
+    def __init__(self, config, embeddings=None):
+        super().__init__()
+        self.config = config
+
+        # Embedding layers
+        if embeddings is not None:
+            self.embeddings = embeddings
+        else:
+            self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
+            self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
+            self.embeddings.weight.requires_grad = not config.freeze_embeddings
+
+        self.embedding_projection = nn.utils.weight_norm(
+            nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+        )
+
+        self.bert_embedding_projection = nn.utils.weight_norm(
+            nn.Linear(config.embedding_dim * 1 + config.bio_embedding_dim, config.embedding_dim, bias=False)
+        )
+
+        self.bio_embeddings = (
+            nn.Embedding.from_pretrained(torch.eye(config.bio_embedding_dim), freeze=True).cpu()
+            if config.onehot_bio
+            else nn.Embedding(3, config.bio_embedding_dim).cpu()
+        )
+
+        # Encoder/decoders
+        if config.encdec.bert_encoder:
+            self.freeze_bert = not self.config.encdec.bert_finetune
+            # if not self.config.encdec.bert_finetune:
+            #     print("Building bert encoder without grads")
+            #     with torch.no_grad():
+            #         self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+
+            #     for param in self.bert_encoder.parameters():
+            #         param.requires_grad = False
+            # else:
+            if "bart-" in config.encdec.bert_model:
+                bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+                self.bert_encoder = bart_model.encoder
+                del bart_model.decoder
+            elif "roberta-" in config.encdec.bert_model:
+                self.bert_encoder = RobertaModel.from_pretrained(config.encdec.bert_model)
+            else:
+                self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
+            # self.bert_encoder.train()
+            # for param in self.bert_encoder.parameters():
+            #     param.requires_grad = True
+
+        if self.config.encdec.data.get("pre_ln", False):
+            encoder_layer = custom_transformer.TransformerEncoderLayer(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            )
+            self.encoder = custom_transformer.TransformerEncoder(
+                encoder_layer, config.encdec.num_encoder_layers, encoder_norm
+            )
+
+        else:
+            encoder_layer = nn.TransformerEncoderLayer(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            )
+            self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+
+        if self.config.encdec.data.get("xav_uni_init", False):
+            for p in self.encoder.parameters():
+                if p.dim() > 1:
+                    nn.init.xavier_uniform_(p)
+
+        # Encoder combination
+        num_encoder_outputs = sum(
+            [1 if v else 0 for k, v in config.encoder_outputs.data.items() if k != "c_ans_labels"]
+        )
+        memory_dim = (
+            config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+        ) * num_encoder_outputs
+        memory_dim += self.config.bio_embedding_dim if self.config.encoder_outputs.c_ans_labels else 0
+        self.encoder_projection = nn.utils.weight_norm(nn.Linear(memory_dim, config.embedding_dim, bias=False))
+
+        # Pooling layers
+        self.ans_pooling = MultiHeadedPooling(
+            config.encdec.num_heads,
+            config.embedding_dim + config.bio_embedding_dim,
+            dropout=config.dropout,
+            model_dim_out=config.embedding_dim,
+            use_final_linear=False,
+        )
+        self.ctxt_pooling = MultiHeadedPooling(
+            config.encdec.num_heads,
+            config.embedding_dim + config.bio_embedding_dim,
+            dropout=config.dropout,
+            model_dim_out=config.embedding_dim,
+            use_final_linear=False,
+            use_bilinear=True,
+        )
+
+        # Position encoding
+        self.positional_embeddings_enc = PositionalEncoding(
+            config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+        )
+
+    def forward(self, ctxt_seq, ctxt_seq_len, a_pos, memory):
+        # Re-normalise the projections...
+        with torch.no_grad():
+            self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
+            self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
+            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+
+        # Get some sizes
+        max_ctxt_len = ctxt_seq.shape[1]
+
+        context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= ctxt_seq_len[:, None].cpu()).to(ctxt_seq.device)
+        memory["encoding_mask"] = context_mask
+
+        # First pass? Construct the encoding
+        if "encoding" not in memory:
+            src_mask = (
+                torch.FloatTensor(max_ctxt_len, max_ctxt_len)
+                .fill_(float("-inf") if self.config.directional_masks else 0.0)
+                .to(ctxt_seq.device)
+            )
+            src_mask = torch.triu(src_mask, diagonal=1)
+
+            ctxt_toks_embedded = self.embeddings(ctxt_seq).to(ctxt_seq.device)
+            ctxt_ans_embedded = self.bio_embeddings(a_pos).to(ctxt_seq.device)
+
+            # Build the context
+            if self.config.raw_embedding_dim != self.config.embedding_dim:
+                ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
+
+            if self.config.encdec.bert_encoder:
+                ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
+            else:
+                ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(
+                    self.config.embedding_dim
+                )
+
+            ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
+
+            # Fwd pass through encoder
+            if self.config.encdec.bert_encoder:
+
+                # BERT expects a mask that's 1 unmasked, 0 for masked
+                bert_context_mask = (~context_mask).double()
+
+                if "bert_typeids" in self.config.encdec.data and self.config.encdec.bert_typeids:
+                    bert_typeids = {"token_type_ids": a_pos.to(ctxt_seq.device)}
+                else:
+                    bert_typeids = {}
+
+                if self.freeze_bert or not self.config.encdec.bert_finetune:
+                    with torch.no_grad():
+                        self.bert_encoding = self.bert_encoder(
+                            input_ids=ctxt_seq.to(ctxt_seq.device), attention_mask=bert_context_mask, **bert_typeids
+                        )[0]
+                else:
+                    self.bert_encoding = self.bert_encoder(
+                        input_ids=ctxt_seq.to(ctxt_seq.device), attention_mask=bert_context_mask, **bert_typeids
+                    )[0]
+
+                if "bart" in self.config.encdec.bert_model:
+                    self.bert_encoding = self.bert_encoding.permute(1, 0, 2)
+
+                if self.config.raw_embedding_dim != self.config.embedding_dim:
+                    self.bert_encoding = self.embedding_projection(self.bert_encoding)
+
+                if self.config.encdec.num_encoder_layers > 0:
+                    bert_encoding_augmented = torch.cat(
+                        [self.bert_encoding, ctxt_ans_embedded], dim=-1
+                    )  # ctxt_embedded.permute(1,0,2)
+                    bert_encoding_augmented = self.bert_embedding_projection(bert_encoding_augmented)
+                    encoding = (
+                        self.encoder(
+                            bert_encoding_augmented.permute(1, 0, 2), mask=src_mask, src_key_padding_mask=context_mask
+                        )
+                        .permute(1, 0, 2)
+                        .contiguous()
+                    )
+                else:
+                    encoding = self.bert_encoding
+
+            else:
+                encoding = (
+                    self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask)
+                    .permute(1, 0, 2)
+                    .contiguous()
+                )
+
+            # Construct the encoder output by combining a few diff sources
+            memory_elements = []
+            ans_mask = a_pos == 0
+            if self.config.encoder_outputs.c_raw:
+                memory_elements.append(ctxt_embedded.permute(1, 0, 2))
+
+            if self.config.encoder_outputs.a_raw:
+                memory_elements.append(ctxt_embedded.permute(1, 0, 2).masked_fill(ans_mask, 0))
+
+            if self.config.encoder_outputs.c_enc:
+                memory_elements.append(encoding)
+
+            if self.config.encoder_outputs.c_enc_pool:
+                ctxt_pooled = self.ctxt_pooling(key=encoding, value=encoding).unsqueeze(1)
+                memory_elements.append(ctxt_pooled.expand(-1, max_ctxt_len, -1))
+
+            if self.config.encoder_outputs.a_enc:
+                memory_elements.append(encoding.masked_fill(ans_mask, 0))
+
+            if self.config.encoder_outputs.c_ans_labels:
+                memory_elements.append(ctxt_ans_embedded)
+
+            if self.config.encoder_outputs.a_enc_pool:
+                ans_pooled = self.ans_pooling(encoding, encoding, mask=ans_mask).unsqueeze(1)
+                memory_elements.append(ans_pooled.expand(-1, max_ctxt_len, -1))
+
+            # This one needs work...
+            if self.config.encoder_outputs.c_enc_anspool:
+                ans_pooled = self.ans_pooling(encoding, encoding, mask=ans_mask).unsqueeze(1)
+                ctxt_anspooled = self.ctxt_pooling(key=ans_pooled, value=encoding).unsqueeze(1)
+                memory_elements.append(ctxt_anspooled.expand(-1, max_ctxt_len, -1))
+
+            memory_full = torch.cat(
+                memory_elements, dim=-1
+            )  # , encoding, ctxt_embedded.permute(1,0,2), memory_pooled.expand(-1, max_ctxt_len, -1)
+
+            if len(memory_elements) > 1 or True:
+                memory_full = self.encoder_projection(memory_full)
+
+        return memory_full, memory

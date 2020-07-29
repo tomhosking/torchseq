@@ -96,6 +96,7 @@ class SequenceDecoder(nn.Module):
             memory["encoding"].permute(1, 0, 2),
             tgt_mask=tgt_mask,
             tgt_key_padding_mask=output_pad_mask,
+            memory_key_padding_mask=memory["encoding_mask"],
         ).permute(1, 0, 2)
 
         # Embeddings -> logits
