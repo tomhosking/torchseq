@@ -188,15 +188,17 @@ class ModelAgent(BaseAgent):
         return output_strings, scores
 
     def step_train(self, batch, tgt_field):
-        loss = 0
 
         output, logits, _, _ = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
+        this_loss = 0
 
-        loss += torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
+        if self.config.training.get("xe_loss", True):
+            this_loss += self.loss(logits.permute(0, 2, 1), batch["q"])
 
-        return loss
+        this_loss = torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
+
+        return this_loss
 
     def train(self):
         """

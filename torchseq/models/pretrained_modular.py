@@ -35,7 +35,7 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
 
 
 class PretrainedModularModel(nn.Module):
-    def __init__(self, config, src_field="s1"):
+    def __init__(self, config, src_field="s1", tgt_field="s1"):
         super().__init__()
         self.config = config
 
@@ -43,6 +43,7 @@ class PretrainedModularModel(nn.Module):
             from transformers import BartModel
 
         self.src_field = src_field
+        self.tgt_field = tgt_field
 
         # Encoder/decoders
         bart_model = BartModel.from_pretrained(config.encdec.bert_model)
@@ -76,12 +77,15 @@ class PretrainedModularModel(nn.Module):
             for param in self.decoder.parameters():
                 param.requires_grad = False
 
+        self.mse_loss = nn.MSELoss(reduction="none")
+
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
             memory = {}
 
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
+        max_goal_len = batch[self.tgt_field].shape[1]
         # max_q_len = torch.max(batch['q_len'])
         # curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
@@ -90,28 +94,51 @@ class PretrainedModularModel(nn.Module):
             self.device
         )
 
-        bert_context_mask = ~context_mask
+        # bert_context_mask = ~context_mask
 
         # bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
 
         # First pass? Construct the encoding
         if "encoding" not in memory:
-            src_mask = (
-                torch.FloatTensor(max_ctxt_len, max_ctxt_len)
-                .fill_(float("-inf") if self.config.directional_masks else 0.0)
-                .to(self.device)
-            )
-            src_mask = torch.triu(src_mask, diagonal=1)
-            # src_mask = src_mask.where(batch['a_pos'] > 0, torch.zeros_like(src_mask).unsqueeze(-1))
 
-            encoding = self.encoder(input_ids=batch[self.src_field].to(self.device), attention_mask=bert_context_mask)[
-                0
-            ]
+            pretrained_encoding = self.encoder(
+                input_ids=batch[self.src_field].to(self.device), attention_mask=~context_mask
+            )[0]
 
             if self.config.encdec.data.get("module", False):
-                encoding = self.module(encoding.transpose(0, 1)).transpose(0, 1)
+                encoding = self.module(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
+            else:
+                encoding = pretrained_encoding
 
             memory["encoding"] = encoding
+
+            # calculate loss
+            goal_pad_mask = (
+                torch.arange(max(max_ctxt_len, max_goal_len))[None, :].cpu()
+                >= batch[self.tgt_field + "_len"][:, None].cpu()
+            ).to(self.device)
+            # TODO: this will fail if the input is shorter than the tgt! eg for paraphrasing
+            if max_ctxt_len > max_goal_len:
+                q_padding = torch.full(
+                    [batch[self.tgt_field].shape[0], max(max_ctxt_len - max_goal_len, 0)],
+                    Tokenizer().pad_id,
+                    dtype=torch.long,
+                    device=batch[self.tgt_field].device,
+                )
+                goal_padded = torch.cat([batch[self.tgt_field], q_padding], dim=-1)
+            else:
+                goal_padded = batch[self.tgt_field]
+
+            goal_encoding = self.encoder(input_ids=goal_padded.to(self.device), attention_mask=~goal_pad_mask)[0]
+
+            if max_ctxt_len < max_goal_len:
+                goal_encoding = goal_encoding[:, :max_ctxt_len, :]
+
+            this_mse_loss = self.mse_loss(encoding, goal_encoding).sum(dim=2)
+
+            if "loss" not in memory:
+                memory["loss"] = 0
+            memory["loss"] += this_mse_loss
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(self.device)

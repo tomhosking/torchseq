@@ -75,7 +75,7 @@ class ParaphraseAgent(ModelAgent):
 
         # define model
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_modular":
-            self.model = PretrainedModularModel(self.config, src_field=self.src_field, loss=self.loss)
+            self.model = PretrainedModularModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)
         else:
             self.model = TransformerParaphraseModel(self.config, src_field=self.src_field)
 
@@ -89,11 +89,13 @@ class ParaphraseAgent(ModelAgent):
         self.create_samplers()
 
     def step_train(self, batch, tgt_field):
-        loss = 0
 
         output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
+        this_loss = 0
+
+        if self.config.training.get("xe_loss", True):
+            this_loss += self.loss(logits.permute(0, 2, 1), batch["q"])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(
@@ -105,7 +107,7 @@ class ParaphraseAgent(ModelAgent):
 
         this_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
-        loss += torch.mean(this_loss, dim=0)
+        this_loss = torch.mean(this_loss, dim=0)
 
         if self.config.encdec.data.get("variational", False) or self.config.data.get("variational_projection", False):
             kl_loss = torch.mean(get_kl(memory["mu"], memory["logvar"]))
@@ -122,9 +124,9 @@ class ParaphraseAgent(ModelAgent):
                 )
             )
 
-            loss += kl_loss * kl_weight
+            this_loss += kl_loss * kl_weight
 
-        return loss
+        return this_loss
 
     def text_to_batch(self, x, device):
         if self.config.training.dataset in ["squad"]:

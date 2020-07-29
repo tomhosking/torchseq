@@ -48,7 +48,7 @@ class AQAgent(ModelAgent):
 
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_modular":
-            self.model = PretrainedModularModel(self.config, src_field=self.src_field)
+            self.model = PretrainedModularModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)
         else:
             self.model = TransformerAqModel(self.config)  # , loss=self.loss
 
@@ -85,11 +85,13 @@ class AQAgent(ModelAgent):
         self.model.freeze_bert = self.current_epoch < self.config.encdec.bert_warmup_epochs
 
     def step_train(self, batch, tgt_field):
-        loss = 0
 
         output, logits, _, _ = self.decode_teacher_force(self.model, batch, "q")  # bsd
 
-        this_loss = self.loss(logits.permute(0, 2, 1), batch["q"])
+        this_loss = 0
+
+        if self.config.training.get("xe_loss", True):
+            this_loss += self.loss(logits.permute(0, 2, 1), batch["q"])
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += self.config.training.suppression_loss_weight * self.suppression_loss(logits, batch["a"])
@@ -100,9 +102,9 @@ class AQAgent(ModelAgent):
             mask = self.dropper(this_loss_by_seq)  # The dropper returns a mask of 0s where data should be dropped.
             this_loss_by_seq *= mask  # Mask out the high losses')
 
-        loss += torch.mean(this_loss_by_seq, dim=0)
+        this_loss = torch.mean(this_loss_by_seq, dim=0)
 
-        return loss
+        return this_loss
 
     def text_to_batch(self, x, device):
 
