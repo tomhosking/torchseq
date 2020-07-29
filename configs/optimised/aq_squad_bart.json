@@ -1,0 +1,85 @@
+{
+    "name": "optimised_bart",
+    "tag": "aq",
+    "task": "aq",
+    "model": "pretrained_modular",
+    "env": {
+        "cuda": true,
+        "data_path": "./data",
+        "gpu_device": 0
+
+    },
+    "training": {
+        "dataset": "squad",
+        "use_preprocessed_data": false,
+        "log_interval": 100,
+        "lr_schedule": false,
+        "lr": 5e-6,
+        "beta1": 0.9,
+        "beta2": 0.98,
+        "batch_size": 4,
+        "optim_batch_size": 64,
+        "clip_gradient": 0.1,
+        "num_epochs": 30,
+        "opt": "adam",
+        "warmup_epochs": 10,
+        "suppression_loss_weight": 0.01,
+        "label_smoothing": 0.0,
+        "early_stopping_lag": 0,
+        "reset_metrics": true,
+        "token_dropout": 0.0
+    },
+    "eval": {
+        "eval_batch_size": 4,
+        "sampler": "beam",
+        "prepend_eos": true,
+        "sample_outputs": false
+    },
+    "beam_search": {
+        "beam_width": 8,
+        "beam_expansion": 4,
+        "length_alpha": 2.0
+    },
+    "prepro": {
+        "vocab_size": 50265,
+        "sent_window": 2,
+        "tok_window": 300,
+        "concat_ctxt_ans": true,
+        "roberta_style_encoding": true,
+        "bio_tagging": true,
+        "tokenizer": "bart-large"
+    },
+
+    "dropout": 0.1,
+
+    "raw_embedding_dim": 1024,
+    "embedding_dim": 1024,
+    "onehot_bio" : false,
+    "bio_embedding_dim": 8,
+    "freeze_embeddings": true,
+    "freeze_projection": true,
+    "directional_masks": true,
+
+    "encoder_outputs": {
+        "c_raw": true,
+        "a_raw": false,
+        "c_enc": true,
+        "c_enc_pool": false,
+        "a_enc": false,
+        "a_enc_pool": false,
+        "c_enc_anspool": false,
+        "c_ans_labels": false
+    },
+    "encdec": {
+        "num_encoder_layers": 3,
+        "num_decoder_layers": 3,
+        "num_heads": 8,
+        "dim_feedforward": 2048,
+        "activation": "relu",
+        "bert_encoder": false,
+        "bert_model": "facebook/bart-large",
+        "bert_warmup_epochs": 50,
+        "freeze_encoder": false,
+        "freeze_decoder": true
+    }
+}
