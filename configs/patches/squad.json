@@ -1,0 +1,6 @@
+{
+    "name": "%_squad",
+    "training": {
+        "dataset": "squad"
+    }
+}

@@ -1,0 +1,6 @@
+{
+    "name": "%_squadudep",
+    "training": {
+        "dataset": "models/squad-udep"
+    }
+}

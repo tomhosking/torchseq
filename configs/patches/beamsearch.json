@@ -1,0 +1,12 @@
+{
+    "name": "%_beam16x8",
+    "eval": {
+        "sampler": "beam",
+        "sample_outputs": true
+    },
+    "diverse_beam": {
+        "beam_width": 16,
+        "beam_expansion": 8,
+        "length_alpha": 2.0
+    }
+}

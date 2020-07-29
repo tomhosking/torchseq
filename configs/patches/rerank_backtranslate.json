@@ -1,0 +1,6 @@
+{
+    "name": "%_rerankbacktrans",
+    "reranker": {
+        "strategy": "backtranslate"
+    }
+}

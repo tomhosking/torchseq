@@ -1,0 +1,12 @@
+{
+    "name": "%_nucleus0.9",
+    "eval": {
+        "sampler": "nucleus"
+    },
+    "nucleus_sampling": {
+        "prevent_repetition": true,
+        "cutoff": 0.9,
+        "beam_width": 4,
+        "length_alpha": 0.01
+    }
+}

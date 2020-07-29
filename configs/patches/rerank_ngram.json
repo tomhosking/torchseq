@@ -1,0 +1,6 @@
+{
+    "name": "%_rerankngram",
+    "reranker": {
+        "strategy": "ngram"
+    }
+}
