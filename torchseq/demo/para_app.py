@@ -49,7 +49,7 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/vqvae/20200728_193617_squad_para_256_32h_2r"
+    MODEL_PATH = "./runs/vqvae/20200729_152926_squad_para_256_32h_2r"
     # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
     with open(MODEL_PATH + "/config.json") as f:

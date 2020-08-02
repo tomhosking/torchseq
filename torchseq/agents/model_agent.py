@@ -29,6 +29,7 @@ from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.perplexity import get_perplexity
 
 from torchseq.models.ranger import Ranger
+from torchseq.utils.loss_dropper import LossDropper
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -53,6 +54,9 @@ class ModelAgent(BaseAgent):
                 json.dump(config.data, f, indent=4)
 
             Logger(log_path=self.output_path + "/" + self.config.tag + "/" + self.run_id + "/logs")
+
+        if self.config.training.get("loss_dropping", 0) > 0:
+            self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
 
         # initialize counter
         self.best_metric = None
@@ -189,14 +193,21 @@ class ModelAgent(BaseAgent):
 
     def step_train(self, batch, tgt_field):
 
-        output, logits, _, _ = self.decode_teacher_force(self.model, batch, tgt_field)
+        output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
 
-        this_loss = 0
+        this_loss = torch.zeros(output.shape[0], dtype=torch.float).to(self.device)
 
         if self.config.training.get("xe_loss", True):
-            this_loss += self.loss(logits.permute(0, 2, 1), batch["q"])
+            this_loss += self.loss(logits.permute(0, 2, 1), batch[tgt_field]).sum(dim=1) / (
+                batch[tgt_field + "_len"] - 1
+            ).to(this_loss)
 
-        this_loss = torch.mean(torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0)
+        if "loss" in memory:
+            this_loss += memory["loss"]
+
+        if self.config.training.get("loss_dropping", False):
+            mask = self.dropper(this_loss)  # The dropper returns a mask of 0s where data should be dropped.
+            this_loss *= mask  # Mask out the high losses')
 
         return this_loss
 

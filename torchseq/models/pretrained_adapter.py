@@ -34,7 +34,7 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
     return (a + b).unsqueeze(1).clamp(LARGE_NEGATIVE,)
 
 
-class PretrainedModularModel(nn.Module):
+class PretrainedAdapterModel(nn.Module):
     def __init__(self, config, src_field="s1", tgt_field="s1"):
         super().__init__()
         self.config = config
@@ -51,7 +51,7 @@ class PretrainedModularModel(nn.Module):
         self.decoder = bart_model.decoder
         self.decoder.generation_mode = False
 
-        if self.config.encdec.data.get("module", False):
+        if self.config.encdec.data.get("adapter", False):
 
             encoder_layer = custom_transformer.TransformerEncoderLayer(
                 config.embedding_dim,
@@ -61,7 +61,11 @@ class PretrainedModularModel(nn.Module):
                 activation=config.encdec.activation,
             )
 
-            self.module = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, None)
+            self.adapter = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, None)
+
+            for p in self.adapter.parameters():
+                if p.dim() > 1:
+                    nn.init.xavier_uniform_(p, gain=1e-1)
 
         self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False)
         if config.embedding_dim == config.raw_embedding_dim:
@@ -105,8 +109,8 @@ class PretrainedModularModel(nn.Module):
                 input_ids=batch[self.src_field].to(self.device), attention_mask=~context_mask
             )[0]
 
-            if self.config.encdec.data.get("module", False):
-                encoding = self.module(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
+            if self.config.encdec.data.get("adapter", False):
+                encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
             else:
                 encoding = pretrained_encoding
 
@@ -134,11 +138,15 @@ class PretrainedModularModel(nn.Module):
             if max_ctxt_len < max_goal_len:
                 goal_encoding = goal_encoding[:, :max_ctxt_len, :]
 
-            this_mse_loss = self.mse_loss(encoding, goal_encoding).sum(dim=2)
+            this_mse_loss = self.mse_loss(encoding, goal_encoding).sum(dim=2) * (1.0 * ~goal_pad_mask)
+            this_mse_loss = this_mse_loss.sum(dim=1) / (batch[self.tgt_field + "_len"] - 1).to(encoding)
 
             if "loss" not in memory:
                 memory["loss"] = 0
-            memory["loss"] += this_mse_loss
+
+            if self.config.training.get("mse_loss_weight", 0) > 0:
+
+                memory["loss"] += this_mse_loss * self.config.training.get("mse_loss_weight", 0)
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(self.device)
