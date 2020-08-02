@@ -46,6 +46,7 @@ class PoolingBottleneck(nn.Module):
                 residual=self.config.encdec.get("quantizer_residual", False),
                 code_offset=self.config.encdec.get("code_offset", 0),
                 num_residual=self.config.encdec.get("quantizer_num_residual", 0),
+                soft_em=self.config.encdec.get("quantizer_soft", True),
             )
 
     def forward(self, encoding, memory, global_step):
@@ -94,19 +95,17 @@ class PoolingBottleneck(nn.Module):
                     * self.config.encdec.get("quantizer_num_residual", 0)
                 )
 
-                memory["mu"] = encoding_pooled
-                memory["logvar"] = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+                mu = encoding_pooled
+                logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
-                encoding_pooled[:, :1, :splice_ix] = reparameterize(
-                    memory["mu"][:, :1, :splice_ix], memory["logvar"][:, :1, :splice_ix]
-                )
+                encoding_pooled[:, :1, :splice_ix] = reparameterize(mu[:, :1, :splice_ix], logvar[:, :1, :splice_ix])
             else:
-                memory["mu"] = encoding_pooled
-                memory["logvar"] = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+                mu = encoding_pooled
+                logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
-                encoding_pooled = reparameterize(memory["mu"], memory["logvar"])
+                encoding_pooled = reparameterize(mu, logvar)
 
-            kl_loss = torch.mean(get_kl(memory["mu"], memory["logvar"]), dim=1)
+            kl_loss = torch.mean(get_kl(mu, logvar), dim=1)
 
             kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
             kl_weight = (

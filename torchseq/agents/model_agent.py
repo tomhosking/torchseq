@@ -334,6 +334,8 @@ class ModelAgent(BaseAgent):
 
     def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True, reduce_outputs=True):
 
+        batch["_global_step"] = self.global_step
+
         if not sample_outputs:
             dev_output = None
             dev_output_lens = None

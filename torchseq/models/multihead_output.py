@@ -98,6 +98,6 @@ class MultiHeadOutput(nn.Module):
                 logits = reparameterize(mu, logvar)
 
         if self.variational:
-            return logits, mu, logvar
+            return logits
         else:
             return logits

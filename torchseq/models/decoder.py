@@ -101,7 +101,7 @@ class SequenceDecoder(nn.Module):
 
         # Embeddings -> logits
         if self.config.data.get("variational_projection", False):
-            logits, memory["mu"], memory["logvar"] = self.output_projection(output_seq)
+            logits, memory = self.output_projection(output_seq)
         else:
             logits = self.output_projection(output_seq)
 

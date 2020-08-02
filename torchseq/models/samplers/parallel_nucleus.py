@@ -96,7 +96,7 @@ class ParallelNucleusSampler(nn.Module):
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
 
-        batch_tiled = {k: _tile_batch(x) for k, x in batch.items() if k[-5:] != "_text"}
+        batch_tiled = {k: _tile_batch(x) for k, x in batch.items() if k[-5:] != "_text" and k[0] != "_"}
 
         seq_ix = 0
         memory = {}

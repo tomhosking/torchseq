@@ -17,6 +17,7 @@ class VectorQuantizerMultiHead(nn.Module):
         ema=True,
         code_offset=0,
         num_residual=0,
+        soft_em=True,
     ):
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -27,6 +28,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._ema = ema
         self._code_offset = code_offset
         self._num_residual = num_residual
+        self._soft_em = soft_em
 
         self._embedding = nn.ModuleList(
             [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
@@ -79,12 +81,15 @@ class VectorQuantizerMultiHead(nn.Module):
                     )
                     min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
                     encoding_indices = min_k[:, this_offset].unsqueeze(1)
+                elif self._soft_em and self.training:
+                    encodings = torch.softmax(-1.0 * distances, dim=-1).detach()
+
                 else:
                     encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
 
-                encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
-                encodings.scatter_(1, encoding_indices, 1)
-                vq_codes.append(encoding_indices)
+                    encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+                    encodings.scatter_(1, encoding_indices, 1)
+                    vq_codes.append(encoding_indices)
 
                 # Quantize and unflatten
                 this_quantized = torch.matmul(encodings, embedding.weight)
