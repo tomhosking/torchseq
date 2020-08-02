@@ -192,6 +192,7 @@ class ModelAgent(BaseAgent):
         return output_strings, scores
 
     def step_train(self, batch, tgt_field):
+        batch["_global_step"] = self.global_step
 
         output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
 

@@ -12,7 +12,6 @@ from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.para_transformer import TransformerParaphraseModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
-from torchseq.models.kl_divergence import get_kl
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.logging import Logger
 from torchseq.utils.loss_dropper import LossDropper
@@ -93,6 +92,7 @@ class ParaphraseAgent(ModelAgent):
         self.create_samplers()
 
     def step_train(self, batch, tgt_field):
+        batch["_global_step"] = self.global_step
 
         output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
 
@@ -118,23 +118,6 @@ class ParaphraseAgent(ModelAgent):
             this_loss *= mask  # Mask out the high losses')
 
         this_loss = torch.mean(this_loss, dim=0)
-
-        if self.config.encdec.data.get("variational", False) or self.config.data.get("variational_projection", False):
-            kl_loss = torch.mean(get_kl(memory["mu"], memory["logvar"]))
-
-            kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
-
-            kl_weight = (
-                1
-                if self.global_step >= 2 * kl_warmup_steps
-                else (
-                    0
-                    if self.global_step < kl_warmup_steps
-                    else float(self.global_step - kl_warmup_steps) / (1.0 * kl_warmup_steps)
-                )
-            )
-
-            this_loss += kl_loss * kl_weight
 
         return this_loss
 

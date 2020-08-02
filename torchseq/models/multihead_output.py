@@ -32,7 +32,7 @@ class MultiHeadOutput(nn.Module):
 
         if variational:
             self.embeds_to_logvars = nn.Linear(self.dim_per_head, vocab_size, bias=False).cpu()
-            print("var setup")
+            raise Exception("Variation projection is not correct! Need to implement KL loss")
 
         self.head_weight = nn.Linear(embedding_dim, num_heads * num_projections, bias=False)
 

@@ -116,10 +116,13 @@ class VectorQuantizerMultiHead(nn.Module):
 
         # Loss
         if not self._ema:
-            q_latent_loss = nn.functional.mse_loss(quantized, inputs.detach())
+            q_latent_loss = (
+                nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").sum(dim=-1).sum(dim=-1)
+            )
         else:
             q_latent_loss = 0
-        e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs)
+        e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").sum(dim=-1).sum(dim=-1)
+
         loss = self._commitment_cost * e_latent_loss + q_latent_loss
 
         # Straight Through Estimator

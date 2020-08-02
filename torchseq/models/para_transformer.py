@@ -34,14 +34,16 @@ class TransformerParaphraseModel(nn.Module):
         # First pass? Construct the encoding
         if "encoding" not in memory:
             encoding, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
-            encoding_pooled, memory = self.bottleneck(encoding, memory)
+            encoding_pooled, memory = self.bottleneck(encoding, memory, batch["_global_step"])
 
             if "template" in batch:
                 template_memory = {}
                 template_encoding, template_memory = self.seq_encoder(
                     batch["template"], batch["template_len"], template_memory
                 )
-                template_encoding_pooled, template_memory = self.bottleneck(template_encoding, template_memory)
+                template_encoding_pooled, template_memory = self.bottleneck(
+                    template_encoding, template_memory, batch["_global_step"]
+                )
                 # TODO: splice the template encoding into the input
 
                 splice_ix = (

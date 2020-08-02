@@ -85,6 +85,7 @@ class AQAgent(ModelAgent):
         self.model.freeze_bert = self.current_epoch < self.config.encdec.bert_warmup_epochs
 
     def step_train(self, batch, tgt_field):
+        batch["_global_step"] = self.global_step
 
         output, logits, _, memory = self.decode_teacher_force(self.model, batch, "q")  # bsd
 
