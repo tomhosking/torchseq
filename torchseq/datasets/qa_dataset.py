@@ -12,7 +12,7 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class QADataset(Dataset):
-    def __init__(self, path, config, dev=False, test=False):
+    def __init__(self, path, config, dev=False, test=False, length_limit=None):
         self.config = config
 
         if config.training.dataset == "squad":
@@ -49,6 +49,9 @@ class QADataset(Dataset):
                     reader.close()
             else:
                 raise Exception("Couldn't find dataset file! {:}".format(file_path))
+
+        if length_limit is not None:
+            self.samples = self.samples[:length_limit]
 
     def __len__(self):
         return len(self.samples)

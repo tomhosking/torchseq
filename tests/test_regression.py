@@ -19,8 +19,8 @@ from torchseq.utils.tokenizer import Tokenizer
 @test_utils.slow
 def test_bert_embeds():
 
-    CONFIG = "./models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/config.json"
-    CHKPT = "./models/optimised/bert_embeds/20200113_075322_0sent_lr3e-3/model/checkpoint.pth.tar"
+    CONFIG = "./models/optimised/aq/20200729_141718_optimised_embeds/config.json"
+    CHKPT = "./models/optimised/aq/20200729_141718_optimised_embeds/model/checkpoint.pth.tar"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -35,6 +35,8 @@ def test_bert_embeds():
         if DATA_PATH is not None:
             cfg_dict["env"]["data_path"] = DATA_PATH
 
+        cfg_dict["eval"]["truncate_dataset"] = 100
+
         config = Config(cfg_dict)
 
     set_seed(SEED)
@@ -42,17 +44,22 @@ def test_bert_embeds():
     # This is not a good way of passing this value in
     Tokenizer(config.prepro.tokenizer).reload(config.prepro.tokenizer)
 
-    run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + config.name + "_REGRESSION"
+    # run_id = datetime.now().strftime("%Y%m%d_%H%M%S") + "_" + config.name + "_REGRESSION"
 
     if config.task == "aq":
-        agent = AQAgent(config, run_id, OUTPUT_PATH, silent=True)
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, run_id, OUTPUT_PATH, silent=True)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
 
     agent.load_checkpoint(CHKPT)
     loss, metrics = agent.validate(save=False, force_save_output=True)
 
-    # Now check the output
-    assert abs(loss.item() - 2.5665) < 1e-3, "Loss is different to expected!"
+    # Now check the output (for first 100 samples)
+    assert abs(loss.item() - 3.247) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 17.338) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 15.35) < 1e-2, "BLEU score is different to expected!"
+
+    # Targets for full dataset:
+    # assert abs(loss.item() - 2.833) < 1e-3, "Loss is different to expected!"
+    # assert "bleu" in metrics, "BLEU is missing from output metrics!"
+    # assert abs(metrics["bleu"] - 17.22) < 1e-2, "BLEU score is different to expected!"

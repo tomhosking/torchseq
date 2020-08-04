@@ -138,7 +138,7 @@ class ModelAgent(BaseAgent):
             with open(pointer_filepath, "w") as f:
                 f.write(file_name)
 
-    def save_checkpoint(self, file_name="checkpoint.pth.tar"):
+    def save_checkpoint(self, file_name="checkpoint.pt"):
         """
         Checkpoint saver
         :param file_name: name of the checkpoint file
@@ -545,8 +545,6 @@ class ModelAgent(BaseAgent):
                 and (self.current_epoch - self.best_epoch) <= self.config.training.early_stopping_lag > 0
             )
         ):
-            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
-                f.write("\n".join([json.dumps(pred) for pred in pred_output]))
 
             self.all_metrics_at_best = {"nll": test_loss.item(), "qg_metric": qg_metric, "ppl": ppl}
 
@@ -557,9 +555,11 @@ class ModelAgent(BaseAgent):
                     "em": dev_em,
                     "sari": dev_sari,
                 }
-
-            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "metrics.json"), "w") as f:
-                json.dump(self.all_metrics_at_best, f)
+            if self.run_id is not None:
+                with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
+                    f.write("\n".join([json.dumps(pred) for pred in pred_output]))
+                with open(os.path.join(self.output_path, self.config.tag, self.run_id, "metrics.json"), "w") as f:
+                    json.dump(self.all_metrics_at_best, f)
 
         if (
             self.best_metric is None

@@ -22,12 +22,21 @@ class ParaphraseDataLoader:
             dev=False,
             test=False,
             repeat=(self.config.training.data.get("epoch_steps", 0) > 0),
+            length_limit=self.config.training.get("truncate_dataset", None),
         )
         valid = ParaphraseDataset(
-            os.path.join(config.env.data_path, self.config.training.dataset), config=config, dev=True, test=False
+            os.path.join(config.env.data_path, self.config.training.dataset),
+            config=config,
+            dev=True,
+            test=False,
+            length_limit=self.config.eval.get("truncate_dataset", None),
         )
         test = ParaphraseDataset(
-            os.path.join(config.env.data_path, self.config.training.dataset), config=config, dev=False, test=True
+            os.path.join(config.env.data_path, self.config.training.dataset),
+            config=config,
+            dev=False,
+            test=True,
+            length_limit=self.config.eval.get("truncate_dataset", None),
         )
 
         self.len_train_data = len(train)

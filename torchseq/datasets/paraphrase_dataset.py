@@ -3,17 +3,19 @@ from itertools import cycle
 
 import torch
 import torch.nn.functional as F
-from torch.utils.data import IterableDataset
+from torch.utils.data import Dataset
 
 from torchseq.datasets.paraphrase_pair import ParaphrasePair
 from torchseq.utils.tokenizer import Tokenizer
 
 
-class ParaphraseDataset(IterableDataset):
-    def __init__(self, path, config, dev=False, test=False, repeat=False):
+class ParaphraseDataset(Dataset):
+    def __init__(self, path, config, dev=False, test=False, repeat=False, length_limit=None):
         self.config = config
 
         self.repeat = repeat
+
+        self.samples = []
 
         self.path = path
         self.variant = "dev" if dev else ("test" if test else "train")
@@ -25,34 +27,9 @@ class ParaphraseDataset(IterableDataset):
         if test and not os.path.exists(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))):
             self.exists = False
         else:
-
-            # TODO: Can we get the length without reading the whole file?
             with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
                 for line in f:
                     self.length += 1
-
-    def __len__(self):
-        return self.length
-
-    def __iter__(self):
-        return self.generator()
-
-    def generator(self):
-        worker_info = torch.utils.data.get_worker_info()
-        if not worker_info:
-            worker_id = 0
-            num_workers = 1
-        else:
-            worker_id = worker_info.id
-            num_workers = worker_info.num_workers
-
-        with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
-            num_repeats = 0
-            while self.repeat or num_repeats < 1:
-                num_repeats += 1
-                for ix, line in enumerate(f):
-                    if num_workers > 1 and ix % num_workers != worker_id:
-                        continue
                     x = line.strip("\n").split("\t")
                     if len(x) < 2:
                         print(x)
@@ -60,7 +37,44 @@ class ParaphraseDataset(IterableDataset):
                         exit()
                     is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
                     sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
-                    yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
+                    self.samples.append(sample)
+
+            if length_limit is not None:
+                self.samples = self.samples[:length_limit]
+
+    def __len__(self):
+        return len(self.samples)
+
+    def __getitem__(self, idx):
+        return ParaphraseDataset.to_tensor(self.samples[idx], tok_window=self.config.prepro.tok_window,)
+
+    # def __iter__(self):
+    #     return self.generator()
+
+    # def generator(self):
+    #     worker_info = torch.utils.data.get_worker_info()
+    #     if not worker_info:
+    #         worker_id = 0
+    #         num_workers = 1
+    #     else:
+    #         worker_id = worker_info.id
+    #         num_workers = worker_info.num_workers
+
+    #     with open(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))) as f:
+    #         num_repeats = 0
+    #         while self.repeat or num_repeats < 1:
+    #             num_repeats += 1
+    #             for ix, line in enumerate(f):
+    #                 if num_workers > 1 and ix % num_workers != worker_id:
+    #                     continue
+    #                 x = line.strip("\n").split("\t")
+    #                 if len(x) < 2:
+    #                     print(x)
+    #                     print(line)
+    #                     exit()
+    #                 is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
+    #                 sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
+    #                 yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
     @staticmethod
     def to_tensor(x, tok_window=64):
