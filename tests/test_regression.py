@@ -35,7 +35,7 @@ def test_bert_embeds():
         if DATA_PATH is not None:
             cfg_dict["env"]["data_path"] = DATA_PATH
 
-        cfg_dict['eval']['truncate_dataset'] = 100
+        cfg_dict["eval"]["truncate_dataset"] = 100
 
         config = Config(cfg_dict)
 
@@ -65,7 +65,6 @@ def test_bert_embeds():
     # assert abs(metrics["bleu"] - 17.22) < 1e-2, "BLEU score is different to expected!"
 
 
-
 @test_utils.slow
 def test_autoencoder():
 
@@ -85,7 +84,7 @@ def test_autoencoder():
         if DATA_PATH is not None:
             cfg_dict["env"]["data_path"] = DATA_PATH
 
-        cfg_dict['eval']['truncate_dataset'] = 100
+        cfg_dict["eval"]["truncate_dataset"] = 100
 
         config = Config(cfg_dict)
 
