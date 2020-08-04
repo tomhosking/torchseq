@@ -1,6 +1,6 @@
 absl-py==0.9.0
 tensorboard==2.2.2
-torch==1.5.1
+torch==1.6.0
 tqdm
 # Tokenizermb
 nltk==3.5.0
