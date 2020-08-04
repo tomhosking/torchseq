@@ -4,8 +4,8 @@ torch==1.6.0
 tqdm
 # Tokenizermb
 nltk==3.5.0
-transformers==2.11.0
-tokenizers==0.7.0
+transformers==3.0.2
+tokenizers==0.8.1
 jsonlines
 sacrebleu
 
