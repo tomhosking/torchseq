@@ -14,7 +14,7 @@ class VectorQuantizerMultiHead(nn.Module):
         epsilon=1e-5,
         num_heads=1,
         residual=False,
-        ema=True,
+        ema=False,
         code_offset=0,
         num_residual=0,
         soft_em=True,
@@ -83,7 +83,6 @@ class VectorQuantizerMultiHead(nn.Module):
                     encoding_indices = min_k[:, this_offset].unsqueeze(1)
                 elif self._soft_em and self.training:
                     encodings = torch.softmax(-1.0 * distances, dim=-1).detach()
-
                 else:
                     encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
 
@@ -114,7 +113,6 @@ class VectorQuantizerMultiHead(nn.Module):
                         self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1)
                     )
             else:
-
                 quantized_list.append(this_input)
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
@@ -122,11 +120,11 @@ class VectorQuantizerMultiHead(nn.Module):
         # Loss
         if not self._ema:
             q_latent_loss = (
-                nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").sum(dim=-1).sum(dim=-1)
+                nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
             )
         else:
             q_latent_loss = 0
-        e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").sum(dim=-1).sum(dim=-1)
+        e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
         loss = self._commitment_cost * e_latent_loss + q_latent_loss
 

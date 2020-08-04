@@ -33,7 +33,7 @@
         "eval_batch_size": 4,
         "sampler": "beam",
         "prepend_eos": true,
-        "sample_outputs": false
+        "sample_outputs": true
     },
     "beam_search": {
         "beam_width": 8,

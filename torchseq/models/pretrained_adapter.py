@@ -109,6 +109,9 @@ class PretrainedAdapterModel(nn.Module):
                 input_ids=batch[self.src_field].to(self.device), attention_mask=~context_mask
             )[0]
 
+            if self.config.encdec.freeze_encoder:
+                pretrained_encoding = pretrained_encoding.detach()
+
             if self.config.encdec.data.get("adapter", False):
                 encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
             else:
@@ -116,7 +119,7 @@ class PretrainedAdapterModel(nn.Module):
 
             memory["encoding"] = encoding
 
-            if self.config.encdec.data.get("adapter", False):
+            if self.config.encdec.data.get("adapter", False) and self.config.training.get("mse_loss_weight", 0) > 0:
 
                 # calculate loss
                 goal_pad_mask = (
@@ -145,10 +148,7 @@ class PretrainedAdapterModel(nn.Module):
 
                 if "loss" not in memory:
                     memory["loss"] = 0
-
-                if self.config.training.get("mse_loss_weight", 0) > 0:
-
-                    memory["loss"] += this_mse_loss * self.config.training.get("mse_loss_weight", 0)
+                memory["loss"] += this_mse_loss * self.config.training.get("mse_loss_weight", 0)
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(self.device)

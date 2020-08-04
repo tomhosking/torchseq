@@ -66,7 +66,7 @@ class BeamSearchSampler(nn.Module):
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
 
-        batch_tiled = {k: _tile_batch(x) for k, x in batch.items() if k[-5:] != "_text" and k[0] != "_"}
+        batch_tiled = {k: (_tile_batch(x) if k[-5:] != "_text" and k[0] != "_" else x) for k, x in batch.items()}
 
         seq_ix = 0
         memory = {}
