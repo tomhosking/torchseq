@@ -3,6 +3,7 @@ import string
 from collections import Counter
 
 from nltk.tokenize import TreebankWordTokenizer, sent_tokenize
+from nltk.translate.meteor_score import single_meteor_score
 
 # from torchseq.utils.bleu import compute_bleu
 from torchseq.utils.sari import SARIsent
@@ -37,6 +38,9 @@ def ibleu_corpus(golds, preds, inputs, alpha=0.8):
 
 def sari_corpus(golds, preds, inputs):
     return sum([SARIsent(i, p, g) for g, p, i in zip(golds, preds, inputs)]) / len(golds)
+
+def meteor_corpus(golds, preds):
+    return sum([single_meteor_score(g, p) for g, p in zip(golds, preds)]) / len(golds)
 
 
 def f1(gold, prediction):

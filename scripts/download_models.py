@@ -11,3 +11,8 @@ mod = BertTokenizer.from_pretrained('bert-base-uncased')
 mod = BertTokenizer.from_pretrained('bert-base-cased')
 
 mod = BertForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-masking-finetuned-squad")
+
+
+import nltk
+
+nltk.download('wordnet')

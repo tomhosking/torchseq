@@ -23,7 +23,7 @@ from torchseq.models.rerankers.combo import CombinationReranker
 from torchseq.models.samplers.teacher_force import TeacherForcedSampler
 from torchseq.utils.logging import Logger
 from torchseq.utils.mckenzie import update_mckenzie
-from torchseq.utils.metrics import bleu_corpus
+from torchseq.utils.metrics import bleu_corpus, meteor_corpus
 from torchseq.utils.sari import SARIsent
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.perplexity import get_perplexity
@@ -481,7 +481,7 @@ class ModelAgent(BaseAgent):
                         gold_input.append(batch[self.src_field + "_text"][ix])
 
                     if batch_idx % 200 == 0 and not self.silent:
-                        print(gold_input[-2:])
+                        # print(gold_input[-2:])
                         print(gold_output[-2:])
                         print(pred_output[-2:])
 
@@ -524,6 +524,8 @@ class ModelAgent(BaseAgent):
 
             dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
 
+            dev_meteor = meteor_corpus(gold_output, pred_output)
+
             Logger().log_scalar("dev/bleu", dev_bleu, self.global_step)
             Logger().log_scalar("dev/ppl", ppl, self.global_step)
 
@@ -531,6 +533,7 @@ class ModelAgent(BaseAgent):
             self.logger.info("EM: {:}".format(dev_em))
             self.logger.info("SARI: {:}".format(dev_sari))
             self.logger.info("PPL: {:}".format(ppl))
+            self.logger.info("Meteor: {:}".format(dev_meteor))
 
         else:
             dev_bleu = "n/a"
@@ -555,6 +558,7 @@ class ModelAgent(BaseAgent):
                     "bleu": dev_bleu,
                     "em": dev_em,
                     "sari": dev_sari,
+                    "meteor": dev_meteor
                 }
             if self.run_id is not None:
                 with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
