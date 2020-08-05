@@ -39,6 +39,7 @@ def ibleu_corpus(golds, preds, inputs, alpha=0.8):
 def sari_corpus(golds, preds, inputs):
     return sum([SARIsent(i, p, g) for g, p, i in zip(golds, preds, inputs)]) / len(golds)
 
+
 def meteor_corpus(golds, preds):
     return sum([single_meteor_score(g, p) for g, p in zip(golds, preds)]) / len(golds)
 

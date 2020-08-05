@@ -558,7 +558,7 @@ class ModelAgent(BaseAgent):
                     "bleu": dev_bleu,
                     "em": dev_em,
                     "sari": dev_sari,
-                    "meteor": dev_meteor
+                    "meteor": dev_meteor,
                 }
             if self.run_id is not None:
                 with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:

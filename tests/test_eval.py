@@ -22,10 +22,10 @@ def test_bleu():
     bleu = metrics.bleu_corpus(sys, refs)
     assert abs(bleu - 45.0675) < 0.001, "BLEU score for basic examples differs from SacreBLEU reference!"
 
-def test_meteor():
-    preds = ['It is a guide to action which ensures that the military always obeys the commands of the party']
-    refs = ['It is a guide to action that ensures that the military will forever heed Party commands']
 
+def test_meteor():
+    preds = ["It is a guide to action which ensures that the military always obeys the commands of the party"]
+    refs = ["It is a guide to action that ensures that the military will forever heed Party commands"]
 
     assert metrics.meteor_corpus(refs, preds) - 0.7398 < 1e-4
 
