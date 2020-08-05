@@ -39,16 +39,25 @@ class PretrainedAdapterModel(nn.Module):
         super().__init__()
         self.config = config
 
-        if "bart" in self.config.encdec.bert_model:
-            from transformers import BartModel
-
         self.src_field = src_field
         self.tgt_field = tgt_field
 
-        # Encoder/decoders
-        bart_model = BartModel.from_pretrained(config.encdec.bert_model)
-        self.encoder = bart_model.encoder
-        self.decoder = bart_model.decoder
+        if "mbart" in self.config.encdec.bert_model:
+            from transformers import BartModel
+
+            # Encoder/decoders
+            bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+            self.encoder = bart_model.encoder
+            self.decoder = bart_model.decoder
+
+        elif "bart" in self.config.encdec.bert_model:
+            from transformers import BartModel
+
+            # Encoder/decoders
+            bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+            self.encoder = bart_model.encoder
+            self.decoder = bart_model.decoder
+
         self.decoder.generation_mode = False
 
         if self.config.encdec.data.get("adapter", False):
@@ -115,6 +124,19 @@ class PretrainedAdapterModel(nn.Module):
         # bert_context_mask = ~context_mask
 
         # bert_context_mask = (1.0 - bert_context_mask.long()) * -10000.0
+
+        if "_test" not in memory:
+            memory["_test"] = 0
+        else:
+            memory["_test"] += 1
+
+        # if memory['_test'] == 2:
+        #     print(self.src_field , '->', self.tgt_field)
+        #     print(batch['s1'])
+        #     print(batch['s2'])
+        #     print(output)
+        #     # print(context_mask)
+        #     exit()
 
         # First pass? Construct the encoding
         if "encoding" not in memory:

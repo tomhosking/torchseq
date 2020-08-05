@@ -7,8 +7,8 @@ class ParaphrasePair:
         if "artist appear below the euro symbol" in sent2_text:
             print("Found the dodgy pair", sent1_text, sent2_text)
 
-        self._s1_doc = Tokenizer().tokenise(sent1_text)
-        self._s2_doc = Tokenizer().tokenise(sent2_text)
+        self._s1_doc = Tokenizer().tokenise(sent1_text, src_lang_code="en_XX")
+        self._s2_doc = Tokenizer().tokenise(sent2_text, tgt_lang_code="en_XX")
         self._template_doc = Tokenizer().tokenise(sent2_text) if template is not None else None
         self.is_paraphrase = is_paraphrase
 

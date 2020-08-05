@@ -481,6 +481,7 @@ class ModelAgent(BaseAgent):
                         gold_input.append(batch[self.src_field + "_text"][ix])
 
                     if batch_idx % 200 == 0 and not self.silent:
+                        print(gold_input[-2:])
                         print(gold_output[-2:])
                         print(pred_output[-2:])
 

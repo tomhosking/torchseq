@@ -44,6 +44,7 @@ class BeamSearchSampler(nn.Module):
         )
 
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
+        MBART_HACK = self.config.eval.data.get("prepend_langcode", False)
 
         # Create vector of SOS + placeholder for first prediction
         output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().bos_id).to(self.device)
@@ -51,6 +52,11 @@ class BeamSearchSampler(nn.Module):
 
         if BART_HACK:
             dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().eos_id).to(self.device)
+            output_seq = torch.cat([dummy_token, output_seq], dim=-1)
+            scores = torch.cat([scores, scores], dim=-1)
+
+        if MBART_HACK:
+            dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(250004).to(self.device)
             output_seq = torch.cat([dummy_token, output_seq], dim=-1)
             scores = torch.cat([scores, scores], dim=-1)
 
@@ -148,7 +154,7 @@ class BeamSearchSampler(nn.Module):
 
         # Sort by score
 
-        if BART_HACK:
+        if BART_HACK or MBART_HACK:
             output_seq = output_seq[:, :, 1:]
             scores = scores[:, :, 1:]
 

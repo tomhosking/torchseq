@@ -16,6 +16,7 @@ class GreedySampler(nn.Module):
         max_output_len = batch[tgt_field].size()[1]
 
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
+        MBART_HACK = self.config.eval.data.get("prepend_langcode", False)
 
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().bos_id).to(self.device)
@@ -30,6 +31,12 @@ class GreedySampler(nn.Module):
         if BART_HACK:
             dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
             output = torch.cat([dummy_token, output], dim=1)
+
+        if MBART_HACK:
+            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(250004).to(self.device)
+            output = torch.cat([dummy_token, output], dim=1)
+            # output = dummy_token
+            # scores = torch.cat([scores, scores], dim=-1)
 
         seq_ix = 0
         memory = {}
@@ -49,7 +56,7 @@ class GreedySampler(nn.Module):
             output_done = output_done | (output[:, -1] == Tokenizer().eos_id)
             seq_ix += 1
 
-        if BART_HACK:
+        if BART_HACK or MBART_HACK:
             output = output[:, 1:]
 
         return output, logits, torch.sum(output != Tokenizer().pad_id, dim=-1), memory
