@@ -14,7 +14,7 @@ class VectorQuantizerMultiHead(nn.Module):
         epsilon=1e-5,
         num_heads=1,
         residual=False,
-        ema=False,
+        ema=True,
         code_offset=0,
         num_residual=0,
         soft_em=True,

@@ -52,16 +52,30 @@ class PretrainedAdapterModel(nn.Module):
         self.decoder.generation_mode = False
 
         if self.config.encdec.data.get("adapter", False):
+            if self.config.encdec.get("aq_adapter", False):
+                decoder_layer = custom_transformer.TransformerDecoderLayer(
+                    config.embedding_dim,
+                    nhead=config.encdec.num_heads,
+                    dim_feedforward=config.encdec.dim_feedforward,
+                    dropout=config.dropout,
+                    activation=config.encdec.activation,
+                )
 
-            encoder_layer = custom_transformer.TransformerEncoderLayer(
-                config.embedding_dim,
-                nhead=config.encdec.num_heads,
-                dim_feedforward=config.encdec.dim_feedforward,
-                dropout=config.dropout,
-                activation=config.encdec.activation,
-            )
+                self.adapter = custom_transformer.TransformerDecoder(
+                    decoder_layer, config.encdec.num_encoder_layers, None
+                )
+            else:
+                encoder_layer = custom_transformer.TransformerEncoderLayer(
+                    config.embedding_dim,
+                    nhead=config.encdec.num_heads,
+                    dim_feedforward=config.encdec.dim_feedforward,
+                    dropout=config.dropout,
+                    activation=config.encdec.activation,
+                )
 
-            self.adapter = custom_transformer.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, None)
+                self.adapter = custom_transformer.TransformerEncoder(
+                    encoder_layer, config.encdec.num_encoder_layers, None
+                )
 
             for p in self.adapter.parameters():
                 if p.dim() > 1:
@@ -113,7 +127,22 @@ class PretrainedAdapterModel(nn.Module):
                 pretrained_encoding = pretrained_encoding.detach()
 
             if self.config.encdec.data.get("adapter", False):
-                encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
+                if self.config.encdec.get("aq_adapter", False):
+                    sideinfo_mask = batch["a_pos"] == 0
+
+                    sideinfo = pretrained_encoding
+
+                    encoding = self.adapter(
+                        pretrained_encoding.transpose(0, 1),
+                        sideinfo.permute(1, 0, 2),
+                        tgt_key_padding_mask=context_mask,
+                        memory_key_padding_mask=sideinfo_mask,
+                    ).permute(1, 0, 2)
+                    # encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
+                else:
+                    encoding = self.adapter(
+                        pretrained_encoding.transpose(0, 1), src_key_padding_mask=context_mask
+                    ).transpose(0, 1)
             else:
                 encoding = pretrained_encoding
 
