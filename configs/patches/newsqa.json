@@ -1,0 +1,6 @@
+{
+    "name": "%_newsqa",
+    "training": {
+        "dataset": "newsqa"
+    }
+}

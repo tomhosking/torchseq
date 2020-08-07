@@ -1,0 +1,12 @@
+{
+    "name": "%_beam4x2L1",
+    "eval": {
+        "sampler": "beam",
+        "sample_outputs": true
+    },
+    "beam_search": {
+        "beam_width": 4,
+        "beam_expansion": 2,
+        "length_alpha": 1.0
+    }
+}
