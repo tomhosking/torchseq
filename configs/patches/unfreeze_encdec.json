@@ -1,0 +1,10 @@
+{
+    "name": "%_unfreeze",
+    "training": {
+        "batch_size": 2
+    },
+    "encdec": {
+        "freeze_encoder": false,
+        "freeze_decoder": false
+    }
+}

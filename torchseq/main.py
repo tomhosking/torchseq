@@ -29,7 +29,7 @@ def main(_):
                 chkpt_pth = f.readlines()[0]
             FLAGS.load_chkpt = chkpt_pth
         else:
-            FLAGS.load_chkpt = os.path.join(FLAGS.load, "model", "checkpoint.pth.tar")
+            FLAGS.load_chkpt = os.path.join(FLAGS.load, "model", "checkpoint.pt")
 
     print("** Running with config={:} **".format(FLAGS.config))
 
