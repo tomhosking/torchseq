@@ -31,7 +31,13 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
     if causal_lm_mask is not None:  # (tgt_len, src_len) -> targ_size
         _check_shapes(causal_lm_mask.shape, targ_size[-2:])
         b = causal_lm_mask.cpu().unsqueeze(0).expand(*targ_size)
-    return (a + b).unsqueeze(1).clamp(LARGE_NEGATIVE,)
+    return (
+        (a + b)
+        .unsqueeze(1)
+        .clamp(
+            LARGE_NEGATIVE,
+        )
+    )
 
 
 class PretrainedAdapterModel(nn.Module):

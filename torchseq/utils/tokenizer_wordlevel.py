@@ -8,7 +8,7 @@ import tokenizers
 
 
 class WordLevelTokenizer(BaseTokenizer):
-    """ WordLevelTokenizer
+    """WordLevelTokenizer
     Represents a simple word level tokenization
     """
 

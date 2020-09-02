@@ -606,5 +606,6 @@ class ModelAgent(BaseAgent):
             )
         else:
             update_mckenzie(
-                self.current_epoch / self.config.training.num_epochs * 100, "-",
+                self.current_epoch / self.config.training.num_epochs * 100,
+                "-",
             )

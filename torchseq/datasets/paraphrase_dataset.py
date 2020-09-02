@@ -46,7 +46,10 @@ class ParaphraseDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        return ParaphraseDataset.to_tensor(self.samples[idx], tok_window=self.config.prepro.tok_window,)
+        return ParaphraseDataset.to_tensor(
+            self.samples[idx],
+            tok_window=self.config.prepro.tok_window,
+        )
 
     # def __iter__(self):
     #     return self.generator()

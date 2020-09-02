@@ -1,7 +1,8 @@
 {
-    "name": "%_unfreeze",
+    "name": "%_unfreeze_lr1e-6",
     "training": {
-        "batch_size": 2
+        "batch_size": 2,
+        "lr": 1e-6
     },
     "encdec": {
         "freeze_encoder": false,
