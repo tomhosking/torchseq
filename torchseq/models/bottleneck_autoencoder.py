@@ -16,7 +16,7 @@ from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
 
 
-class TransformerParaphraseModel(nn.Module):
+class BottleneckAutoencoderModel(nn.Module):
     def __init__(self, config, src_field="s1"):
         super().__init__()
         self.config = config
@@ -41,10 +41,10 @@ class TransformerParaphraseModel(nn.Module):
                 template_encoding, template_memory = self.seq_encoder(
                     batch["template"], batch["template_len"], template_memory
                 )
+
                 template_encoding_pooled, template_memory = self.bottleneck(
                     template_encoding, template_memory, batch["_global_step"]
                 )
-                # TODO: splice the template encoding into the input
 
                 splice_ix = (
                     self.config.embedding_dim
