@@ -512,6 +512,10 @@ class ModelAgent(BaseAgent):
         for h_ix, codes in self.vq_codes.items():
             Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
 
+        if len(self.vq_codes) > 0:
+            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
+                json.dump(self.vq_codes, f)
+
         qg_metric = sum(qg_metric) / len(qg_metric)
         ppl = sum(perplexities) / len(perplexities)
 

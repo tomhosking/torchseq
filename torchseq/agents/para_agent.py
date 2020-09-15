@@ -9,7 +9,7 @@ from torchseq.datasets.paraphrase_pair import ParaphrasePair
 from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
 from torchseq.datasets.qa_dataset import QADataset
 from torchseq.datasets.qa_loader import QADataLoader
-from torchseq.models.para_transformer import TransformerParaphraseModel
+from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
 from torchseq.utils.tokenizer import Tokenizer
@@ -77,7 +77,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
             self.model = PretrainedAdapterModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)
         else:
-            self.model = TransformerParaphraseModel(self.config, src_field=self.src_field)
+            self.model = BottleneckAutoencoderModel(self.config, src_field=self.src_field)
 
         self.suppression_loss = SuppressionLoss(self.config)
 
