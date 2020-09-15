@@ -22,6 +22,6 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     entry_points = {
-        'console_scripts': ['torchseq=torchseq.main:run'],
+        'console_scripts': ['torchseq=torchseq.main:main'],
     },
 )

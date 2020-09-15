@@ -14,11 +14,11 @@ syntax:
 
 # Run tests for the library
 test:
-	pytest --cov=./torchseq
+	pytest --cov=./torchseq ./tests
 
 # Run tests for the library
 testall:
-	RUN_SLOW=1 pytest --cov=./torchseq
+	RUN_SLOW=1 pytest --cov=./torchseq ./tests
 
 # Send coverage report to codecov
 coverage:
