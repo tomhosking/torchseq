@@ -262,7 +262,8 @@ class ModelAgent(BaseAgent):
             tqdm(self.data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
         ):
             batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
-            curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+
+            curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
             # self.global_step += curr_batch_size
 
@@ -422,7 +423,7 @@ class ModelAgent(BaseAgent):
             ):
                 batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
-                curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+                curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
                 this_loss, dev_output, dev_output_lens, dev_scores, logits = self.step_validate(
                     batch,

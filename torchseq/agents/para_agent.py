@@ -9,6 +9,7 @@ from torchseq.datasets.paraphrase_pair import ParaphrasePair
 from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
 from torchseq.datasets.qa_dataset import QADataset
 from torchseq.datasets.qa_loader import QADataLoader
+from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
@@ -67,6 +68,15 @@ class ParaphraseAgent(ModelAgent):
                 self.data_loader = QADataLoader(config=config)
                 self.src_field = "q"
                 self.tgt_field = "q"
+            elif self.config.training.dataset in [
+                "json",
+            ]:
+                self.data_loader = JsonDataLoader(config=config)
+                self.src_field = (
+                    "s2"
+                    if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
+                    else "s1"
+                )
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 

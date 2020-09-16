@@ -64,7 +64,7 @@ class ParallelNucleusSampler(nn.Module):
         self.device = device
 
     def forward(self, model, batch, tgt_field):
-        curr_batch_size = batch[[k for k in batch.keys()][0]].size()[0]
+        curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
         max_output_len = self.config.eval.data.get("max_out_len", 32)
 
