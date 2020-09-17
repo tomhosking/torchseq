@@ -28,6 +28,7 @@ class JsonDataset(Dataset):
 
         self.length = 0
 
+        # TODO: handle jsonl files
         if test and not os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant))):
             self.exists = False
         else:

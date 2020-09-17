@@ -258,9 +258,9 @@ class ModelAgent(BaseAgent):
 
         start_step = self.global_step
 
-        for batch_idx, batch in enumerate(
-            tqdm(self.data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
-        ):
+        pbar = tqdm(self.data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
+
+        for batch_idx, batch in enumerate(pbar):
             batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
             curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -272,6 +272,10 @@ class ModelAgent(BaseAgent):
                 self.step_train(batch, self.tgt_field)
                 * float(curr_batch_size)
                 / float(self.config.training.optim_batch_size)
+            )
+
+            pbar.set_postfix(
+                {"loss": loss.item() * float(self.config.training.optim_batch_size) / float(curr_batch_size)}
             )
 
             loss.backward()
