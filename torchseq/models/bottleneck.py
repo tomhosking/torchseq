@@ -47,6 +47,7 @@ class PoolingBottleneck(nn.Module):
                 code_offset=self.config.encdec.get("code_offset", 0),
                 num_residual=self.config.encdec.get("quantizer_num_residual", 0),
                 soft_em=self.config.encdec.get("quantizer_soft", True),
+                warmup_steps=self.config.encdec.get("quantizer_warmup_steps", None),
             )
 
     def forward(self, encoding, memory, global_step):
@@ -60,7 +61,7 @@ class PoolingBottleneck(nn.Module):
 
         # Quantize
         if self.config.encdec.data.get("vector_quantized", False):
-            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled)
+            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step)
 
             if "loss" not in memory:
                 memory["loss"] = 0

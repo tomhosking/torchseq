@@ -18,6 +18,7 @@ class VectorQuantizerMultiHead(nn.Module):
         code_offset=0,
         num_residual=0,
         soft_em=True,
+        warmup_steps=None,
     ):
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -29,6 +30,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._code_offset = code_offset
         self._num_residual = num_residual
         self._soft_em = soft_em
+        self._warmup_steps = warmup_steps
 
         self._embedding = nn.ModuleList(
             [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
@@ -49,7 +51,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._residual = residual
         self._alpha = nn.Parameter(torch.Tensor(num_heads))
 
-    def forward(self, inputs):
+    def forward(self, inputs, global_step=None):
         # convert inputs from BCHW -> BHWC
         # inputs = inputs.permute(0, 2, 3, 1).contiguous()
         input_shape = inputs.shape
@@ -81,6 +83,10 @@ class VectorQuantizerMultiHead(nn.Module):
                     )
                     min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
                     encoding_indices = min_k[:, this_offset].unsqueeze(1)
+
+                    encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+                    encodings.scatter_(1, encoding_indices, 1)
+                    vq_codes.append(encoding_indices)
                 elif self._soft_em and self.training:
                     encodings = torch.softmax(-1.0 * distances, dim=-1).detach()
                 else:
@@ -141,7 +147,11 @@ class VectorQuantizerMultiHead(nn.Module):
                 + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
             ).view(input_shape)
         else:
-            quantized = inputs + (quantized - inputs).detach()
+            if self._warmup_steps is not None and global_step is not None:
+                w = min(global_step / self._warmup_steps, 1.0)
+                quantized = inputs + (w * quantized - w * inputs).detach()
+            else:
+                quantized = inputs + (quantized - inputs).detach()
 
         return loss, quantized, vq_codes
 

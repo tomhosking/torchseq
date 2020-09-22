@@ -14,6 +14,7 @@ import torch.nn as nn
 from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
+from torchseq.utils.logging import Logger
 
 
 class BottleneckAutoencoderModel(nn.Module):
@@ -72,26 +73,33 @@ class BottleneckAutoencoderModel(nn.Module):
                         diff1 = (
                             encoding_pooled[:, :, loss_splice_ix:] - template_encoding_pooled[:, :, loss_splice_ix:]
                         )
-                        similarity_loss = diff1 ** 2
+                        similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
                         diff2 = (
                             encoding_pooled[:, :, :loss_splice_ix] - template_encoding_pooled[:, :, :loss_splice_ix]
                         )
-                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2))
+                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
                     else:
                         diff1 = (
                             encoding_pooled[:, :, :loss_splice_ix] - template_encoding_pooled[:, :, :loss_splice_ix]
                         )
-                        similarity_loss = diff1 ** 2
+                        similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
                         diff2 = (
                             encoding_pooled[:, :, loss_splice_ix:] - template_encoding_pooled[:, :, loss_splice_ix:]
                         )
-                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2))
+                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
 
-                    memory["loss"] += (similarity_loss + dissimilarity_loss).mean(dim=-1).mean(
-                        dim=-1
-                    ) * self.config.encdec.get("separation_loss_weight", 0)
+                    similarity_loss *= 10
+
+                    separation_loss = (similarity_loss + dissimilarity_loss) * self.config.encdec.get(
+                        "separation_loss_weight", 0
+                    )
+
+                    Logger().log_scalar("bottleneck/sim_loss", similarity_loss.mean(), batch["_global_step"])
+                    Logger().log_scalar("bottleneck/dissim_loss", dissimilarity_loss.mean(), batch["_global_step"])
+
+                    memory["loss"] += separation_loss
 
             memory["encoding"] = encoding_pooled
             memory["encoding_mask"] = None

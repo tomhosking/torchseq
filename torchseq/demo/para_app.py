@@ -29,7 +29,7 @@ def generate():
     # ctxt = request.args['ctxt']
     # ans = request.args['ans']
 
-    query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "is_para": True}
+    query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "is_para": True, "s2": s1}
     if "template" in request.args:
         template = request.args["template"]
         query["template"] = template
@@ -49,7 +49,7 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/vqvae/20200729_152926_squad_para_256_32h_2r"
+    MODEL_PATH = "./runs/sep_ae/20200918_134056_squad_256_8h_2r_sep_flipped"
     # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
     with open(MODEL_PATH + "/config.json") as f:
@@ -58,7 +58,7 @@ def init():
         cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "nucleus"
         cfg_dict["eval"]["topk"] = 32
-        cfg_dict["training"]["dataset"] = "kaggle"
+        cfg_dict["training"]["dataset"] = "squad"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
         cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
         cfg_dict["diverse_beam"] = {
@@ -72,19 +72,20 @@ def init():
         #     # 'strategy': 'qa'
         #     "strategy": "ngram"
         # }
+        cfg_dict["encdec"]["prior_var_weight"] = 0.0
         var_offset = 2
-        cfg_dict["encdec"]["prior_var_weight"] = (
-            [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
-        )
+        # cfg_dict["encdec"]["prior_var_weight"] = (
+        #     [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
+        # )
         cfg_dict["encdec"]["code_offset"] = (
-            [0] * var_offset + [0] + [0] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
+            [0] * var_offset + [50] + [50] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
         )
         config = Config(cfg_dict)
 
     Tokenizer(config.prepro.tokenizer)
 
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
-    checkpoint_path = MODEL_PATH + "/model/checkpoint.pth.tar"
+    checkpoint_path = MODEL_PATH + "/model/checkpoint.pt"
 
     app.agent = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/")
 
