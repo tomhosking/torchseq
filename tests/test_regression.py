@@ -52,7 +52,7 @@ def test_bert_embeds():
         agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
 
     agent.load_checkpoint(CHKPT)
-    loss, metrics = agent.validate(save=False, force_save_output=True, save_model=False)
+    loss, metrics, memory = agent.validate(save=False, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 3.247) < 1e-3, "Loss is different to expected!"
@@ -101,7 +101,7 @@ def test_autoencoder():
         agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
 
     agent.load_checkpoint(CHKPT)
-    loss, metrics = agent.validate(save=False, force_save_output=True, save_model=False)
+    loss, metrics, memory = agent.validate(save=False, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 0.0974) < 1e-3, "Loss is different to expected!"

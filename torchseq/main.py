@@ -50,7 +50,7 @@ def main():
 
     config = Config(cfg_dict)
 
-    Tokenizer(config.prepro.tokenizer)
+    # Tokenizer(config.prepro.tokenizer)
 
     set_seed(config.get("seed", 123))
 

@@ -25,6 +25,7 @@ from torchseq.utils.logging import Logger
 from torchseq.utils.mckenzie import update_mckenzie
 from torchseq.utils.metrics import bleu_corpus, meteor_corpus
 from torchseq.utils.sari import SARIsent
+import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.perplexity import get_perplexity
 
@@ -46,6 +47,10 @@ class ModelAgent(BaseAgent):
         self.silent = silent
         self.output_path = output_path
         self.training_mode = training_mode
+
+        # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
+        tokenizer.DATA_PATH = config.env.data_path
+        tokenizer.Tokenizer(config.prepro.tokenizer)
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
