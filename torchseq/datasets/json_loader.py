@@ -34,6 +34,7 @@ class JsonDataLoader:
         self.len_valid_data = len(valid)
         # self.len_test_data = len(test)
 
+        # TODO: check whether running in silent mode
         print(
             "Loaded {:} training and {:} validation examples from {:}".format(
                 self.len_train_data,

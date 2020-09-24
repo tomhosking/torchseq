@@ -176,7 +176,7 @@ class ModelAgent(BaseAgent):
         """
         batch = self.text_to_batch(input, self.device)
 
-        _, output, output_lens, scores, qg_metric = self.step_validate(
+        _, output, output_lens, scores, logits, memory = self.step_validate(
             batch, tgt_field=self.tgt_field, sample_outputs=True, calculate_loss=False, reduce_outputs=reduce_outputs
         )
 
@@ -387,9 +387,17 @@ class ModelAgent(BaseAgent):
         else:
             logits = None
             normed_loss = None
-        return normed_loss, dev_output, dev_output_lens, dev_scores, logits
+        return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
-    def validate(self, save=False, force_save_output=False, use_test=False, use_train=False, save_model=True):
+    def validate(
+        self,
+        save=False,
+        force_save_output=False,
+        use_test=False,
+        use_train=False,
+        save_model=True,
+        memory_keys_to_return=None,
+    ):
         """
         One cycle of model validation
         :return:
@@ -411,6 +419,8 @@ class ModelAgent(BaseAgent):
 
         self.vq_codes = defaultdict(lambda: [])
 
+        memory_values_to_return = defaultdict(lambda: [])
+
         if use_test:
             print("***** USING TEST SET ******")
             valid_loader = self.data_loader.test_loader
@@ -429,7 +439,7 @@ class ModelAgent(BaseAgent):
 
                 curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
-                this_loss, dev_output, dev_output_lens, dev_scores, logits = self.step_validate(
+                this_loss, dev_output, dev_output_lens, dev_scores, logits, memory = self.step_validate(
                     batch,
                     self.tgt_field,
                     sample_outputs=self.config.eval.data.get("sample_outputs", True),
@@ -437,6 +447,10 @@ class ModelAgent(BaseAgent):
                 )
 
                 test_loss += this_loss * curr_batch_size
+
+                if memory_keys_to_return is not None:
+                    for mem_key in memory_keys_to_return:
+                        memory_values_to_return[mem_key].extend(memory[mem_key].detach().tolist())
 
                 # Calc QG metric
                 # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
@@ -600,7 +614,7 @@ class ModelAgent(BaseAgent):
 
         self.update_dashboard()
 
-        return test_loss, self.all_metrics_at_best
+        return test_loss, self.all_metrics_at_best, memory_values_to_return
 
     def update_dashboard(self):
         if "bleu" in self.all_metrics_at_best:

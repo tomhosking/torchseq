@@ -82,7 +82,7 @@ class ParaphraseDataset(Dataset):
     @staticmethod
     def to_tensor(x, tok_window=64):
         parsed_triple = ParaphrasePair(
-            x["s1"], x["s2"], x.get("template", None), is_paraphrase=x["is_para"], tok_window=tok_window
+            x["s1"], x["s2"], x.get("template", None), is_paraphrase=x.get("is_para", True), tok_window=tok_window
         )
 
         sample = {

@@ -96,8 +96,9 @@ class BottleneckAutoencoderModel(nn.Module):
                         "separation_loss_weight", 0
                     )
 
-                    Logger().log_scalar("bottleneck/sim_loss", similarity_loss.mean(), batch["_global_step"])
-                    Logger().log_scalar("bottleneck/dissim_loss", dissimilarity_loss.mean(), batch["_global_step"])
+                    if self.training:
+                        Logger().log_scalar("bottleneck/sim_loss", similarity_loss.mean(), batch["_global_step"])
+                        Logger().log_scalar("bottleneck/dissim_loss", dissimilarity_loss.mean(), batch["_global_step"])
 
                     memory["loss"] += separation_loss
 

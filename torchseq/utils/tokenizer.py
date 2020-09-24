@@ -7,6 +7,8 @@ from transformers import MBartTokenizer
 from torchseq.utils.singleton import Singleton
 from torchseq.utils.tokenizer_wordlevel import WordLevelTokenizer
 
+DATA_PATH = "./data/"
+
 FAIRSEQ_LANGUAGE_CODES = [
     "ar_AR",
     "cs_CZ",
@@ -68,8 +70,8 @@ class Tokenizer(metaclass=Singleton):
 
         elif "bart-" in model_slug or "roberta-" in model_slug:
             self.engine = ByteLevelBPETokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]),
-                "./data/pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1]),
+                "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1]),
+                "{:}pretrained-vocabs/{:}-merges.txt".format(DATA_PATH, model_slug.split("/")[-1]),
                 lowercase=False,
             )
 
@@ -84,7 +86,7 @@ class Tokenizer(metaclass=Singleton):
 
         elif "ptb" in model_slug:
             self.engine = WordLevelTokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])
+                "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1])
             )
 
             self.pad_id = self.engine.token_to_id("<pad>")
@@ -96,7 +98,7 @@ class Tokenizer(metaclass=Singleton):
 
         else:
             self.engine = BertWordPieceTokenizer(
-                "./data/pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1]),
+                "{:}pretrained-vocabs/{:}-vocab.txt".format(DATA_PATH, model_slug.split("/")[-1]),
                 lowercase=(model_slug[-8:] == "-uncased"),
             )
 
@@ -130,7 +132,7 @@ class Tokenizer(metaclass=Singleton):
         )
 
     def get_embeddings(self, model_slug):
-        return torch.load("./data/pretrained-vocabs/{:}.embeddings.pt".format(model_slug.split("/")[-1]))
+        return torch.load("{:}pretrained-vocabs/{:}.embeddings.pt".format(DATA_PATH, model_slug.split("/")[-1]))
 
     def tokenise(self, text, add_bos_eos=True, src_lang_code=None, tgt_lang_code=None):
         output = Tokenizer().engine.encode(text)

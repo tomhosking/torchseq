@@ -133,7 +133,7 @@ class ParaphraseAgent(ModelAgent):
 
     def text_to_batch(self, x, device):
         if self.config.training.dataset in ["squad"]:
-            x["s2"] = ""
+            # x["s2"] = ""
 
             return {
                 k: (v.to(self.device) if k[-5:] != "_text" else v)
@@ -142,7 +142,6 @@ class ParaphraseAgent(ModelAgent):
                 ).items()
             }
         else:
-            x["s2"] = ""
 
             return {
                 k: (v.to(self.device) if k[-5:] != "_text" else v)

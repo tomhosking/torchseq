@@ -88,17 +88,17 @@ def main():
 
     if args.validate_train:
         agent.logger.info("Starting validation (on training set)...")
-        agent.validate(save=False, force_save_output=True, use_train=True, save_model=False)
+        _ = agent.validate(save=False, force_save_output=True, use_train=True, save_model=False)
         agent.logger.info("...validation done!")
 
     if args.validate:
         agent.logger.info("Starting validation...")
-        agent.validate(save=False, force_save_output=True, save_model=False)
+        _ = agent.validate(save=False, force_save_output=True, save_model=False)
         agent.logger.info("...validation done!")
 
     if args.test:
         agent.logger.info("Starting testing...")
-        agent.validate(save=False, force_save_output=True, use_test=True, save_model=False)
+        _ = agent.validate(save=False, force_save_output=True, use_test=True, save_model=False)
         agent.logger.info("...testing done!")
 
 
