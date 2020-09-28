@@ -33,7 +33,7 @@ def generate():
     if "template" in request.args:
         template = request.args["template"]
         query["template"] = template
-    res, scores = app.agent.infer(query, reduce_outputs=False)
+    res, scores, _ = app.agent.infer(query, reduce_outputs=False)
 
     scores = scores.tolist()
 

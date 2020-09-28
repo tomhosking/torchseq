@@ -66,6 +66,7 @@ def main():
     print("** Run ID is {:} **".format(run_id))
 
     if args.preprocess:
+        raise Exception("Preprocessing is not currently maintained :(")
         preprocessor = PreprocessorAgent(config)
         preprocessor.logger.info("Preprocessing...")
         preprocessor.run()

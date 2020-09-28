@@ -177,7 +177,7 @@ class ModelAgent(BaseAgent):
 
     def infer(self, input, reduce_outputs=True):
         """
-        Run inference on a dictionary of strings
+        Run inference on a dictionary of raw inputs
         """
         batch = self.text_to_batch(input, self.device)
 
@@ -194,7 +194,7 @@ class ModelAgent(BaseAgent):
                 for i in range(len(output_lens))
             ]
 
-        return output_strings, scores
+        return output_strings, scores, memory
 
     def step_train(self, batch, tgt_field):
         batch["_global_step"] = self.global_step
@@ -224,6 +224,11 @@ class ModelAgent(BaseAgent):
         """
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
+
+        if self.data_loader is None:
+            raise Exception(
+                "Agent was created with a null dataset - you can only use this for on-the-fly inference, not training!"
+            )
 
         update_mckenzie(0, "-")
 
@@ -410,6 +415,11 @@ class ModelAgent(BaseAgent):
 
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
+
+        if self.data_loader is None:
+            raise Exception(
+                "Agent was created with a null dataset - you can only use this for on-the-fly inference, not validation!"
+            )
 
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()

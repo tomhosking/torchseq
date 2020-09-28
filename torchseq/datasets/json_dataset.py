@@ -1,5 +1,6 @@
 import os
 import json
+import jsonlines
 from itertools import cycle
 
 import torch
@@ -29,13 +30,24 @@ class JsonDataset(Dataset):
         self.length = 0
 
         # TODO: handle jsonl files
-        if test and not os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant))):
+        if test and not (
+            os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant)))
+            or os.path.exists(os.path.join(self.path, "{:}.jsonl".format(self.variant)))
+        ):
             self.exists = False
         else:
 
             # TODO: Can we get the length without reading the whole file?
-            with open(os.path.join(self.path, "{:}.json".format(self.variant))) as f:
-                self.samples = json.load(f)
+            if os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant))):
+                with open(os.path.join(self.path, "{:}.json".format(self.variant))) as f:
+                    self.samples = json.load(f)
+            if os.path.exists(os.path.join(self.path, "{:}.jsonl".format(self.variant))):
+                with jsonlines.open(os.path.join(self.path, "{:}.jsonl".format(self.variant))) as f:
+                    # TODO: maybe jsonl files should be read as a stream instead of all in one...
+                    self.samples = [x for x in f.read(f)]
+            else:
+                fpath = os.path.join(self.path, "{:}.json(l)".format(self.variant))
+                raise Exception("Could not find dataset file! {:}".format(fpath))
 
     def __len__(self):
         return len(self.samples)

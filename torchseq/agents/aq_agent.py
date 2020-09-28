@@ -64,6 +64,8 @@ class AQAgent(ModelAgent):
                 self.data_loader = QADataLoader(config=config)
             # elif self.config.training.dataset == 'newsqa':
             #     self.data_loader = NewsqaDataLoader(config=config)
+            elif self.config.training.dataset is None:
+                self.data_loader = None
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
@@ -116,7 +118,8 @@ class AQAgent(ModelAgent):
 
     def text_to_batch(self, x, device):
 
-        x["q"] = ""
+        if "q" not in x:
+            x["q"] = ""
 
         return {
             k: (v.to(self.device) if k[-5:] != "_text" else v)

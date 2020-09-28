@@ -77,6 +77,9 @@ class ParaphraseAgent(ModelAgent):
                     if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
                     else "s1"
                 )
+            elif self.config.training.dataset is None:
+                self.data_loader = None
+                self.src_field = "s2"
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 
@@ -142,6 +145,8 @@ class ParaphraseAgent(ModelAgent):
                 ).items()
             }
         else:
+            if self.tgt_field not in x:
+                x[self.tgt_field] = ""
 
             return {
                 k: (v.to(self.device) if k[-5:] != "_text" else v)

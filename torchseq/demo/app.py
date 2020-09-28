@@ -29,7 +29,7 @@ def generate():
 
     query = {"c": context, "a": answer, "a_pos": a_pos}
 
-    res, scores = app.agent.infer(query, reduce_outputs=False)
+    res, scores, _ = app.agent.infer(query, reduce_outputs=False)
 
     scores = scores.tolist()
 
