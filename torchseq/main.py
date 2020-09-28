@@ -15,7 +15,7 @@ from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import args as args
 from torchseq.datasets import qa_triple, loaders
 from torchseq.utils.config import Config, merge_cfg_dicts
-from torchseq.utils.seed import set_seed
+
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.logging import Logger
 
@@ -51,8 +51,6 @@ def main():
     config = Config(cfg_dict)
 
     # Tokenizer(config.prepro.tokenizer)
-
-    set_seed(config.get("seed", 123))
 
     run_id = (
         datetime.now().strftime("%Y%m%d_%H%M%S")

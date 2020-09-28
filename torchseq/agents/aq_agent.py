@@ -29,8 +29,8 @@ from torchseq.utils.loss_dropper import LossDropper
 
 
 class AQAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True):
-        super().__init__(config, run_id, output_path, silent, training_mode)
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
+        super().__init__(config, run_id, output_path, silent, training_mode, verbose)
 
         self.src_field = "c"
         self.tgt_field = "q"
@@ -56,7 +56,10 @@ class AQAgent(ModelAgent):
         if self.config.training.use_preprocessed_data:
             self.data_loader = PreprocessedDataLoader(config=config)
         else:
-            if (
+            if self.config.training.dataset is None:
+                self.data_loader = None
+                self.src_field = "s2"
+            elif (
                 self.config.training.dataset
                 in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa", "squad_nq_newsqa"]
                 or self.config.training.dataset[:5] == "squad"
@@ -64,8 +67,6 @@ class AQAgent(ModelAgent):
                 self.data_loader = QADataLoader(config=config)
             # elif self.config.training.dataset == 'newsqa':
             #     self.data_loader = NewsqaDataLoader(config=config)
-            elif self.config.training.dataset is None:
-                self.data_loader = None
             else:
                 raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 

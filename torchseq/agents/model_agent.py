@@ -31,6 +31,7 @@ from torchseq.utils.perplexity import get_perplexity
 
 from torchseq.models.ranger import Ranger
 from torchseq.utils.loss_dropper import LossDropper
+from torchseq.utils.seed import set_seed
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -40,13 +41,16 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True):
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
         super().__init__(config)
 
         self.run_id = run_id
         self.silent = silent
+        self.verbose = verbose
         self.output_path = output_path
         self.training_mode = training_mode
+
+        set_seed(config.get("seed", 123))
 
         # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
         tokenizer.DATA_PATH = config.env.data_path
@@ -175,24 +179,30 @@ class ModelAgent(BaseAgent):
         """
         raise NotImplementedError("Your model is missing a text_to_batch method!")
 
-    def infer(self, input, reduce_outputs=True):
+    def infer(self, input, reduce_outputs=True, sample_outputs=True, calculate_loss=False):
         """
         Run inference on a dictionary of raw inputs
         """
         batch = self.text_to_batch(input, self.device)
 
         _, output, output_lens, scores, logits, memory = self.step_validate(
-            batch, tgt_field=self.tgt_field, sample_outputs=True, calculate_loss=False, reduce_outputs=reduce_outputs
+            batch,
+            tgt_field=self.tgt_field,
+            sample_outputs=sample_outputs,
+            calculate_loss=calculate_loss,
+            reduce_outputs=reduce_outputs,
         )
 
-        if reduce_outputs:
+        if sample_outputs and reduce_outputs:
             output_strings = [Tokenizer().decode(output.data[ix][: output_lens[ix]]) for ix in range(len(output_lens))]
-        else:
+        elif sample_outputs:
             # There's an extra dim of nesting
             output_strings = [
                 [Tokenizer().decode(output.data[i][j][: output_lens[i][j]]) for j in range(len(output_lens[i]))]
                 for i in range(len(output_lens))
             ]
+        else:
+            output_strings = None
 
         return output_strings, scores, memory
 
@@ -321,7 +331,7 @@ class ModelAgent(BaseAgent):
                 )
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
-                if batch_idx % (self.config.training.log_interval * 20) == 0 and not self.silent:
+                if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
 
                     with torch.no_grad():
                         greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
@@ -397,6 +407,7 @@ class ModelAgent(BaseAgent):
         else:
             logits = None
             normed_loss = None
+            memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
     def validate(
@@ -465,7 +476,7 @@ class ModelAgent(BaseAgent):
 
                 if memory_keys_to_return is not None:
                     for mem_key in memory_keys_to_return:
-                        memory_values_to_return[mem_key].extend(memory[mem_key].detach().tolist())
+                        memory_values_to_return[mem_key].extend(memory[mem_key].detach().cpu().tolist())
 
                 # Calc QG metric
                 # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
@@ -514,7 +525,7 @@ class ModelAgent(BaseAgent):
                         # gold_input.append(Tokenizer().decode(gold[: batch[self.src_field + "_len"][ix]]))
                         gold_input.append(batch[self.src_field + "_text"][ix])
 
-                    if batch_idx % 200 == 0 and not self.silent:
+                    if batch_idx % 200 == 0 and self.verbose:
                         # print(gold_input[-2:])
                         print(gold_output[-2:])
                         print(pred_output[-2:])
@@ -546,7 +557,7 @@ class ModelAgent(BaseAgent):
         for h_ix, codes in self.vq_codes.items():
             Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
 
-        if len(self.vq_codes) > 0:
+        if len(self.vq_codes) > 0 and self.run_id is not None:
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
                 json.dump(self.vq_codes, f)
 

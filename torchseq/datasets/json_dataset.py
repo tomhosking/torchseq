@@ -30,21 +30,22 @@ class JsonDataset(Dataset):
         self.length = 0
 
         # TODO: handle jsonl files
-        if test and not (
+        if not (
             os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant)))
             or os.path.exists(os.path.join(self.path, "{:}.jsonl".format(self.variant)))
         ):
             self.exists = False
+            self.samples = []
         else:
 
             # TODO: Can we get the length without reading the whole file?
             if os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant))):
                 with open(os.path.join(self.path, "{:}.json".format(self.variant))) as f:
                     self.samples = json.load(f)
-            if os.path.exists(os.path.join(self.path, "{:}.jsonl".format(self.variant))):
+            elif os.path.exists(os.path.join(self.path, "{:}.jsonl".format(self.variant))):
                 with jsonlines.open(os.path.join(self.path, "{:}.jsonl".format(self.variant))) as f:
                     # TODO: maybe jsonl files should be read as a stream instead of all in one...
-                    self.samples = [x for x in f.read(f)]
+                    self.samples = [x for x in f]
             else:
                 fpath = os.path.join(self.path, "{:}.json(l)".format(self.variant))
                 raise Exception("Could not find dataset file! {:}".format(fpath))

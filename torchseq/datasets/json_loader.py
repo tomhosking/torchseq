@@ -47,29 +47,31 @@ class JsonDataLoader:
         # self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
         # self.test_iterations = (self.len_test_data + self.config.training.batch_size - 1) // self.config.training.batch_size
 
-        self.train_loader = DataLoader(
-            train,
-            batch_size=config.training.batch_size,
-            shuffle=self.config.training.data.get("shuffle_data", True),
-            num_workers=0,
-            collate_fn=JsonDataset.pad_and_order_sequences,
-            worker_init_fn=init_worker,
-        )
+        if train.exists:
+            self.train_loader = DataLoader(
+                train,
+                batch_size=config.training.batch_size,
+                shuffle=self.config.training.data.get("shuffle_data", True),
+                num_workers=2,
+                collate_fn=JsonDataset.pad_and_order_sequences,
+                worker_init_fn=init_worker,
+            )
 
-        self.valid_loader = DataLoader(
-            valid,
-            batch_size=config.eval.eval_batch_size,
-            shuffle=False,
-            num_workers=0,
-            collate_fn=JsonDataset.pad_and_order_sequences,
-            worker_init_fn=init_worker,
-        )
+        if valid.exists:
+            self.valid_loader = DataLoader(
+                valid,
+                batch_size=config.eval.eval_batch_size,
+                shuffle=False,
+                num_workers=2,
+                collate_fn=JsonDataset.pad_and_order_sequences,
+                worker_init_fn=init_worker,
+            )
         if test.exists:
             self.test_loader = DataLoader(
                 test,
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
-                num_workers=0,
+                num_workers=2,
                 collate_fn=JsonDataset.pad_and_order_sequences,
                 worker_init_fn=init_worker,
             )
