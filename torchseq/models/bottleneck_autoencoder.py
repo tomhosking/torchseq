@@ -15,6 +15,7 @@ from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
 from torchseq.utils.logging import Logger
+from torchseq.utils.functions import cos_sim
 
 
 class BottleneckAutoencoderModel(nn.Module):
@@ -69,20 +70,42 @@ class BottleneckAutoencoderModel(nn.Module):
                         memory["loss"] = 0
 
                     # TODO: there must be a cleaner way of flipping the tensor ranges here...
-                    if self.config.encdec.get("flip_separation_loss", False):
-                        diff1 = encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
-                        similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
-
-                        diff2 = encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
-                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
+                    if self.config.encdec.get("cos_separation_loss", True):
+                        diff1 = cos_sim(
+                            encoding_pooled[:, :, sep_splice_ix:], template_encoding_pooled[:, :, sep_splice_ix:]
+                        )
+                        diff2 = cos_sim(
+                            encoding_pooled[:, :, :sep_splice_ix], template_encoding_pooled[:, :, :sep_splice_ix]
+                        )
+                        if self.config.encdec.get("flip_separation_loss", False):
+                            similarity_loss = 1 - 1 * diff1.mean(dim=-1).mean(dim=-1)
+                            dissimilarity_loss = 1 + 1 * diff2.mean(dim=-1).mean(dim=-1)
+                        else:
+                            similarity_loss = 1 - 1 * diff2.mean(dim=-1).mean(dim=-1)
+                            dissimilarity_loss = 1 + 1 * diff1.mean(dim=-1).mean(dim=-1)
                     else:
-                        diff1 = encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
-                        similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
+                        if self.config.encdec.get("flip_separation_loss", False):
+                            diff1 = (
+                                encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
+                            )
+                            similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
-                        diff2 = encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
-                        dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
+                            diff2 = (
+                                encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
+                            )
+                            dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
+                        else:
+                            diff1 = (
+                                encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
+                            )
+                            similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
-                    similarity_loss *= 10
+                            diff2 = (
+                                encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
+                            )
+                            dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
+
+                        similarity_loss *= 10
 
                     separation_loss = (similarity_loss + dissimilarity_loss) * self.config.encdec.get(
                         "separation_loss_weight", 0

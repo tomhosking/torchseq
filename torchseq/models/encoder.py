@@ -40,20 +40,37 @@ class SequenceEncoder(nn.Module):
             else:
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
 
-        if self.config.encdec.data.get("residual", False):
+        if self.config.encdec.get("residual", False):
             self.encoder_projection = nn.utils.weight_norm(
                 nn.Linear(config.embedding_dim * 2, config.embedding_dim, bias=False)
             )
+        if self.config.encdec.get("pre_residual", False):
+            self.encoder_projection = nn.utils.weight_norm(
+                nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+            )
 
-        encoder_layer = nn.TransformerEncoderLayer(
-            config.embedding_dim,
-            nhead=config.encdec.num_heads,
-            dim_feedforward=config.encdec.dim_feedforward,
-            dropout=config.dropout,
-            activation=config.encdec.activation,
-        )
-        encoder_norm = nn.LayerNorm(config.embedding_dim)
-        self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+        if self.config.encdec.data.get("pre_ln", False):
+            encoder_layer = custom_transformer.TransformerEncoderLayer(
+                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(config.embedding_dim)
+            self.encoder = custom_transformer.TransformerEncoder(
+                encoder_layer, config.encdec.num_encoder_layers, encoder_norm
+            )
+        else:
+            encoder_layer = nn.TransformerEncoderLayer(
+                config.embedding_dim,
+                nhead=config.encdec.num_heads,
+                dim_feedforward=config.encdec.dim_feedforward,
+                dropout=config.dropout,
+                activation=config.encdec.activation,
+            )
+            encoder_norm = nn.LayerNorm(config.embedding_dim)
+            self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.embedding_dim)
@@ -77,6 +94,9 @@ class SequenceEncoder(nn.Module):
 
         if self.config.encdec.data.get("attention_limit", None) is not None:
             src_mask = torch.tril(src_mask, diagonal=self.config.encdec.data.get("attention_limit", 0))
+
+        if self.config.encdec.data.get("no_diagonal_attn", False):
+            src_mask += float("-inf") * torch.eye(max_input_len)
 
         padding_mask = (torch.arange(max_input_len)[None, :].cpu() >= input_seq_len[:, None].cpu()).to(
             input_seq.device
@@ -127,8 +147,12 @@ class SequenceEncoder(nn.Module):
             )
 
         # Include original input?
-        if self.config.encdec.data.get("residual", False):
+        if self.config.encdec.get("residual", False):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded.permute(1, 0, 2)], dim=-1))
+
+        if self.config.encdec.get("pre_residual", False):
+
+            encoding = torch.cat([encoding, self.encoder_projection(input_embedded.permute(1, 0, 2))], dim=-1)
 
         return encoding, memory
 

@@ -53,3 +53,8 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")
         indices_to_remove = sorted_indices_to_remove.scatter(dim=1, index=sorted_indices, src=sorted_indices_to_remove)
         logits[indices_to_remove] = filter_value
     return logits.reshape(orig_shape)
+
+
+# Return the cosine similarity between x, y
+def cos_sim(x, y):
+    return (x * y).sum(-1) / (x.norm(dim=-1) * y.norm(dim=-1))
