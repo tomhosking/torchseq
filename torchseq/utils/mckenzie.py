@@ -1,10 +1,10 @@
 import os
-
+import logging
 import requests
 
 
 def update_mckenzie(progress, metric):
-
+    logger = logging.getLogger("McKenzie")
     try:
         job_id = os.environ["SLURM_JOB_ID"]
         partition = os.environ["SLURM_JOB_PARTITION"]
@@ -15,4 +15,4 @@ def update_mckenzie(progress, metric):
             data={"jobid": job_id, "partition": partition, "progress": progress, "metric": metric},
         )
     except Exception as e:
-        print(repr(e))
+        logger.error("Error updating McKenzie: " + repr(e))

@@ -29,6 +29,17 @@ class BottleneckAutoencoderModel(nn.Module):
         self.bottleneck = PoolingBottleneck(config)
         self.seq_decoder = SequenceDecoder(config, embeddings=self.seq_encoder.embeddings)
 
+        if self.config.bottleneck.get("split_encoder", False):
+            self.seq_encoder_2 = SequenceEncoder(config)
+            self.bottleneck_2 = PoolingBottleneck(config)
+
+            self.split_projection_1 = nn.utils.weight_norm(
+                nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
+            )
+            self.split_projection_2 = nn.utils.weight_norm(
+                nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
+            )
+
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
             memory = dict()
@@ -38,10 +49,22 @@ class BottleneckAutoencoderModel(nn.Module):
             encoding, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
             encoding_pooled, memory = self.bottleneck(encoding, memory, batch["_global_step"])
 
+            if self.config.bottleneck.get("split_encoder", False):
+                encoding2, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
+                encoding_pooled2, memory = self.bottleneck(encoding2, memory, batch["_global_step"])
+
+                # TODO: Instead of 2x full size encoders + down projection, change to 2x half size encoders
+                if self.config.encoder.embedding_dim != self.config.decoder.embedding_dim:
+                    encoding_pooled = torch.cat(
+                        [self.split_projection_1(encoding_pooled), self.split_projection_2(encoding_pooled2)], -1
+                    )
+                else:
+                    encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
+
             sep_splice_ix = (
-                self.config.embedding_dim
+                self.config.decoder.embedding_dim
                 // self.config.encdec.get("num_heads", 1)
-                * self.config.encdec.get("num_similar_heads", 0)
+                * self.config.bottleneck.get("num_similar_heads", 0)
             )
 
             if "template" in batch:
@@ -54,6 +77,24 @@ class BottleneckAutoencoderModel(nn.Module):
                     template_encoding, template_memory, batch["_global_step"]
                 )
 
+                if self.config.bottleneck.get("split_encoder", False):
+                    template_encoding2, memory = self.seq_encoder(
+                        batch["template"], batch["template_len"], template_memory
+                    )
+                    template_encoding_pooled2, memory = self.bottleneck(
+                        template_encoding2, template_memory, batch["_global_step"]
+                    )
+
+                    template_encoding_pooled_joint = torch.cat(
+                        [
+                            self.split_projection_1(template_encoding_pooled),
+                            self.split_projection_2(template_encoding_pooled2),
+                        ],
+                        -1,
+                    )
+
+                    template_encoding_pooled = template_encoding_pooled_joint
+
                 # splice_ix = (
                 #     self.config.embedding_dim
                 #     // self.config.encdec.get("quantizer_heads", 1)
@@ -65,26 +106,31 @@ class BottleneckAutoencoderModel(nn.Module):
 
                 # encoding_pooled = torch.cat([resid_heads, quant_heads], dim=-1)
 
-                if self.config.encdec.get("separation_loss_weight", 0) > 0:
+                if self.config.bottleneck.get("use_templ_encoding", False):
+                    # switch = torch.randint(2, (encoding_pooled.shape[0], ), device=encoding_pooled.device).unsqueeze(-1).unsqueeze(-1)
+                    # encoding_pooled[:, :, sep_splice_ix:] = torch.where(switch > 0, template_encoding_pooled[:, :, sep_splice_ix:], encoding_pooled[:, :, sep_splice_ix:])
+                    encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
+
+                if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:
                         memory["loss"] = 0
 
                     # TODO: there must be a cleaner way of flipping the tensor ranges here...
-                    if self.config.encdec.get("cos_separation_loss", True):
+                    if self.config.bottleneck.get("cos_separation_loss", True):
                         diff1 = cos_sim(
                             encoding_pooled[:, :, sep_splice_ix:], template_encoding_pooled[:, :, sep_splice_ix:]
                         )
                         diff2 = cos_sim(
                             encoding_pooled[:, :, :sep_splice_ix], template_encoding_pooled[:, :, :sep_splice_ix]
                         )
-                        if self.config.encdec.get("flip_separation_loss", False):
+                        if self.config.bottleneck.get("flip_separation_loss", False):
                             similarity_loss = 1 - 1 * diff1.mean(dim=-1).mean(dim=-1)
                             dissimilarity_loss = 1 + 1 * diff2.mean(dim=-1).mean(dim=-1)
                         else:
                             similarity_loss = 1 - 1 * diff2.mean(dim=-1).mean(dim=-1)
                             dissimilarity_loss = 1 + 1 * diff1.mean(dim=-1).mean(dim=-1)
                     else:
-                        if self.config.encdec.get("flip_separation_loss", False):
+                        if self.config.bottleneck.get("flip_separation_loss", False):
                             diff1 = (
                                 encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
                             )
@@ -107,7 +153,7 @@ class BottleneckAutoencoderModel(nn.Module):
 
                         similarity_loss *= 10
 
-                    separation_loss = (similarity_loss + dissimilarity_loss) * self.config.encdec.get(
+                    separation_loss = (similarity_loss + dissimilarity_loss) * self.config.bottleneck.get(
                         "separation_loss_weight", 0
                     )
 

@@ -70,7 +70,7 @@ class PretrainedAdapterModel(nn.Module):
         if self.config.encdec.data.get("adapter", False):
             if self.config.encdec.get("aq_adapter", False):
                 decoder_layer = custom_transformer.TransformerDecoderLayer(
-                    config.embedding_dim,
+                    config.decoder.embedding_dim,
                     nhead=config.encdec.num_heads,
                     dim_feedforward=config.encdec.dim_feedforward,
                     dropout=config.dropout,
@@ -82,7 +82,7 @@ class PretrainedAdapterModel(nn.Module):
                 )
             else:
                 encoder_layer = custom_transformer.TransformerEncoderLayer(
-                    config.embedding_dim,
+                    config.encoder.embedding_dim,
                     nhead=config.encdec.num_heads,
                     dim_feedforward=config.encdec.dim_feedforward,
                     dropout=config.dropout,
@@ -97,8 +97,8 @@ class PretrainedAdapterModel(nn.Module):
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p, gain=self.config.encdec.get("adapter_init_scale", 1e-1))
 
-        self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False)
-        if config.embedding_dim == config.raw_embedding_dim:
+        self.output_projection = nn.Linear(config.decoder.embedding_dim, config.prepro.vocab_size, bias=False)
+        if config.decoder.embedding_dim == config.raw_embedding_dim:
             self.output_projection.weight.data = bart_model.shared.weight.data
 
         # self.output_projection = bart_model.lm_head

@@ -25,16 +25,16 @@ class SequenceDecoder(nn.Module):
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         decoder_layer = nn.TransformerDecoderLayer(
-            config.embedding_dim,
+            config.decoder.embedding_dim,
             nhead=config.encdec.num_heads,
             dim_feedforward=config.encdec.dim_feedforward,
             dropout=config.dropout,
             activation=config.encdec.activation,
         )
-        decoder_norm = nn.LayerNorm(config.embedding_dim)
+        decoder_norm = nn.LayerNorm(config.decoder.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
-        if config.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
+        if config.decoder.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
             projection_init = Tokenizer().get_embeddings(config.prepro.tokenizer)
         else:
             projection_init = None
@@ -46,7 +46,7 @@ class SequenceDecoder(nn.Module):
             or config.data.get("output_projection_embeddings", 1) > 1
         ):
             self.output_projection = MultiHeadOutput(
-                config.embedding_dim,
+                config.decoder.embedding_dim,
                 config.prepro.vocab_size,
                 num_heads=config.data.get("output_projection_heads", 1),
                 num_projections=config.data.get("output_projection_embeddings", 1),
@@ -56,13 +56,15 @@ class SequenceDecoder(nn.Module):
                 normed=self.config.data.get("normed_projection", False),
             ).cpu()
         else:
-            self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+            self.output_projection = nn.Linear(
+                config.decoder.embedding_dim, config.prepro.vocab_size, bias=False
+            ).cpu()
             # Init output projection layer with embedding matrix
             if projection_init is not None:
                 self.output_projection.weight.data = projection_init
             self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        self.positional_embeddings = PositionalEncoding(config.embedding_dim)
+        self.positional_embeddings = PositionalEncoding(config.decoder.embedding_dim)
 
     def forward(self, output_seq, memory):
 
@@ -82,10 +84,12 @@ class SequenceDecoder(nn.Module):
         )[:, :output_max_len]
 
         # Embed the output so far
-        output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(self.config.embedding_dim)
+        output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
+            self.config.decoder.embedding_dim
+        )
 
-        if self.config.raw_embedding_dim != self.config.embedding_dim:
-            output_embedded = self.embedding_projection(output_embedded)
+        # if self.config.raw_embedding_dim != self.config.decoder.embedding_dim:
+        #     output_embedded = self.embedding_projection(output_embedded)
 
         # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
         output_embedded = self.positional_embeddings(output_embedded.permute(1, 0, 2))

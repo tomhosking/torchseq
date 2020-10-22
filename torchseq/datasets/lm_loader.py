@@ -8,6 +8,8 @@ from torchseq.datasets.lm_dataset import LangmodellingDataset
 from torchseq.utils.seed import init_worker
 from torchseq.utils.tokenizer import Tokenizer
 
+import logging
+
 
 class LangmodellingDataLoader:
     def __init__(self, config):
@@ -15,6 +17,7 @@ class LangmodellingDataLoader:
         :param config:
         """
         self.config = config
+        self.logger = logging.getLogger("DataLoader")
 
         train = LangmodellingDataset(
             os.path.join(config.env.data_path, self.config.training.dataset),
@@ -35,7 +38,7 @@ class LangmodellingDataLoader:
         # self.len_test_data = len(test)
 
         # TODO: check whether running in silent mode
-        print(
+        self.logger.info(
             "Loaded {:} training and {:} validation examples from {:}".format(
                 self.len_train_data,
                 self.len_valid_data,

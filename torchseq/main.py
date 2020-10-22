@@ -2,6 +2,7 @@
 
 import json
 import os
+import logging
 from datetime import datetime
 
 import torch
@@ -22,6 +23,11 @@ from torchseq.utils.logging import Logger
 
 def main():
 
+    logging.basicConfig(
+        level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"
+    )
+    logger = logging.getLogger("CLI")
+
     if args.load is not None:
         args.config = os.path.join(args.load, "config.json")
 
@@ -32,7 +38,7 @@ def main():
         else:
             args.load_chkpt = os.path.join(args.load, "model", "checkpoint.pt")
 
-    print("** Running with config={:} **".format(args.config))
+    logger.info("** Running with config={:} **".format(args.config))
 
     with open(args.config) as f:
         cfg_dict = json.load(f)
@@ -61,7 +67,7 @@ def main():
         + ("_EVALTRAIN" if args.validate_train else "")
     )
 
-    print("** Run ID is {:} **".format(run_id))
+    logger.info("** Run ID is {:} **".format(run_id))
 
     if args.preprocess:
         raise Exception("Preprocessing is not currently maintained :(")
@@ -73,32 +79,34 @@ def main():
 
     agents = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
 
-    agent = agents[config.task](config, run_id, args.output_path, silent=args.silent, training_mode=args.train)
+    agent = agents[config.task](
+        config, run_id, args.output_path, silent=args.silent, verbose=(not args.silent), training_mode=args.train
+    )
 
     if args.load_chkpt is not None:
-        agent.logger.info("Loading from checkpoint...")
+        logger.info("Loading from checkpoint...")
         agent.load_checkpoint(args.load_chkpt)
-        agent.logger.info("...loaded!")
+        logger.info("...loaded!")
 
     if args.train:
-        agent.logger.info("Starting training...")
+        logger.info("Starting training...")
         agent.train()
-        agent.logger.info("...training done!")
+        logger.info("...training done!")
 
     if args.validate_train:
-        agent.logger.info("Starting validation (on training set)...")
+        logger.info("Starting validation (on training set)...")
         _ = agent.validate(save=False, force_save_output=True, use_train=True, save_model=False)
-        agent.logger.info("...validation done!")
+        logger.info("...validation done!")
 
     if args.validate:
-        agent.logger.info("Starting validation...")
+        logger.info("Starting validation...")
         _ = agent.validate(save=False, force_save_output=True, save_model=False)
-        agent.logger.info("...validation done!")
+        logger.info("...validation done!")
 
     if args.test:
-        agent.logger.info("Starting testing...")
+        logger.info("Starting testing...")
         _ = agent.validate(save=False, force_save_output=True, use_test=True, save_model=False)
-        agent.logger.info("...testing done!")
+        logger.info("...testing done!")
 
 
 if __name__ == "__main__":

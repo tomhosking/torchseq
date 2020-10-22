@@ -86,7 +86,7 @@ class JsonDataset(Dataset):
         sample = {}
 
         for f in fields:
-            sample[f["to"]] = JsonDataset._transform(obj[f["from"]], f["type"])
+            sample[f["to"]] = JsonDataset._transform(obj[f["from"]], f.get("type", "copy"))
 
         parsed = JsonDataInstance(sample, [f["to"] for f in fields])
 

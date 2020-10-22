@@ -1,4 +1,5 @@
 import os
+import logging
 
 import torch
 import torch.nn.functional as F
@@ -15,6 +16,7 @@ class JsonDataLoader:
         :param config:
         """
         self.config = config
+        self.logger = logging.getLogger("DataLoader")
 
         train = JsonDataset(
             os.path.join(config.env.data_path, self.config.json_dataset.path),
@@ -35,7 +37,7 @@ class JsonDataLoader:
         # self.len_test_data = len(test)
 
         # TODO: check whether running in silent mode
-        print(
+        self.logger.info(
             "Loaded {:} training and {:} validation examples from {:}".format(
                 self.len_train_data,
                 self.len_valid_data,

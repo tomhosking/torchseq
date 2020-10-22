@@ -23,33 +23,33 @@ class TransformerLanguageModel(nn.Module):
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
-            nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+            nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
         )
 
         # Encoder
 
         encoder_layer = nn.TransformerEncoderLayer(
-            config.embedding_dim,
+            config.encoder.embedding_dim,
             nhead=config.encdec.num_heads,
             dim_feedforward=config.encdec.dim_feedforward,
             dropout=config.dropout,
             activation=config.encdec.activation,
         )
-        encoder_norm = nn.LayerNorm(config.embedding_dim)
+        encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
         self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
-        # self.output_projection = nn.Linear(config.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+        # self.output_projection = nn.Linear(config.encoder.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
         # # Init output projection layer with embedding matrix
-        # if config.embedding_dim == config.raw_embedding_dim:
+        # if config.encoder.embedding_dim == config.raw_embedding_dim:
         #     self.output_projection.weight.data = self.embeddings.weight.data
         # self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        if config.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
+        if config.encoder.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
             projection_init = self.embeddings.weight.data
         else:
             projection_init = None
         self.output_projection = MultiHeadOutput(
-            config.embedding_dim,
+            config.encoder.embedding_dim,
             config.prepro.vocab_size,
             num_heads=config.data.get("output_projection_heads", 1),
             projection_init=projection_init,
@@ -58,7 +58,7 @@ class TransformerLanguageModel(nn.Module):
         )
 
         # Position encoding
-        self.positional_embeddings_enc = PositionalEncoding(config.embedding_dim)
+        self.positional_embeddings_enc = PositionalEncoding(config.encoder.embedding_dim)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
 
@@ -91,10 +91,10 @@ class TransformerLanguageModel(nn.Module):
         ctxt_toks_embedded = self.embeddings(output).to(self.device)
 
         # Build the context
-        if self.config.raw_embedding_dim != self.config.embedding_dim:
+        if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
             ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
 
-        ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
+        ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.encoder.embedding_dim)
 
         ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
 

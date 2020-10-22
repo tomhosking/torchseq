@@ -336,9 +336,9 @@ class ModelAgent(BaseAgent):
                     with torch.no_grad():
                         greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
 
-                    print(Tokenizer().decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
-                    print(Tokenizer().decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
-                    print(Tokenizer().decode(greedy_output.data[0][: output_lens[0]]))
+                    self.logger.info(Tokenizer().decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
+                    self.logger.info(Tokenizer().decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
+                    self.logger.info(Tokenizer().decode(greedy_output.data[0][: output_lens[0]]))
 
                     # if self.config.encdec.data.get("variational", False):
                     #     print(self.model.mu)
@@ -350,8 +350,8 @@ class ModelAgent(BaseAgent):
                 self.config.training.data.get("epoch_steps", 0) > 0
                 and self.global_step - start_step >= self.config.training.epoch_steps
             ):
-                print(
-                    "Epoch step size is set - validatin after {:} training steps".format(
+                self.logger.info(
+                    "Epoch step size is set - validating after {:} training steps".format(
                         self.config.training.epoch_steps
                     )
                 )
@@ -448,10 +448,10 @@ class ModelAgent(BaseAgent):
         memory_values_to_return = defaultdict(lambda: [])
 
         if use_test:
-            print("***** USING TEST SET ******")
+            self.logger.info("***** USING TEST SET ******")
             valid_loader = self.data_loader.test_loader
         elif use_train:
-            print("***** USING TRAINING SET ******")
+            self.logger.info("***** USING TRAINING SET ******")
             valid_loader = self.data_loader.train_loader
         else:
             valid_loader = self.data_loader.valid_loader
@@ -527,8 +527,8 @@ class ModelAgent(BaseAgent):
 
                     if batch_idx % 200 == 0 and self.verbose:
                         # print(gold_input[-2:])
-                        print(gold_output[-2:])
-                        print(pred_output[-2:])
+                        self.logger.info(gold_output[-2:])
+                        self.logger.info(pred_output[-2:])
 
                 # Handle top-k sampling
                 if self.config.eval.data.get("sample_outputs", True) and not (

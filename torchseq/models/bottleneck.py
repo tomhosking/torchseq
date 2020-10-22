@@ -19,35 +19,35 @@ class PoolingBottleneck(nn.Module):
 
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
-            config.embedding_dim,
+            config.bottleneck.embedding_dim,
             dropout=config.dropout,
-            model_dim_out=config.embedding_dim,
+            model_dim_out=config.bottleneck.embedding_dim,
             use_final_linear=False,
         )
 
         # Extra modules for a variational bottleneck
-        if self.config.encdec.data.get("variational", False):
+        if self.config.bottleneck.get("variational", False):
             self.encoder_logvar_pooling = MultiHeadedPooling(
                 config.encdec.num_heads,
-                config.embedding_dim,
+                config.bottleneck.embedding_dim,
                 dropout=config.dropout,
-                model_dim_out=config.embedding_dim,
+                model_dim_out=config.bottleneck.embedding_dim,
                 use_final_linear=False,
             )
 
         # VQ-VAE bottleneck
-        if self.config.encdec.data.get("vector_quantized", False):
+        if self.config.bottleneck.get("vector_quantized", False):
             self.quantizer = VectorQuantizerMultiHead(
-                self.config.encdec.codebook_size,
-                self.config.embedding_dim,
+                self.config.bottleneck.codebook_size,
+                self.config.bottleneck.embedding_dim,
                 commitment_cost=0.25,
                 decay=0.99,
-                num_heads=self.config.encdec.get("quantizer_heads", 1),
-                residual=self.config.encdec.get("quantizer_residual", False),
-                code_offset=self.config.encdec.get("code_offset", 0),
-                num_residual=self.config.encdec.get("quantizer_num_residual", 0),
-                soft_em=self.config.encdec.get("quantizer_soft", True),
-                warmup_steps=self.config.encdec.get("quantizer_warmup_steps", None),
+                num_heads=self.config.bottleneck.get("quantizer_heads", 1),
+                residual=self.config.bottleneck.get("quantizer_residual", False),
+                code_offset=self.config.bottleneck.get("code_offset", 0),
+                num_residual=self.config.bottleneck.get("quantizer_num_residual", 0),
+                soft_em=self.config.bottleneck.get("quantizer_soft", True),
+                warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
             )
 
     def forward(self, encoding, memory, global_step):
@@ -55,12 +55,12 @@ class PoolingBottleneck(nn.Module):
         # Pool
         encoding_pooled = (
             self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
-            if self.config.encdec.data.get("pooling", True)
+            if self.config.bottleneck.get("pooling", True)
             else encoding
         )
 
         # Quantize
-        if self.config.encdec.data.get("vector_quantized", False):
+        if self.config.bottleneck.get("vector_quantized", False):
             vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step)
 
             if "loss" not in memory:
@@ -69,31 +69,31 @@ class PoolingBottleneck(nn.Module):
             memory["vq_codes"] = quantizer_indices
 
         # Reparameterise for VAE
-        if self.config.encdec.data.get("variational", False):
+        if self.config.bottleneck.get("variational", False):
 
             def reparameterize(mu, logvar):
                 std = torch.exp(0.5 * logvar)
                 eps = torch.randn_like(std)
 
-                var_weight = self.config.encdec.data.get("prior_var_weight", 1.0)
+                var_weight = self.config.bottleneck.get("prior_var_weight", 1.0)
                 if not isinstance(var_weight, float) and len(var_weight) > 1:
                     assert len(var_weight) == self.config.encdec.num_heads
                     var_weight = torch.Tensor(var_weight).to(encoding.device)
                     var_weight = torch.repeat_interleave(
-                        var_weight, self.config.embedding_dim // self.config.encdec.num_heads
+                        var_weight, self.config.bottleneck.embedding_dim // self.config.encdec.num_heads
                     )
 
                 return mu + eps * std * var_weight
 
             # If VQ-VAE with residual path, only make the residual heads variational
             if (
-                self.config.encdec.data.get("vector_quantized", False)
-                and self.config.encdec.data.get("quantizer_num_residual", 0) > 0
+                self.config.bottleneck.get("vector_quantized", False)
+                and self.config.bottleneck.get("quantizer_num_residual", 0) > 0
             ):
                 splice_ix = (
-                    self.config.embedding_dim
-                    // self.config.encdec.get("quantizer_heads", 1)
-                    * self.config.encdec.get("quantizer_num_residual", 0)
+                    self.config.bottleneck.embedding_dim
+                    // self.config.bottleneck.get("quantizer_heads", 1)
+                    * self.config.bottleneck.get("quantizer_num_residual", 0)
                 )
 
                 mu = encoding_pooled

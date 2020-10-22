@@ -27,7 +27,7 @@ class SequenceEncoder(nn.Module):
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
-            nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+            nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
         )
 
         # Encoder/decoders
@@ -42,47 +42,50 @@ class SequenceEncoder(nn.Module):
 
         if self.config.encdec.get("residual", False):
             self.encoder_projection = nn.utils.weight_norm(
-                nn.Linear(config.embedding_dim * 2, config.embedding_dim, bias=False)
+                nn.Linear(config.encoder.embedding_dim * 2, config.encoder.embedding_dim, bias=False)
             )
         if self.config.encdec.get("pre_residual", False):
-            self.encoder_projection = nn.utils.weight_norm(
-                nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+            # self.encoder_projection = nn.utils.weight_norm(
+            #     nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+            # )
+            self.token_projection = nn.utils.weight_norm(
+                nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
             )
 
         if self.config.encdec.data.get("pre_ln", False):
             encoder_layer = custom_transformer.TransformerEncoderLayer(
-                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
                 nhead=config.encdec.num_heads,
                 dim_feedforward=config.encdec.dim_feedforward,
                 dropout=config.dropout,
                 activation=config.encdec.activation,
             )
-            encoder_norm = nn.LayerNorm(config.embedding_dim)
+            encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
             self.encoder = custom_transformer.TransformerEncoder(
                 encoder_layer, config.encdec.num_encoder_layers, encoder_norm
             )
         else:
             encoder_layer = nn.TransformerEncoderLayer(
-                config.embedding_dim,
+                config.encoder.embedding_dim,
                 nhead=config.encdec.num_heads,
                 dim_feedforward=config.encdec.dim_feedforward,
                 dropout=config.dropout,
                 activation=config.encdec.activation,
             )
-            encoder_norm = nn.LayerNorm(config.embedding_dim)
+            encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
             self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
         # Position encoding
-        self.positional_embeddings = PositionalEncoding(config.embedding_dim)
+        self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
 
     def forward(self, input_seq, input_seq_len, memory):
         max_input_len = input_seq.shape[1]
 
         # Re-normalise the projections...
-        with torch.no_grad():
-            self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            if self.config.encdec.data.get("residual", False):
-                self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+        # with torch.no_grad():
+        #     self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
+        #     if self.config.encdec.data.get("residual", False):
+        #         self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # Set up some masks
         src_mask = (
@@ -105,10 +108,10 @@ class SequenceEncoder(nn.Module):
         # Embed the input
         input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
 
-        if self.config.raw_embedding_dim != self.config.embedding_dim:
+        if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
             input_toks_embedded = self.embedding_projection(input_toks_embedded)
 
-        input_embedded = input_toks_embedded * math.sqrt(self.config.embedding_dim)
+        input_embedded = input_toks_embedded * math.sqrt(self.config.encoder.embedding_dim)
 
         input_embedded = self.positional_embeddings(input_embedded.permute(1, 0, 2))
 
@@ -151,8 +154,12 @@ class SequenceEncoder(nn.Module):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded.permute(1, 0, 2)], dim=-1))
 
         if self.config.encdec.get("pre_residual", False):
-
-            encoding = torch.cat([encoding, self.encoder_projection(input_embedded.permute(1, 0, 2))], dim=-1)
+            input_toks_resid = self.embeddings(input_seq).to(input_seq.device)
+            input_toks_resid = self.token_projection(input_toks_resid)
+            input_toks_resid = self.positional_embeddings(input_toks_resid.permute(1, 0, 2))
+            print(encoding.shape)
+            print(input_toks_resid.shape)
+            encoding = torch.cat([encoding, input_toks_resid.permute(1, 0, 2)], dim=-1)
 
         return encoding, memory
 
@@ -171,11 +178,13 @@ class ContextAnswerEncoder(nn.Module):
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
-            nn.Linear(config.raw_embedding_dim, config.embedding_dim, bias=False)
+            nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
         )
 
         self.bert_embedding_projection = nn.utils.weight_norm(
-            nn.Linear(config.embedding_dim * 1 + config.bio_embedding_dim, config.embedding_dim, bias=False)
+            nn.Linear(
+                config.encoder.embedding_dim * 1 + config.bio_embedding_dim, config.encoder.embedding_dim, bias=False
+            )
         )
 
         self.bio_embeddings = (
@@ -209,14 +218,14 @@ class ContextAnswerEncoder(nn.Module):
 
         if self.config.encdec.data.get("pre_ln", False):
             encoder_layer = custom_transformer.TransformerEncoderLayer(
-                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
                 nhead=config.encdec.num_heads,
                 dim_feedforward=config.encdec.dim_feedforward,
                 dropout=config.dropout,
                 activation=config.encdec.activation,
             )
             encoder_norm = nn.LayerNorm(
-                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
             )
             self.encoder = custom_transformer.TransformerEncoder(
                 encoder_layer, config.encdec.num_encoder_layers, encoder_norm
@@ -224,14 +233,14 @@ class ContextAnswerEncoder(nn.Module):
 
         else:
             encoder_layer = nn.TransformerEncoderLayer(
-                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
                 nhead=config.encdec.num_heads,
                 dim_feedforward=config.encdec.dim_feedforward,
                 dropout=config.dropout,
                 activation=config.encdec.activation,
             )
             encoder_norm = nn.LayerNorm(
-                config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
             )
             self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
@@ -245,31 +254,31 @@ class ContextAnswerEncoder(nn.Module):
             [1 if v else 0 for k, v in config.encoder_outputs.data.items() if k != "c_ans_labels"]
         )
         memory_dim = (
-            config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
         ) * num_encoder_outputs
         memory_dim += self.config.bio_embedding_dim if self.config.encoder_outputs.c_ans_labels else 0
-        self.encoder_projection = nn.utils.weight_norm(nn.Linear(memory_dim, config.embedding_dim, bias=False))
+        self.encoder_projection = nn.utils.weight_norm(nn.Linear(memory_dim, config.encoder.embedding_dim, bias=False))
 
         # Pooling layers
         self.ans_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
-            config.embedding_dim + config.bio_embedding_dim,
+            config.encoder.embedding_dim + config.bio_embedding_dim,
             dropout=config.dropout,
-            model_dim_out=config.embedding_dim,
+            model_dim_out=config.encoder.embedding_dim,
             use_final_linear=False,
         )
         self.ctxt_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
-            config.embedding_dim + config.bio_embedding_dim,
+            config.encoder.embedding_dim + config.bio_embedding_dim,
             dropout=config.dropout,
-            model_dim_out=config.embedding_dim,
+            model_dim_out=config.encoder.embedding_dim,
             use_final_linear=False,
             use_bilinear=True,
         )
 
         # Position encoding
         self.positional_embeddings_enc = PositionalEncoding(
-            config.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
+            config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
         )
 
     def forward(self, ctxt_seq, ctxt_seq_len, a_pos, memory):
@@ -298,14 +307,14 @@ class ContextAnswerEncoder(nn.Module):
             ctxt_ans_embedded = self.bio_embeddings(a_pos).to(ctxt_seq.device)
 
             # Build the context
-            if self.config.raw_embedding_dim != self.config.embedding_dim:
+            if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
                 ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
 
             if self.config.encdec.bert_encoder:
-                ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.embedding_dim)
+                ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.encoder.embedding_dim)
             else:
                 ctxt_embedded = torch.cat([ctxt_toks_embedded, ctxt_ans_embedded], dim=-1) * math.sqrt(
-                    self.config.embedding_dim
+                    self.config.encoder.embedding_dim
                 )
 
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
@@ -334,7 +343,7 @@ class ContextAnswerEncoder(nn.Module):
                 if "bart" in self.config.encdec.bert_model:
                     self.bert_encoding = self.bert_encoding.permute(1, 0, 2)
 
-                if self.config.raw_embedding_dim != self.config.embedding_dim:
+                if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
                     self.bert_encoding = self.embedding_projection(self.bert_encoding)
 
                 if self.config.encdec.num_encoder_layers > 0:

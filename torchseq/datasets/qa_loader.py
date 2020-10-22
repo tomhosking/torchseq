@@ -8,6 +8,8 @@ from torchseq.datasets.qa_dataset import QADataset
 from torchseq.utils.seed import init_worker
 from torchseq.utils.tokenizer import Tokenizer
 
+import logging
+
 
 class QADataLoader:
     def __init__(self, config):
@@ -15,6 +17,7 @@ class QADataLoader:
         :param config:
         """
         self.config = config
+        self.logger = logging.getLogger("DataLoader")
 
         train = QADataset(
             os.path.join(config.env.data_path, config.training.dataset) + "/",
@@ -43,7 +46,7 @@ class QADataLoader:
         self.len_test_data = len(test)
 
         # TODO: check whether running in silent mode
-        print(
+        self.logger.info(
             "Loaded {:} training and {:} validation examples from {:}".format(
                 self.len_train_data, self.len_valid_data, os.path.join(config.env.data_path, config.training.dataset)
             )
