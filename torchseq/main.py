@@ -28,6 +28,9 @@ def main():
     )
     logger = logging.getLogger("CLI")
 
+    if args.debug:
+        torch.autograd.set_detect_anomaly(True)
+
     if args.load is not None:
         args.config = os.path.join(args.load, "config.json")
 

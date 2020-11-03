@@ -109,6 +109,7 @@ class BottleneckAutoencoderModel(nn.Module):
                 if self.config.bottleneck.get("use_templ_encoding", False):
                     # switch = torch.randint(2, (encoding_pooled.shape[0], ), device=encoding_pooled.device).unsqueeze(-1).unsqueeze(-1)
                     # encoding_pooled[:, :, sep_splice_ix:] = torch.where(switch > 0, template_encoding_pooled[:, :, sep_splice_ix:], encoding_pooled[:, :, sep_splice_ix:])
+                    
                     encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
@@ -168,6 +169,8 @@ class BottleneckAutoencoderModel(nn.Module):
 
             memory["sep_encoding_1"] = encoding_pooled[:, :, :sep_splice_ix].detach()
             memory["sep_encoding_2"] = encoding_pooled[:, :, sep_splice_ix:].detach()
+
+            
 
         # Fwd pass through decoder block
         logits, memory = self.seq_decoder(output, memory)

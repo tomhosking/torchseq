@@ -99,7 +99,9 @@ class PoolingBottleneck(nn.Module):
                 mu = encoding_pooled
                 logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
-                encoding_pooled[:, :1, :splice_ix] = reparameterize(mu[:, :1, :splice_ix], logvar[:, :1, :splice_ix])
+                # Reparametrisation trick, only for the residual heads
+                var_encoding = reparameterize(mu[:, :1, :splice_ix], logvar[:, :1, :splice_ix])
+                encoding_pooled = torch.cat([var_encoding, encoding_pooled[:, :1, splice_ix:]], dim=-1)
             else:
                 mu = encoding_pooled
                 logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
