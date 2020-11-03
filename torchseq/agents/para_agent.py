@@ -145,12 +145,12 @@ class ParaphraseAgent(ModelAgent):
                     [QADataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
                 ).items()
             }
-        elif self.config.training.dataset == 'json':
+        elif self.config.training.dataset == "json":
             if self.tgt_field not in x:
                 x[self.tgt_field] = ""
             if "s1" not in x:
                 x["s1"] = ""
-            
+
             fields = self.config.json_dataset.data["field_map"]
 
             return {
