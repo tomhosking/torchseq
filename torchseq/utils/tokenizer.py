@@ -69,7 +69,7 @@ class Tokenizer(metaclass=Singleton):
             self.eos_id = self.engine.eos_token_id
 
         elif "bart-" in model_slug or "roberta-" in model_slug:
-            self.engine = ByteLevelBPETokenizer(
+            self.engine = ByteLevelBPETokenizer.from_file(
                 "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1]),
                 "{:}pretrained-vocabs/{:}-merges.txt".format(DATA_PATH, model_slug.split("/")[-1]),
                 lowercase=False,
@@ -85,7 +85,7 @@ class Tokenizer(metaclass=Singleton):
             self.eos_id = self.engine.token_to_id("</s>")
 
         elif "ptb" in model_slug:
-            self.engine = WordLevelTokenizer(
+            self.engine = WordLevelTokenizer.from_file(
                 "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1])
             )
 
@@ -97,7 +97,7 @@ class Tokenizer(metaclass=Singleton):
             self.eos_id = self.engine.token_to_id("</s>")
 
         else:
-            self.engine = BertWordPieceTokenizer(
+            self.engine = BertWordPieceTokenizer.from_file(
                 "{:}pretrained-vocabs/{:}-vocab.txt".format(DATA_PATH, model_slug.split("/")[-1]),
                 lowercase=(model_slug[-8:] == "-uncased"),
             )

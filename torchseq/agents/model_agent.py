@@ -245,7 +245,7 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            self.validate(save=True)
+            _ = self.validate(save=True)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
@@ -255,7 +255,7 @@ class ModelAgent(BaseAgent):
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                self.validate(save=True)
+                _ = self.validate(save=True)
             else:
                 # We won't have metrics - but we should update the progress tracker
                 self.update_dashboard()
@@ -640,7 +640,7 @@ class ModelAgent(BaseAgent):
 
         self.update_dashboard()
 
-        return test_loss, self.all_metrics_at_best, memory_values_to_return
+        return test_loss, self.all_metrics_at_best, pred_output, memory_values_to_return
 
     def update_dashboard(self):
         if "bleu" in self.all_metrics_at_best:

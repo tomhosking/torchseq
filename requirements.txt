@@ -3,7 +3,7 @@ torch==1.7.0
 tqdm
 # Tokenizermb
 nltk==3.5.0
-transformers==3.4.0
+transformers==3.5.0
 tokenizers==0.9.2
 jsonlines
 sacrebleu
