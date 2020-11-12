@@ -43,9 +43,6 @@ class AQAgent(ModelAgent):
         else:
             self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
 
-        if self.config.training.get("loss_dropping", 0) > 0:
-            self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
-
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
             self.model = PretrainedAdapterModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)

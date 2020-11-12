@@ -27,11 +27,15 @@ from torchseq.utils.metrics import bleu_corpus, meteor_corpus
 from torchseq.utils.sari import SARIsent
 import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
-from torchseq.utils.perplexity import get_perplexity
+
 
 from torchseq.models.ranger import Ranger
 from torchseq.utils.loss_dropper import LossDropper
 from torchseq.utils.seed import set_seed
+
+from torchseq.metric_hooks.qg_metric import QGMetricHook
+from torchseq.metric_hooks.textual import TextualMetricHook
+from torchseq.metric_hooks.default import DefaultMetricHook
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -418,6 +422,7 @@ class ModelAgent(BaseAgent):
         use_train=False,
         save_model=True,
         memory_keys_to_return=None,
+        slow_metrics=False,
     ):
         """
         One cycle of model validation
@@ -436,8 +441,21 @@ class ModelAgent(BaseAgent):
         self.model.eval()
         test_loss = 0
 
-        qg_metric = []
-        perplexities = []
+        # Register the metric hooks to be used
+        metric_hooks = [DefaultMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if self.config.eval.data.get("sample_outputs", True):
+            metric_hooks += [TextualMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if slow_metrics:
+            metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        # TODO: add QA, LM metric for Qgen task
+        # TODO: Add sem similarity for sep AE
+        # TODO: Add weird BLEU variants for sep AE
+
+        for hook in metric_hooks:
+            hook.on_begin_epoch()
 
         pred_output = []
         gold_output = []
@@ -478,41 +496,7 @@ class ModelAgent(BaseAgent):
                     for mem_key in memory_keys_to_return:
                         memory_values_to_return[mem_key].extend(memory[mem_key].detach().cpu().tolist())
 
-                # Calc QG metric
-                # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
-                omega = 0.7
-                if self.config.get("nucleus_sampling", None) is not None:
-                    top_p = self.config.nucleus_sampling.cutoff
-                else:
-                    top_p = 0.9
-                from torchseq.models.samplers.parallel_nucleus import top_k_top_p_filtering, onehot
-
-                nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
-                gt_onehot = onehot(
-                    batch[self.tgt_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
-                )
-                accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (
-                    batch[self.tgt_field + "_len"] - 1
-                )
-
-                diversity = torch.sum(torch.sum(torch.gt(nucleus_prob * gt_onehot, 0) * 1.0, dim=-1), dim=-1) / (
-                    batch[self.tgt_field + "_len"] - 1
-                )
-
-                dev_qg_metric = omega * accuracy + (1 - omega) * diversity
-                qg_metric.extend(dev_qg_metric.tolist())
-
                 num_samples += curr_batch_size
-
-                # Calc perplexity
-                this_ppl = get_perplexity(
-                    logits,
-                    batch[self.tgt_field],
-                    vocab_size=self.config.prepro.vocab_size,
-                    ignore_index=Tokenizer().pad_id,
-                )
-
-                perplexities.extend(this_ppl.tolist())
 
                 #  Handle top-1 sampling
                 if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
@@ -549,10 +533,19 @@ class ModelAgent(BaseAgent):
                     # if batch_idx > 20:
                     #     break
 
+                for hook in metric_hooks:
+                    # This is a horrible way of getting the current batch worth of decoded output - tidy it up at some point!
+                    hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory)
+
             test_loss /= num_samples
             self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
         Logger().log_scalar("dev/loss", test_loss, self.global_step)
+
+        all_metrics = {}
+        for hook in metric_hooks:
+            hook_values = hook.on_end_epoch()
+            all_metrics = {**all_metrics, **hook_values}
 
         for h_ix, codes in self.vq_codes.items():
             Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
@@ -560,32 +553,6 @@ class ModelAgent(BaseAgent):
         if len(self.vq_codes) > 0 and self.run_id is not None:
             with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
                 json.dump(self.vq_codes, f)
-
-        qg_metric = sum(qg_metric) / len(qg_metric)
-        ppl = sum(perplexities) / len(perplexities)
-
-        if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
-            dev_bleu = bleu_corpus(gold_output, pred_output)
-
-            dev_sari = 100 * np.mean(
-                [SARIsent(gold_input[ix], pred_output[ix], [gold_output[ix]]) for ix in range(len(pred_output))]
-            )
-
-            dev_em = np.mean([gold_output[ix] == pred_output[ix] for ix in range(len(pred_output))])
-
-            dev_meteor = meteor_corpus(gold_output, pred_output)
-
-            Logger().log_scalar("dev/bleu", dev_bleu, self.global_step)
-            Logger().log_scalar("dev/ppl", ppl, self.global_step)
-
-            self.logger.info("BLEU: {:}".format(dev_bleu))
-            self.logger.info("EM: {:}".format(dev_em))
-            self.logger.info("SARI: {:}".format(dev_sari))
-            self.logger.info("PPL: {:}".format(ppl))
-            self.logger.info("Meteor: {:}".format(dev_meteor))
-
-        else:
-            dev_bleu = "n/a"
 
         # TODO: sort this out - there's got to be a more compact way of doing it all
         if (
@@ -599,16 +566,8 @@ class ModelAgent(BaseAgent):
             )
         ):
 
-            self.all_metrics_at_best = {"nll": test_loss.item(), "qg_metric": qg_metric, "ppl": ppl}
+            self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
 
-            if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
-                self.all_metrics_at_best = {
-                    **self.all_metrics_at_best,
-                    "bleu": dev_bleu,
-                    "em": dev_em,
-                    "sari": dev_sari,
-                    "meteor": dev_meteor,
-                }
             if self.run_id is not None:
                 with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
                     f.write("\n".join([json.dumps(pred) for pred in pred_output]))
