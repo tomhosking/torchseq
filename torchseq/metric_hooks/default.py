@@ -22,7 +22,7 @@ class DefaultMetricHook(MetricHook):
                 batch[self.tgt_field],
                 vocab_size=self.config.prepro.vocab_size,
                 ignore_index=Tokenizer().pad_id,
-            )
+            ).tolist()
         )
 
         # TODO: actually calculate this, and compare to the loss that comes from the teacher forced decoder!

@@ -22,18 +22,23 @@ class TextualMetricHook(MetricHook):
         self.inputs = []
 
     def on_batch(self, batch, logits, output, memory):
-        self.pred_targets.extend(output)
+
+        if self.config.eval.data.get("topk", 1) > 1:
+            self.pred_targets.extend([x[0] for x in output])
+        else:
+            self.pred_targets.extend(output)
         self.gold_targets.extend(batch[self.tgt_field + "_text"])
         self.inputs.extend(batch[self.src_field + "_text"])
 
-        print(len(self.pred_targets))
-        print(len(self.gold_targets))
-        print(len(self.inputs))
+        # print(len(self.pred_targets))
+        # print(len(self.gold_targets))
+        # print(len(self.inputs))
         # exit()
 
-    def on_end_epoch(self):
+    def on_end_epoch(self, _):
 
-        print(len(self.gold_targets), len(self.pred_targets), len(self.inputs))
+        # print(len(self.gold_targets), len(self.pred_targets), len(self.inputs))
+
         self.scores["bleu"] = bleu_corpus(self.gold_targets, self.pred_targets)
 
         self.scores["ibleu"] = ibleu_corpus(self.gold_targets, self.pred_targets, self.inputs)

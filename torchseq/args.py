@@ -25,6 +25,9 @@ parser.add_argument("--validate_train", action="store_true", help="Run eval on t
 parser.add_argument("--test", action="store_true", help="Run eval on test?")
 parser.add_argument("--preprocess", action="store_true", help="Run prepro?")
 parser.add_argument("--silent", action="store_true", help="Disable logging")
+parser.add_argument(
+    "--reload_after_train", action="store_true", help="Reload model after training to do a validation run"
+)
 
 # Model loading
 parser.add_argument("--load_chkpt", type=str, metavar="CHECKPOINT", default=None, help="Path to checkpoint file")

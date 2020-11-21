@@ -544,7 +544,7 @@ class ModelAgent(BaseAgent):
 
         all_metrics = {}
         for hook in metric_hooks:
-            hook_values = hook.on_end_epoch()
+            hook_values = hook.on_end_epoch(self)
             all_metrics = {**all_metrics, **hook_values}
 
         for h_ix, codes in self.vq_codes.items():

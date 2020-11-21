@@ -13,5 +13,5 @@ class MetricHook:
     def on_batch(self, batch, logits, output, memory):
         raise NotImplementedError("You need to implement on_batch for your MetricHook!")
 
-    def on_end_epoch(self):
+    def on_end_epoch(self, agent):
         return {k: sum(v) / len(v) for k, v in self.scores.items()}
