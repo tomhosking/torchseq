@@ -231,7 +231,7 @@ class ModelAgent(BaseAgent):
 
         return this_loss
 
-    def train(self):
+    def train(self, data_loader):
         """
         Main training loop
         :return:
@@ -239,7 +239,7 @@ class ModelAgent(BaseAgent):
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
-        if self.data_loader is None:
+        if data_loader is None:
             raise Exception(
                 "Agent was created with a null dataset - you can only use this for on-the-fly inference, not training!"
             )
@@ -254,7 +254,7 @@ class ModelAgent(BaseAgent):
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
 
-            self.train_one_epoch()
+            self.train_one_epoch(data_loader)
 
             self.current_epoch += 1
 
@@ -267,7 +267,7 @@ class ModelAgent(BaseAgent):
         self.logger.info("## Training completed {:} epochs".format(self.current_epoch + 1))
         self.logger.info("## Best metrics: {:}".format(self.all_metrics_at_best))
 
-    def train_one_epoch(self):
+    def train_one_epoch(self, data_loader):
         """
         One epoch of training
         :return:
@@ -282,7 +282,7 @@ class ModelAgent(BaseAgent):
 
         start_step = self.global_step
 
-        pbar = tqdm(self.data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
+        pbar = tqdm(data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
 
         for batch_idx, batch in enumerate(pbar):
             batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
@@ -416,6 +416,7 @@ class ModelAgent(BaseAgent):
 
     def validate(
         self,
+        data_loader,
         save=False,
         force_save_output=False,
         use_test=False,
@@ -432,7 +433,7 @@ class ModelAgent(BaseAgent):
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
-        if self.data_loader is None:
+        if data_loader is None:
             raise Exception(
                 "Agent was created with a null dataset - you can only use this for on-the-fly inference, not validation!"
             )
@@ -467,12 +468,12 @@ class ModelAgent(BaseAgent):
 
         if use_test:
             self.logger.info("***** USING TEST SET ******")
-            valid_loader = self.data_loader.test_loader
+            valid_loader = data_loader.test_loader
         elif use_train:
             self.logger.info("***** USING TRAINING SET ******")
-            valid_loader = self.data_loader.train_loader
+            valid_loader = data_loader.train_loader
         else:
-            valid_loader = self.data_loader.valid_loader
+            valid_loader = data_loader.valid_loader
 
         with torch.no_grad():
             num_samples = 0

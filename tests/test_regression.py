@@ -14,6 +14,7 @@ from torchseq.datasets import qa_triple, loaders
 from torchseq.utils.config import Config
 from torchseq.utils.seed import set_seed
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.datasets.builder import dataloader_from_config
 
 
 @test_utils.slow
@@ -51,8 +52,10 @@ def test_bert_embeds():
     elif config.task in ["para", "autoencoder"]:
         agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
 
+    data_loader = dataloader_from_config(config)
+
     agent.load_checkpoint(CHKPT)
-    loss, metrics, output, memory = agent.validate(save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 3.247) < 1e-3, "Loss is different to expected!"
@@ -100,8 +103,10 @@ def test_autoencoder():
     elif config.task in ["para", "autoencoder"]:
         agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
 
+    data_loader = dataloader_from_config(config)
+
     agent.load_checkpoint(CHKPT)
-    loss, metrics, output, memory = agent.validate(save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 0.0974) < 1e-3, "Loss is different to expected!"

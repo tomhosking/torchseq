@@ -49,24 +49,6 @@ class AQAgent(ModelAgent):
         else:
             self.model = TransformerAqModel(self.config)  # , loss=self.loss
 
-        # define data_loader
-        if self.config.training.use_preprocessed_data:
-            self.data_loader = PreprocessedDataLoader(config=config)
-        else:
-            if self.config.training.dataset is None:
-                self.data_loader = None
-                self.src_field = "s2"
-            elif (
-                self.config.training.dataset
-                in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa", "squad_nq_newsqa"]
-                or self.config.training.dataset[:5] == "squad"
-            ):
-                self.data_loader = QADataLoader(config=config)
-            # elif self.config.training.dataset == 'newsqa':
-            #     self.data_loader = NewsqaDataLoader(config=config)
-            else:
-                raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
-
         self.suppression_loss = SuppressionLoss(self.config)
 
         # define optimizer

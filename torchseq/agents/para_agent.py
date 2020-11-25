@@ -3,20 +3,16 @@ import torch.nn.functional as F
 from torch import nn
 
 from torchseq.agents.model_agent import ModelAgent
-from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
-from torchseq.datasets.paraphrase_loader import ParaphraseDataLoader
-from torchseq.datasets.paraphrase_pair import ParaphrasePair
-from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
-from torchseq.datasets.qa_dataset import QADataset
-from torchseq.datasets.qa_loader import QADataLoader
-from torchseq.datasets.json_loader import JsonDataLoader
-from torchseq.datasets.json_dataset import JsonDataset
+
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.logging import Logger
 from torchseq.utils.loss_dropper import LossDropper
+from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
+from torchseq.datasets.qa_dataset import QADataset
+from torchseq.datasets.json_dataset import JsonDataset
 
 
 class ParaphraseAgent(ModelAgent):
@@ -25,64 +21,24 @@ class ParaphraseAgent(ModelAgent):
 
         self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
 
-        # define data_loader
-        if self.config.training.use_preprocessed_data:
-            self.data_loader = PreprocessedDataLoader(config=config)
+        if self.config.training.dataset is None:
+            self.src_field = "s2"
+        elif self.config.training.dataset in [
+            "squad",
+            "squad_nq_newsqa",
+            "nq_newsqa",
+            "newsqa",
+            "naturalquestions",
+        ]:
+
+            self.src_field = "q"
+            self.tgt_field = "q"
         else:
-            if self.config.training.dataset is None:
-                self.data_loader = None
-                self.src_field = "s2"
-            elif (
-                self.config.training.dataset
-                in [
-                    "paranmt",
-                    "parabank",
-                    "kaggle",
-                    "parabank-qs",
-                    "para-squad",
-                    "models/squad-udep",
-                    "models/squad-constituency",
-                    "models/squad-udep-deptree",
-                    "models/qdmr-squad",
-                    "models/nq_newsqa-udep",
-                    "models/nq_newsqa-udep-deptree",
-                    "models/squad_nq_newsqa-udep",
-                    "models/squad_nq_newsqa-udep-deptree",
-                    "models/naturalquestions-udep",
-                    "models/newsqa-udep",
-                    "models/naturalquestions-udep-deptree",
-                    "models/newsqa-udep-deptree",
-                ]
-                or self.config.training.dataset[:5] == "qdmr-"
-                or "kaggle-" in self.config.training.dataset
-            ):
-                self.data_loader = ParaphraseDataLoader(config=config)
-                self.src_field = (
-                    "s2"
-                    if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
-                    else "s1"
-                )
-            elif self.config.training.dataset in [
-                "squad",
-                "squad_nq_newsqa",
-                "nq_newsqa",
-                "newsqa",
-                "naturalquestions",
-            ]:
-                self.data_loader = QADataLoader(config=config)
-                self.src_field = "q"
-                self.tgt_field = "q"
-            elif self.config.training.dataset in [
-                "json",
-            ]:
-                self.data_loader = JsonDataLoader(config=config)
-                self.src_field = (
-                    "s2"
-                    if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
-                    else "s1"
-                )
-            else:
-                raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
+            self.src_field = (
+                "s2"
+                if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
+                else "s1"
+            )
 
         # define loss
         self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")

@@ -20,6 +20,8 @@ from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.logging import Logger
 
+from torchseq.datasets.builder import dataloader_from_config
+
 
 def main():
 
@@ -72,6 +74,8 @@ def main():
 
     logger.info("** Run ID is {:} **".format(run_id))
 
+    data_loader = dataloader_from_config(config)
+
     if args.preprocess:
         raise Exception("Preprocessing is not currently maintained :(")
         preprocessor = PreprocessorAgent(config)
@@ -93,7 +97,7 @@ def main():
 
     if args.train:
         logger.info("Starting training...")
-        agent.train()
+        agent.train(data_loader)
         logger.info("...training done!")
 
     if args.reload_after_train:
@@ -104,17 +108,23 @@ def main():
 
     if args.validate_train:
         logger.info("Starting validation (on training set)...")
-        _ = agent.validate(save=False, force_save_output=True, use_train=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader, save=False, force_save_output=True, use_train=True, save_model=False, slow_metrics=True
+        )
         logger.info("...validation done!")
 
     if args.validate:
         logger.info("Starting validation...")
-        _ = agent.validate(save=False, force_save_output=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader, data_loadersave=False, force_save_output=True, save_model=False, slow_metrics=True
+        )
         logger.info("...validation done!")
 
     if args.test:
         logger.info("Starting testing...")
-        _ = agent.validate(save=False, force_save_output=True, use_test=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader, save=False, force_save_output=True, use_test=True, save_model=False, slow_metrics=True
+        )
         logger.info("...testing done!")
 
 
