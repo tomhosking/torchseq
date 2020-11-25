@@ -66,7 +66,7 @@ def main():
         + "_"
         + config.name
         + ("_TEST" if args.test else "")
-        + ("_DEV" if args.validate else "")
+        + ("_DEV" if (not args.train and args.validate) else "")
         + ("_EVALTRAIN" if args.validate_train else "")
     )
 
