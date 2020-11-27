@@ -103,7 +103,7 @@ def main():
     if args.reload_after_train:
         logger.info("Training done - reloading saved model")
         save_path = os.path.join(agent.output_path, agent.config.tag, agent.run_id, "model", "checkpoint.pt")
-        agent.load_checkpoint(save_path)
+        agent.load_checkpoint(save_path, write_pointer=False)
         logger.info("...loaded!")
 
     if args.validate_train:
@@ -115,9 +115,7 @@ def main():
 
     if args.validate:
         logger.info("Starting validation...")
-        _ = agent.validate(
-            data_loader, data_loadersave=False, force_save_output=True, save_model=False, slow_metrics=True
-        )
+        _ = agent.validate(data_loader, save=False, force_save_output=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
 
     if args.test:

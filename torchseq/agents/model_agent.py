@@ -36,6 +36,7 @@ from torchseq.utils.seed import set_seed
 from torchseq.metric_hooks.qg_metric import QGMetricHook
 from torchseq.metric_hooks.textual import TextualMetricHook
 from torchseq.metric_hooks.default import DefaultMetricHook
+from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -114,7 +115,7 @@ class ModelAgent(BaseAgent):
         else:
             self.reranker = TopkReducer(self.config, self.device)
 
-    def load_checkpoint(self, file_name):
+    def load_checkpoint(self, file_name, write_pointer=True):
         """
         Latest checkpoint loader
         :param file_name: name of the checkpoint file
@@ -145,7 +146,7 @@ class ModelAgent(BaseAgent):
                 if "dampening" not in param_group:
                     param_group["dampening"] = 0
 
-        if self.run_id is not None:
+        if write_pointer and self.run_id is not None:
             pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")
 
             with open(pointer_filepath, "w") as f:
@@ -249,7 +250,7 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            _ = self.validate(save=True)
+            _ = self.validate(data_loader, save=True)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
@@ -259,7 +260,7 @@ class ModelAgent(BaseAgent):
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                _ = self.validate(save=True)
+                _ = self.validate(data_loader, save=True)
             else:
                 # We won't have metrics - but we should update the progress tracker
                 self.update_dashboard()
@@ -450,6 +451,9 @@ class ModelAgent(BaseAgent):
 
         if slow_metrics:
             metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if slow_metrics and "sep_ae" in self.config.eval.get("metrics", []):
+            metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
 
         # TODO: add QA, LM metric for Qgen task
         # TODO: Add sem similarity for sep AE
