@@ -10,6 +10,7 @@ from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
 from torchseq.models.kl_divergence import get_kl
+from torchseq.models.vmf import vMF
 
 
 class PoolingBottleneck(nn.Module):
@@ -33,6 +34,13 @@ class PoolingBottleneck(nn.Module):
                 dropout=config.dropout,
                 model_dim_out=config.bottleneck.embedding_dim,
                 use_final_linear=False,
+            )
+
+        if self.config.bottleneck.get("use_vmf", False):
+            self.vmf = vMF(
+                config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1),
+                config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1),
+                kappa=80,
             )
 
         # VQ-VAE bottleneck
@@ -73,6 +81,30 @@ class PoolingBottleneck(nn.Module):
                 memory["loss"] = 0
             memory["loss"] += vq_loss
             memory["vq_codes"] = quantizer_indices
+
+        if self.config.bottleneck.get("use_vmf", False):
+            if self.config.bottleneck.get("quantizer_heads", 1) > 1:
+                num_heads = self.config.bottleneck.get("quantizer_heads", 1)
+                encoding_chunked = torch.cat(torch.chunk(encoding_pooled, num_heads, -1), 1)
+
+                chunk_dim = encoding_chunked.size()[-1]
+                encoding_chunked = encoding_chunked.view(-1, chunk_dim)
+
+            else:
+                encoding_chunked = encoding_pooled.squeeze(1)
+
+            tup, kld, encoding_vmf = self.vmf.build_bow_rep(encoding_chunked)
+
+            if self.config.bottleneck.get("quantizer_heads", 1) > 1:
+                bsz = encoding_pooled.size()[0]
+                encoding_vmf = encoding_vmf.view(1, -1, encoding_pooled.size()[-1])
+                kld = kld.view(bsz, -1).sum(-1)
+
+            if "loss" not in memory:
+                memory["loss"] = 0
+            memory["loss"] += kld
+
+            encoding_pooled = encoding_vmf.transpose_(0, 1)
 
         # Reparameterise for VAE
         if self.config.bottleneck.get("variational", False):
