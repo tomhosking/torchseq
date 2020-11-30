@@ -16,7 +16,7 @@ class VectorQuantizerMultiHead(nn.Module):
         residual=False,
         ema=True,
         code_offset=0,
-        num_residual=0,
+        residual_head_range=(0, 0),
         soft_em=True,
         warmup_steps=None,
     ):
@@ -28,7 +28,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._ema = ema
         self._code_offset = code_offset
-        self._num_residual = num_residual
+        self._residual_head_range = residual_head_range
         self._soft_em = soft_em
         self._warmup_steps = warmup_steps
 
@@ -64,7 +64,7 @@ class VectorQuantizerMultiHead(nn.Module):
         for head_ix, embedding in enumerate(self._embedding):
 
             this_input = flat_input[:, head_ix, :]
-            if head_ix >= self._num_residual:
+            if head_ix >= self._residual_head_range[0] and head_ix < self._residual_head_range[1]:
 
                 this_input = flat_input[:, head_ix, :]
 

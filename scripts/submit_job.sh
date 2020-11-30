@@ -46,6 +46,7 @@ then
     echo "Batch job ID $jobId -> $jobTag/$jobName"
     
     ${MCKENZIE_HOOK} -i $jobId -p $partition -n $jobTag/$jobName > /dev/null
+    sleep 15
 else
     echo "Error submitting job!"
     echo res

@@ -61,10 +61,13 @@ class BottleneckAutoencoderModel(nn.Module):
                 else:
                     encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
 
+            splice_head_offset = (
+                self.config.bottleneck.get("splice_head_offset", 0)
+                if self.config.bottleneck.get("num_similar_heads", None) is None
+                else self.config.bottleneck.get("num_similar_heads", 0)
+            )
             sep_splice_ix = (
-                self.config.decoder.embedding_dim
-                // self.config.encdec.get("num_heads", 1)
-                * self.config.bottleneck.get("num_similar_heads", 0)
+                self.config.decoder.embedding_dim // self.config.encdec.get("num_heads", 1) * splice_head_offset
             )
 
             if "template" in batch:

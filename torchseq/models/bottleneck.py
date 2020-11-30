@@ -37,6 +37,12 @@ class PoolingBottleneck(nn.Module):
 
         # VQ-VAE bottleneck
         if self.config.bottleneck.get("vector_quantized", False):
+            if self.config.bottleneck.get("residual_head_range", None) is None:
+                residual_head_range = (0, self.config.bottleneck.get("num_similar_heads", 0))
+            else:
+                residual_head_range = self.config.bottleneck.get("residual_head_range", (0, 0))
+                assert len(residual_head_range) == 2, "bottlneck residual_head_range must be length 2! (lower, upper)"
+
             self.quantizer = VectorQuantizerMultiHead(
                 self.config.bottleneck.codebook_size,
                 self.config.bottleneck.embedding_dim,
@@ -45,7 +51,7 @@ class PoolingBottleneck(nn.Module):
                 num_heads=self.config.bottleneck.get("quantizer_heads", 1),
                 residual=self.config.bottleneck.get("quantizer_residual", False),
                 code_offset=self.config.bottleneck.get("code_offset", 0),
-                num_residual=self.config.bottleneck.get("quantizer_num_residual", 0),
+                residual_head_range=residual_head_range,
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
             )
