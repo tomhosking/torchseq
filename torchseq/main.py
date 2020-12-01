@@ -13,7 +13,7 @@ from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.para_agent import ParaphraseAgent
 from torchseq.agents.prepro_agent import PreprocessorAgent
 from torchseq.agents.lm_agent import LangModelAgent
-from torchseq.args import args as args
+from torchseq.args import parse_args
 from torchseq.datasets import qa_triple, loaders
 from torchseq.utils.config import Config, merge_cfg_dicts
 
@@ -22,8 +22,14 @@ from torchseq.utils.logging import Logger
 
 from torchseq.datasets.builder import dataloader_from_config
 
+"""
+Entry point for torchseq CLI
+"""
+
 
 def main():
+
+    args = parse_args()
 
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"

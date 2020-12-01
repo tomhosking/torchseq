@@ -58,3 +58,10 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")
 # Return the cosine similarity between x, y
 def cos_sim(x, y):
     return (x * y).sum(-1) / (x.norm(dim=-1) * y.norm(dim=-1))
+
+
+def reparameterize_gaussian(mu, logvar, var_weight=1.0):
+    std = torch.exp(0.5 * logvar)
+    eps = torch.randn_like(std)
+
+    return mu + eps * std * var_weight

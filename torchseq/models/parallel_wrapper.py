@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 
 
-class ParallelModel(nn.module):
+class ParallelModel(nn.Module):
     def __init__(self, model, loss, tgt_field):
         super(ParallelModel, self).__init__()
 
