@@ -50,7 +50,9 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = "./runs/sep_ae/20201101_105520_vae_wikitrip3way100nostop_swapenc_invert"
+    MODEL_PATH = (
+        "./runs/sep_ae/20201207_224719_vae_wikianswers-triples-chunk-extendstop-realexemplars-uniform-drop10-N10-R100"
+    )
 
     # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
 
@@ -77,7 +79,7 @@ def init():
 
         var_offset = 4
         cfg_dict["bottleneck"]["prior_var_weight"] = (
-            [2.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
+            [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         )
         # cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
         # cfg_dict["encdec"]["code_offset"] = (

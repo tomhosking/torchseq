@@ -54,6 +54,35 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ["json_dataset"] = {
             "path": "wikianswers-para-splitforgeneval",
             "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+            ],
+        }
+
+        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+
+        _, _, output, _ = agent.validate(
+            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
+        )
+
+        with jsonlines.open(
+            os.path.join(self.config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")
+        ) as f:
+            qs_by_para_split = [q["paras"] for q in f]
+
+        # refs = [x["paras"] for x in qs_by_para_split]
+        max_num_refs = max([len(x) for x in qs_by_para_split])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in qs_by_para_split]
+
+        self.scores["cluster_gen_with_templ_bleu"] = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+
+    def eval_gen_with_templ_diversity(self, agent):
+        config_gen_with_templ = copy.deepcopy(self.config.data)
+        config_gen_with_templ["dataset"] = "json"
+        config_gen_with_templ["json_dataset"] = {
+            "path": "wikianswers-para-splitforgeneval",
+            "field_map": [
                 {"type": "copy", "from": "q", "to": "s2"},
                 {"type": "copy", "from": "q", "to": "s1"},
                 {"type": "sample", "from": "paras", "to": "template"},

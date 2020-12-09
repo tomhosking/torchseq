@@ -158,6 +158,7 @@ class PoolingBottleneck(nn.Module):
                 kl_loss = torch.mean(get_kl(mu, logvar), dim=1)
 
             kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
+            kl_weight_mult = self.config.training.data.get("kl_weight", 1.0)
             kl_weight = (
                 1
                 if global_step >= 2 * kl_warmup_steps
@@ -166,7 +167,7 @@ class PoolingBottleneck(nn.Module):
                     if global_step < kl_warmup_steps
                     else float(global_step - kl_warmup_steps) / (1.0 * kl_warmup_steps)
                 )
-            )
+            ) * kl_weight_mult
 
             if "loss" not in memory:
                 memory["loss"] = 0

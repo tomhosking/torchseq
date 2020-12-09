@@ -79,6 +79,7 @@ class BottleneckAutoencoderModel(nn.Module):
                 template_encoding_pooled, template_memory = self.bottleneck(
                     template_encoding, template_memory, batch["_global_step"]
                 )
+                memory["loss"] += template_memory["loss"]
 
                 if self.config.bottleneck.get("split_encoder", False):
                     template_encoding2, memory = self.seq_encoder(
@@ -112,8 +113,19 @@ class BottleneckAutoencoderModel(nn.Module):
                 if self.config.bottleneck.get("use_templ_encoding", False):
                     # switch = torch.randint(2, (encoding_pooled.shape[0], ), device=encoding_pooled.device).unsqueeze(-1).unsqueeze(-1)
                     # encoding_pooled[:, :, sep_splice_ix:] = torch.where(switch > 0, template_encoding_pooled[:, :, sep_splice_ix:], encoding_pooled[:, :, sep_splice_ix:])
-
-                    encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
+                    if self.config.bottleneck.get("invert_templ", False):
+                        #
+                        # print("Flipped")
+                        # print(sep_splice_ix)
+                        # print(encoding_pooled.shape)
+                        # exit()
+                        encoding_pooled[:, :, :sep_splice_ix] = template_encoding_pooled[:, :, :sep_splice_ix]
+                    else:
+                        # print("Not Flipped")
+                        # print(sep_splice_ix)
+                        # print(encoding_pooled.shape)
+                        # exit()
+                        encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:

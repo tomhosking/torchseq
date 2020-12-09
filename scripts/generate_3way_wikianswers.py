@@ -6,6 +6,7 @@ from flair.data import Sentence
 
 from collections import defaultdict, Counter
 from tqdm import tqdm
+from copy import deepcopy
 
 
 import torch
@@ -39,6 +40,8 @@ parser.add_argument("--no_stopwords", action="store_true", help="Don't use any s
 parser.add_argument("--single_vocab", action="store_true", help="Use one vocab and ignore tags")
 parser.add_argument("--resample_cluster", action="store_true", help="Generate the full sample size from each cluster, even if the cluster is smaller")
 parser.add_argument("--uniform_sampling", action="store_true", help="Sample from the vocab unformly rather than weighted by occurrence")
+
+parser.add_argument("--real_exemplars", action="store_true", help="Use exemplars from the dataset if possible")
 
 parser.add_argument(
  "--sample_size", type=int, metavar="N", default=10, help="Number of samples per cluster"
@@ -111,6 +114,8 @@ if args.single_vocab:
 
 cache_key += modifiers
 
+if args.real_exemplars:
+    modifiers += '-realexemplars'
 if args.resample_cluster:
     modifiers += '-resample'
 if args.uniform_sampling:
@@ -240,6 +245,7 @@ for split in splits:
             all_clusters = [x for x in f]
 
     samples = []
+    rebuild_cache = True
 
     cache_file = os.path.join(args.data_dir, f"wa-triples-cache/{cache_key}_{split}.json")
     if os.path.exists(cache_file):
@@ -249,13 +255,18 @@ for split in splits:
         vocab_by_pos = cache["vocab_by_pos"]
         parses = cache['parses']
         tokenised = cache['tokenised']
+        if "qs_by_templ" in cache:
+            rebuild_cache = False
+            qs_by_templ = cache['qs_by_templ']
+        else:
+            print('Cache is missing qs_by_templ, rebuilding')
         
-    else:
+    if rebuild_cache:
         print("Cache file missing, building")
         parses = []
         tokenised = []
         vocab_by_pos = defaultdict(Counter)
-        # qs_by_templ = defaultdict(list)
+        qs_by_templ = defaultdict(list)
         
 
         for cix,cluster in enumerate(tqdm(all_clusters)):
@@ -286,7 +297,7 @@ for split in splits:
                     vocab_by_pos[vocab_key][toks[ix]] += 1
                 cluster_parses.append(" ".join(parse))
                 cluster_tokenised.append(toks)
-    #             qs_by_templ[parse].append(q)
+                qs_by_templ[" ".join(parse)].append(q)
             parses.append(cluster_parses)
             tokenised.append(cluster_tokenised)
             if cix > 1000 and DEBUG:
@@ -303,7 +314,8 @@ for split in splits:
             json.dump({
                 "vocab_by_pos": vocab_by_pos,
                 "parses": parses,
-                "tokenised": tokenised
+                "tokenised": tokenised,
+                "qs_by_templ": qs_by_templ
             }, f)
     
     
@@ -316,7 +328,7 @@ for split in splits:
     replace_randoms = np.random.rand(len(all_clusters), SAMPLES_PER_CLUSTER, max_q_len)
     dropout_randoms = np.random.rand(len(all_clusters), SAMPLES_PER_CLUSTER)
     # replace_randoms = np.random.randint(0, max_vocab_size, size=(len(all_clusters), SAMPLES_PER_CLUSTER, max_q_len))
-    sample_randoms = np.random.randint(0, max_cluster_len, size=(len(all_clusters), SAMPLES_PER_CLUSTER, 3))
+    sample_randoms = np.random.randint(0, max_cluster_len, size=(len(all_clusters), SAMPLES_PER_CLUSTER, 4))
 
     # num_samples = SAMPLES_PER_CLUSTER if split == 'train' else 1
 
@@ -326,8 +338,9 @@ for split in splits:
         sample_size = SAMPLES_PER_CLUSTER if args.resample_cluster else min(SAMPLES_PER_CLUSTER, len(cluster)-1)
         for i in range(sample_size):
 #             tgt_ix, sem_ix = np.random.choice(len(cluster), replace=False, size=2)
-            tgt_ix, sem_ix, parse_ix = sample_randoms[cix][i]
+            tgt_ix, sem_ix, parse_ix, exemplar_ix = sample_randoms[cix][i]
             tgt_ix = tgt_ix % len(cluster)
+            tgt_txt = cluster[tgt_ix]
 
             if args.template_dropout > 0 and dropout_randoms[cix, i] < args.template_dropout:
                 tgt_parse = parses[cix][parse_ix % len(cluster)]
@@ -344,33 +357,46 @@ for split in splits:
 
             toks = tokenised[cix][tgt_ix]
 
-            syn_text = []
-            
-            j=0
-            for tok, tag in zip(toks, tgt_parse.split(' ')):
-                if tag not in tags_to_preserve and tok.lower() not in stopwords and noising_randoms[cix,i,j] > KEEP_FRACTION:
-#                     replacement = np.random.choice(list(vocab_by_pos[tag]))
-                    
-                    vocab_key = 'KEY' if args.single_vocab else tag
+            exemplar_options = []
+            if args.real_exemplars and tgt_parse in qs_by_templ:
+                exemplar_options = deepcopy(qs_by_templ[tgt_parse])
+                # remove any exemplar from this cluster
+                for q in cluster:
+                    if q in exemplar_options:
+                        exemplar_options.remove(q)
+            if len(exemplar_options) > 0:
+                syn_text = exemplar_options[exemplar_ix % len(exemplar_options)]
+            else:
+                # Build an exemplar by noising
+                syn_text = []
+                
+                j=0
+                for tok, tag in zip(toks, tgt_parse.split(' ')):
+                    if tag not in tags_to_preserve and tok.lower() not in stopwords and noising_randoms[cix,i,j] > KEEP_FRACTION:
+    #                     replacement = np.random.choice(list(vocab_by_pos[tag]))
+                        
+                        vocab_key = 'KEY' if args.single_vocab else tag
 
-                    if len(vocab_by_pos[vocab_key]) > 0:
-                        options, probs = zip(*vocab_by_pos[vocab_key])
-                        # repl_ix = replace_randoms[cix,i,j] % len(options)
-                        cum_prob = 0
-                        for k in range(len(probs)):
-                            cum_prob += 1/len(probs) if args.uniform_sampling else probs[k]
-                            if cum_prob > replace_randoms[cix,i,j]:
-                                repl_ix = k
-                                break
-                        syn_text.append(options[repl_ix])
+                        if len(vocab_by_pos[vocab_key]) > 0:
+                            options, probs = zip(*vocab_by_pos[vocab_key])
+                            # repl_ix = replace_randoms[cix,i,j] % len(options)
+                            cum_prob = 0
+                            for k in range(len(probs)):
+                                cum_prob += 1/len(probs) if args.uniform_sampling else probs[k]
+                                if cum_prob > replace_randoms[cix,i,j]:
+                                    repl_ix = k
+                                    break
+                            syn_text.append(options[repl_ix])
+                        else:
+                            syn_text.append(tok)
                     else:
                         syn_text.append(tok)
-                else:
-                    syn_text.append(tok)
-                j += 1
-            syn_text = " ".join(syn_text)
+                    j += 1
+                syn_text = " ".join(syn_text)
+
+
             samples.append({
-                'tgt': cluster[tgt_ix],
+                'tgt': tgt_txt,
                 'sem_input': sem_text,
                 'syn_input': syn_text
             })
