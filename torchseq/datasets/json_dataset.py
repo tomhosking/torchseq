@@ -15,7 +15,7 @@ from torchseq.utils.tokenizer import Tokenizer
 
 # class LangmodellingDataset(IterableDataset):
 class JsonDataset(Dataset):
-    def __init__(self, path, config, dev=False, test=False, repeat=False, length_limit=None):
+    def __init__(self, path, config, dev=False, test=False, repeat=False, length_limit=None, repeat_samples=None):
         self.config = config
 
         self.repeat = repeat
@@ -52,6 +52,9 @@ class JsonDataset(Dataset):
 
             if length_limit is not None:
                 self.samples = self.samples[:length_limit]
+
+            if repeat_samples is not None:
+                self.samples = [x for x in self.samples for _ in range(repeat_samples)]
 
     def __len__(self):
         return len(self.samples)
