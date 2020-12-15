@@ -79,7 +79,7 @@ def init():
 
         var_offset = 4
         cfg_dict["bottleneck"]["prior_var_weight"] = (
-            [0.0] * var_offset + [0.0] + [0.0] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
+            [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         )
         # cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
         # cfg_dict["encdec"]["code_offset"] = (

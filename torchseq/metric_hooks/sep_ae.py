@@ -166,3 +166,57 @@ class SepAEMetricHook(MetricHook):
             sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
             sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
         )
+
+    @abstractmethod
+    def eval_gen_diversity_with_lookup(config, agent):
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": "wikianswers-para-exemplarlookup",
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+        # config_gen_noised["eval"]["repeat_samples"] = 5
+
+        # var_offset = config_gen_noised["bottleneck"]["num_similar_heads"]
+        # if config_gen_noised["bottleneck"].get("invert_templ", False):
+        #     var1 = 2.0
+        #     var2 = 0.0
+        # else:
+        #     var1 = 0.0
+        #     var2 = 2.0
+        # config.bottleneck.data["prior_var_weight"] = (
+        #     [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
+        # )
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        _, _, output, _ = agent.validate(
+            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
+        )
+
+        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarlookup/dev.jsonl")) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+        # templates = [[q["syn_input"]] for q in rows]
+
+        # print(output)
+        # print(refs)
+        # print(inputs)
+        # print(templates)
+
+        # refs = [x["paras"] for x in qs_by_para_split]
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        # config.bottleneck.data["prior_var_weight"] = 0.0
+
+        return (
+            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
+            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
+        )
