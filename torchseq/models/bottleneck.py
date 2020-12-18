@@ -47,7 +47,7 @@ class PoolingBottleneck(nn.Module):
         # VQ-VAE bottleneck
         if self.config.bottleneck.get("vector_quantized", False):
             if self.config.bottleneck.get("residual_head_range", None) is None:
-                residual_head_range = (0, self.config.bottleneck.get("num_similar_heads", 0))
+                residual_head_range = (0, self.config.bottleneck.get("quantizer_num_residual", 0))
             else:
                 residual_head_range = self.config.bottleneck.get("residual_head_range", (0, 0))
                 assert len(residual_head_range) == 2, "bottlneck residual_head_range must be length 2! (lower, upper)"
@@ -143,6 +143,9 @@ class PoolingBottleneck(nn.Module):
                     // self.config.bottleneck.get("quantizer_heads", 1)
                     * self.config.bottleneck.get("quantizer_num_residual", 0)
                 )
+
+                if not isinstance(var_weight, float) and len(var_weight) > 1:
+                    var_weight = var_weight[:splice_ix]
 
                 # Reparametrisation trick, only for the residual heads
                 var_encoding = reparameterize_gaussian(

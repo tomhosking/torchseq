@@ -468,7 +468,7 @@ class ModelAgent(BaseAgent):
 
         self.vq_codes = defaultdict(lambda: [])
 
-        memory_values_to_return = defaultdict(lambda: None)
+        memory_values_to_return = defaultdict(lambda: [])
 
         if use_test:
             self.logger.info("***** USING TEST SET ******")
@@ -499,13 +499,7 @@ class ModelAgent(BaseAgent):
 
                 if memory_keys_to_return is not None:
                     for mem_key in memory_keys_to_return:
-                        # memory_values_to_return[mem_key].extend(memory[mem_key].detach().cpu().tolist())
-                        if memory_values_to_return[mem_key] is None:
-                            memory_values_to_return[mem_key] = memory[mem_key].cpu().detach()
-                        else:
-                            memory_values_to_return[mem_key] = torch.cat(
-                                [memory_values_to_return[mem_key], memory[mem_key].cpu().detach()], dim=0
-                            )
+                        memory_values_to_return[mem_key].append(memory[mem_key].cpu().detach())
 
                 num_samples += curr_batch_size
 
@@ -609,6 +603,10 @@ class ModelAgent(BaseAgent):
                 self.save_checkpoint()
 
         self.update_dashboard()
+
+        if memory_keys_to_return is not None:
+            for mem_key in memory_keys_to_return:
+                memory_values_to_return[mem_key] = torch.cat(memory_values_to_return[mem_key], dim=0)
 
         return test_loss, self.all_metrics_at_best, pred_output, memory_values_to_return
 

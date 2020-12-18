@@ -65,6 +65,8 @@ class VectorQuantizerMultiHead(nn.Module):
 
             this_input = flat_input[:, head_ix, :]
             if head_ix >= self._residual_head_range[0] and head_ix < self._residual_head_range[1]:
+                quantized_list.append(this_input)
+            else:
 
                 this_input = flat_input[:, head_ix, :]
 
@@ -118,8 +120,6 @@ class VectorQuantizerMultiHead(nn.Module):
                     self._embedding[head_ix].weight = nn.Parameter(
                         self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1)
                     )
-            else:
-                quantized_list.append(this_input)
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
 
