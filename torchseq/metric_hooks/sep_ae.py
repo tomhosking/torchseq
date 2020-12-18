@@ -180,7 +180,7 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_noised["eval"]["topk"] = 1
-        
+
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
         _, _, output, _ = agent.validate(
@@ -217,7 +217,7 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_noised["eval"]["topk"] = 1
-        
+
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
         _, _, output, _ = agent.validate(
