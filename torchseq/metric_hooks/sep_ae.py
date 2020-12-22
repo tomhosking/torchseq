@@ -42,7 +42,7 @@ class SepAEMetricHook(MetricHook):
         self.config.bottleneck.data["prior_var_weight"] = 0.0
 
         self.logger.info("Running generation with oracle template")
-        self.scores["cluster_gen_with_templ_bleu"] = SepAEMetricHook.eval_gen_with_templ(self.config, agent)
+        self.scores["cluster_gen_with_templ_bleu"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent)
         self.logger.info("...done")
 
         self.logger.info("Running generation with noised encodings")
@@ -52,7 +52,7 @@ class SepAEMetricHook(MetricHook):
         ) = SepAEMetricHook.eval_gen_noised_diversity(self.config, agent)
         self.logger.info("...done")
 
-        self.logger.info("Running generation with tgt as exemplar")
+        self.logger.info("Running generation to test reconstruction")
         self.scores["sepae_reconstruction"] = SepAEMetricHook.eval_reconstruction(self.config, agent)
         self.logger.info("...done")
 
@@ -61,7 +61,7 @@ class SepAEMetricHook(MetricHook):
         return self.scores
 
     @abstractmethod
-    def eval_gen_with_templ(config, agent):
+    def eval_gen_with_oracle(config, agent):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
@@ -121,7 +121,7 @@ class SepAEMetricHook(MetricHook):
         return sacrebleu.corpus_bleu(output, list(zip(*refs))).score
 
     @abstractmethod
-    def eval_gen_noised_diversity(config, agent, noise_weight=2.0):
+    def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=5):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -134,16 +134,24 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["eval"]["topk"] = 1
         config_gen_noised["eval"]["repeat_samples"] = 5
 
-        var_offset = config_gen_noised["bottleneck"]["num_similar_heads"]
-        if config_gen_noised["bottleneck"].get("invert_templ", False):
-            var1 = noise_weight
-            var2 = 0.0
+        if config_gen_noised["bottleneck"]["vector_quantized"]:
+            var_offset = config_gen_noised["bottleneck"]["quantizer_num_residual"]
+            agent.model.bottleneck.quantizer._code_offset = (
+                [0] * var_offset
+                + [code_offset]
+                + [code_offset] * (config_gen_noised["bottleneck"]["quantizer_heads"] - var_offset - 1)
+            )
         else:
-            var1 = 0.0
-            var2 = noise_weight
-        config.bottleneck.data["prior_var_weight"] = (
-            [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
-        )
+            var_offset = config_gen_noised["bottleneck"]["num_similar_heads"]
+            if config_gen_noised["bottleneck"].get("invert_templ", False):
+                var1 = noise_weight
+                var2 = 0.0
+            else:
+                var1 = 0.0
+                var2 = noise_weight
+            config.bottleneck.data["prior_var_weight"] = (
+                [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
+            )
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
@@ -161,6 +169,7 @@ class SepAEMetricHook(MetricHook):
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
         config.bottleneck.data["prior_var_weight"] = 0.0
+        agent.model.bottleneck.quantizer._code_offset = 0
 
         return (
             sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
@@ -225,6 +234,43 @@ class SepAEMetricHook(MetricHook):
         )
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcooccur/dev.jsonl")) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+        # templates = [[q["syn_input"]] for q in rows]
+
+        # refs = [x["paras"] for x in qs_by_para_split]
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        # config.bottleneck.data["prior_var_weight"] = 0.0
+
+        return (
+            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
+            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
+        )
+
+    @abstractmethod
+    def eval_gen_diversity_with_nn(config, agent):
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": "wikianswers-para-exemplarnn",
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        _, _, output, _ = agent.validate(
+            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
+        )
+
+        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarnn/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]

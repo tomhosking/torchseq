@@ -81,7 +81,7 @@ class PoolingBottleneck(nn.Module):
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += vq_loss
-            memory["vq_codes"] = quantizer_indices
+            memory["vq_codes"] = torch.cat([x.unsqueeze(1) for x in quantizer_indices], dim=1)
 
         if self.config.bottleneck.get("use_vmf", False):
             if self.config.bottleneck.get("quantizer_heads", 1) > 1:

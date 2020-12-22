@@ -406,8 +406,8 @@ class ModelAgent(BaseAgent):
             )
 
             if self.config.encdec.get("vector_quantized", False):
-                for h_ix, vq_codes in enumerate(memory["vq_codes"]):
-                    self.vq_codes[h_ix].extend(vq_codes.tolist())
+                for h_ix in range(memory["vq_codes"].shape[1]):
+                    self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix, :].tolist())
 
         else:
             logits = None
