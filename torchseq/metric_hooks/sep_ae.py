@@ -76,9 +76,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
             refs = [q["paras"] for q in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
@@ -111,9 +109,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_reconstruction))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
             refs = [[q["sem_input"]] for q in f][: config_reconstruction["eval"].get("truncate_dataset", None)]
@@ -155,9 +151,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
@@ -192,9 +186,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarlookup/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
@@ -229,9 +221,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcooccur/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
@@ -266,9 +256,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarnn/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
@@ -304,9 +292,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(
-            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
-        )
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcodelookup/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]

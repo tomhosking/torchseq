@@ -630,8 +630,6 @@ class ModelAgent(BaseAgent):
 
         self.update_dashboard()
 
-        
-
         return test_loss, self.all_metrics_at_best, pred_output, memory_values_to_return
 
     def update_dashboard(self):
