@@ -76,7 +76,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
@@ -111,7 +111,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_reconstruction))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
@@ -155,7 +155,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
@@ -192,7 +192,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
@@ -229,7 +229,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
@@ -266,11 +266,49 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, output, _ = agent.validate(
+        _, _, (output, _, _), _ = agent.inference(
             data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
         )
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarnn/dev.jsonl")) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+        # templates = [[q["syn_input"]] for q in rows]
+
+        # refs = [x["paras"] for x in qs_by_para_split]
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        # config.bottleneck.data["prior_var_weight"] = 0.0
+
+        return (
+            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
+            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
+        )
+
+    @abstractmethod
+    def eval_gen_diversity_with_code_lookup(config, agent):
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": "wikianswers-para-exemplarcodelookup",
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+                {"type": "copy", "from": "vq_codes", "to": "forced_codes"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        _, _, (output, _, _), _ = agent.inference(
+            data_loader, save=False, force_save_output=False, save_model=False, slow_metrics=False
+        )
+
+        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcodelookup/dev.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]

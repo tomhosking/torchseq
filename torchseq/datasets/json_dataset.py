@@ -137,15 +137,19 @@ class JsonDataset(Dataset):
 class JsonDataInstance:
     def __init__(self, sample, fields, tok_window=256):
 
-        self._docs = {}
+        self._ids = {}
         for f in fields:
-            _doc = Tokenizer().tokenise(sample[f])
+            if isinstance(sample[f], str):
 
-            if len(_doc) > tok_window:
-                _doc = _doc[:tok_window]
+                _doc = Tokenizer().tokenise(sample[f])
 
-            self._docs[f] = _doc
+                if len(_doc) > tok_window:
+                    _doc = _doc[:tok_window]
+
+                self._ids[f] = [tok["id"] for tok in _doc]
+            else:
+                self._ids[f] = sample[f]
 
     def field_as_ids(self, field):
-        id_list = [tok["id"] for tok in self._docs[field]]
-        return id_list
+
+        return self._ids[field]

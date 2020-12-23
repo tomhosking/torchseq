@@ -51,7 +51,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._residual = residual
         self._alpha = nn.Parameter(torch.Tensor(num_heads))
 
-    def forward(self, inputs, global_step=None):
+    def forward(self, inputs, global_step=None, forced_codes=None):
         # convert inputs from BCHW -> BHWC
         # inputs = inputs.permute(0, 2, 3, 1).contiguous()
         input_shape = inputs.shape
@@ -78,7 +78,17 @@ class VectorQuantizerMultiHead(nn.Module):
                 )
 
                 # Encoding
-                if not isinstance(self._code_offset, int) or self._code_offset > 0:
+                if forced_codes is not None:
+                    assert (
+                        forced_codes.shape[1] == self._num_heads
+                    ), "If forced_codes is supplied, it must be the same length as the number of quantizer heads!"
+                    encoding_indices = forced_codes[:, head_ix].unsqueeze(1)
+
+                    encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
+                    encodings.scatter_(1, encoding_indices, 1)
+                    vq_codes.append(encoding_indices)
+
+                elif not isinstance(self._code_offset, int) or self._code_offset > 0:
                     # Allow for nudging the encodings away from nearest
                     this_offset = (
                         self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset

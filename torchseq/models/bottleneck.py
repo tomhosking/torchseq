@@ -65,7 +65,7 @@ class PoolingBottleneck(nn.Module):
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
             )
 
-    def forward(self, encoding, memory, global_step):
+    def forward(self, encoding, memory, global_step, forced_codes=None):
 
         # Pool
         encoding_pooled = (
@@ -76,7 +76,7 @@ class PoolingBottleneck(nn.Module):
 
         # Quantize
         if self.config.bottleneck.get("vector_quantized", False):
-            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step)
+            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step, forced_codes)
 
             if "loss" not in memory:
                 memory["loss"] = 0

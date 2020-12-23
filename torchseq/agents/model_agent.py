@@ -47,6 +47,9 @@ cudnn.benchmark = False
 
 class ModelAgent(BaseAgent):
     def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
+        """
+        Main constructor for an Agent
+        """
         super().__init__(config)
 
         self.run_id = run_id
@@ -81,6 +84,9 @@ class ModelAgent(BaseAgent):
         self.global_step = 0
 
     def create_optimizer(self):
+        """
+        Initialise the optimizer this agent will use
+        """
         if self.config.training.opt == "adam":
             self.optimizer = optim.Adam(
                 self.model.parameters(),
@@ -97,6 +103,9 @@ class ModelAgent(BaseAgent):
             raise Exception("Unrecognised optimiser: " + self.config.training.opt)
 
     def create_samplers(self):
+        """
+        Initialise sampling methods for this agent
+        """
         self.decode_greedy = GreedySampler(self.config, self.device)
         self.decode_beam = BeamSearchSampler(self.config, self.device)
         self.decode_dbs = DiverseBeamSearchSampler(self.config, self.device)
@@ -212,6 +221,9 @@ class ModelAgent(BaseAgent):
         return output_strings, scores, memory
 
     def step_train(self, batch, tgt_field):
+        """
+        Run a single training step
+        """
         batch["_global_step"] = self.global_step
 
         output, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
@@ -363,6 +375,9 @@ class ModelAgent(BaseAgent):
                 break
 
     def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True, reduce_outputs=True):
+        """
+        Perform a single inference step
+        """
 
         batch["_global_step"] = self.global_step
 
@@ -415,74 +430,25 @@ class ModelAgent(BaseAgent):
             memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
-    def validate(
-        self,
-        data_loader,
-        save=False,
-        force_save_output=False,
-        use_test=False,
-        use_train=False,
-        save_model=True,
-        memory_keys_to_return=None,
-        slow_metrics=False,
-    ):
+    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[]):
         """
-        One cycle of model validation
-        :return:
+        Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
         """
-
-        if self.tgt_field is None:
-            raise Exception("You need to specify the target output field! ie which element of a batch is the output")
-
-        if data_loader is None:
-            raise Exception(
-                "Agent was created with a null dataset - you can only use this for on-the-fly inference, not validation!"
-            )
-
-        self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
-        self.model.eval()
         test_loss = 0
-
-        # Register the metric hooks to be used
-        metric_hooks = [DefaultMetricHook(self.config, self.src_field, self.tgt_field)]
-
-        if self.config.eval.data.get("sample_outputs", True):
-            metric_hooks += [TextualMetricHook(self.config, self.src_field, self.tgt_field)]
-
-        if slow_metrics:
-            metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
-
-        if slow_metrics and "sep_ae" in self.config.eval.get("metrics", []):
-            metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
-
-        # TODO: add QA, LM metric for Qgen task
-        # TODO: Add sem similarity for sep AE
-        # TODO: Add weird BLEU variants for sep AE
-
-        for hook in metric_hooks:
-            hook.on_begin_epoch()
 
         pred_output = []
         gold_output = []
         gold_input = []  # needed for SARI
 
-        self.vq_codes = defaultdict(lambda: [])
-
         memory_values_to_return = defaultdict(lambda: [])
 
-        if use_test:
-            self.logger.info("***** USING TEST SET ******")
-            valid_loader = data_loader.test_loader
-        elif use_train:
-            self.logger.info("***** USING TRAINING SET ******")
-            valid_loader = data_loader.train_loader
-        else:
-            valid_loader = data_loader.valid_loader
+        for hook in metric_hooks:
+            hook.on_begin_epoch()
 
         with torch.no_grad():
             num_samples = 0
             for batch_idx, batch in enumerate(
-                tqdm(valid_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
+                tqdm(data_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
             ):
                 batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
@@ -542,8 +508,8 @@ class ModelAgent(BaseAgent):
                     # This is a horrible way of getting the current batch worth of decoded output - tidy it up at some point!
                     hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory)
 
-            test_loss /= num_samples
-            self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
+        test_loss /= num_samples
+        self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
 
         Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
@@ -551,6 +517,66 @@ class ModelAgent(BaseAgent):
         for hook in metric_hooks:
             hook_values = hook.on_end_epoch(self)
             all_metrics = {**all_metrics, **hook_values}
+
+        if memory_keys_to_return is not None:
+            for mem_key in memory_keys_to_return:
+                memory_values_to_return[mem_key] = torch.cat(memory_values_to_return[mem_key], dim=0)
+
+        return test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return
+
+    def validate(
+        self,
+        data_loader,
+        save=False,
+        force_save_output=False,
+        use_test=False,
+        use_train=False,
+        save_model=True,
+        memory_keys_to_return=None,
+        slow_metrics=False,
+    ):
+        """
+        One cycle of model validation. This includes metrics, and is the entry point for eval using the CLI.
+        :return:
+        """
+
+        if self.tgt_field is None:
+            raise Exception("You need to specify the target output field! ie which element of a batch is the output")
+
+        if data_loader is None:
+            raise Exception(
+                "Agent was created with a null dataset - you can only use this for on-the-fly inference, not validation!"
+            )
+
+        self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
+        self.model.eval()
+
+        # Register the metric hooks to be used
+        metric_hooks = [DefaultMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if self.config.eval.data.get("sample_outputs", True):
+            metric_hooks += [TextualMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if slow_metrics:
+            metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if slow_metrics and "sep_ae" in self.config.eval.get("metrics", []):
+            metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        self.vq_codes = defaultdict(lambda: [])
+
+        if use_test:
+            self.logger.info("***** USING TEST SET ******")
+            valid_loader = data_loader.test_loader
+        elif use_train:
+            self.logger.info("***** USING TRAINING SET ******")
+            valid_loader = data_loader.train_loader
+        else:
+            valid_loader = data_loader.valid_loader
+
+        test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = self.inference(
+            valid_loader, memory_keys_to_return, metric_hooks
+        )
 
         for h_ix, codes in self.vq_codes.items():
             Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
@@ -604,13 +630,14 @@ class ModelAgent(BaseAgent):
 
         self.update_dashboard()
 
-        if memory_keys_to_return is not None:
-            for mem_key in memory_keys_to_return:
-                memory_values_to_return[mem_key] = torch.cat(memory_values_to_return[mem_key], dim=0)
+        
 
         return test_loss, self.all_metrics_at_best, pred_output, memory_values_to_return
 
     def update_dashboard(self):
+        """
+        Update McKenzie with the latest metric values
+        """
         if "bleu" in self.all_metrics_at_best:
             update_mckenzie(
                 self.current_epoch / self.config.training.num_epochs * 100,
