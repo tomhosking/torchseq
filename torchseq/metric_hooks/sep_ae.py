@@ -117,7 +117,7 @@ class SepAEMetricHook(MetricHook):
         return sacrebleu.corpus_bleu(output, list(zip(*refs))).score
 
     @abstractmethod
-    def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=5):
+    def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=2):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {

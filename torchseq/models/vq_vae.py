@@ -86,7 +86,6 @@ class VectorQuantizerMultiHead(nn.Module):
 
                     encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
                     encodings.scatter_(1, encoding_indices, 1)
-                    vq_codes.append(encoding_indices)
 
                 elif not isinstance(self._code_offset, int) or self._code_offset > 0:
                     # Allow for nudging the encodings away from nearest
@@ -98,15 +97,17 @@ class VectorQuantizerMultiHead(nn.Module):
 
                     encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
                     encodings.scatter_(1, encoding_indices, 1)
-                    vq_codes.append(encoding_indices)
+
                 elif self._soft_em and self.training:
                     encodings = torch.softmax(-1.0 * distances, dim=-1).detach()
+                    encoding_indices = torch.argmax(encodings, dim=-1)
                 else:
                     encoding_indices = torch.argmin(distances, dim=1).unsqueeze(1)
 
                     encodings = torch.zeros(encoding_indices.shape[0], self._num_embeddings, device=inputs.device)
                     encodings.scatter_(1, encoding_indices, 1)
-                    vq_codes.append(encoding_indices)
+
+                vq_codes.append(encoding_indices)
 
                 # Quantize and unflatten
                 this_quantized = torch.matmul(encodings, embedding.weight)
