@@ -49,6 +49,7 @@ class SepAEMetricHook(MetricHook):
         (
             self.scores["cluster_gen_noised_diversity_bleu"],
             self.scores["cluster_gen_noised_diversity_selfbleu"],
+            self.scores["cluster_gen_noised_diversity_ibleu"],
         ) = SepAEMetricHook.eval_gen_noised_diversity(self.config, agent)
         self.logger.info("...done")
 
@@ -79,19 +80,24 @@ class SepAEMetricHook(MetricHook):
         _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
 
         with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
-            refs = [q["paras"] for q in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+            rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
 
+        # refs = [x["paras"] for x in qs_by_para_split]
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
-        refs_transpose = list(zip(*refs_padded))
 
-        # print(max_num_refs)
-        # print(config_gen_with_templ['eval']['truncate_dataset'])
-        # print(len(refs_transpose))
-        # print(len(refs_transpose[0]))
-        # print(refs_transpose)
+        config.bottleneck.data["prior_var_weight"] = 0.0
+        agent.model.bottleneck.quantizer._code_offset = 0
 
-        return sacrebleu.corpus_bleu(output, refs_transpose).score
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
     def eval_reconstruction(config, agent):
@@ -165,10 +171,13 @@ class SepAEMetricHook(MetricHook):
         config.bottleneck.data["prior_var_weight"] = 0.0
         agent.model.bottleneck.quantizer._code_offset = 0
 
-        return (
-            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
-            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
-        )
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
     def eval_gen_diversity_with_lookup(config, agent):
@@ -200,10 +209,13 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        return (
-            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
-            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
-        )
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
     def eval_gen_diversity_with_cooccurence(config, agent):
@@ -235,10 +247,13 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        return (
-            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
-            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
-        )
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
     def eval_gen_diversity_with_nn(config, agent):
@@ -270,10 +285,13 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        return (
-            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
-            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
-        )
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
     def eval_gen_diversity_with_code_lookup(config, agent):
@@ -306,7 +324,114 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        return (
-            sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score,
-            sacrebleu.corpus_bleu(output, list(zip(*inputs))).score,
-        )
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu)
+
+    @abstractmethod
+    def eval_gen_diversity_with_mlp(config, agent):
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": "wikianswers-para-exemplarmlppredict",
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+                {"type": "copy", "from": "vq_codes", "to": "forced_codes"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+
+        NUM_HYPOTHESES = 5
+
+        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarmlppredict/dev.jsonl")) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+
+        # First, do top-1
+        refs_top1 = [q["paras"] for i, q in enumerate(rows) if i % NUM_HYPOTHESES == 0]
+        inputs_top1 = [[q["sem_input"]] for i, q in enumerate(rows) if i % NUM_HYPOTHESES == 0]
+        output_top1 = [q for i, q in enumerate(output) if i % NUM_HYPOTHESES == 0]
+
+        max_num_refs = max([len(x) for x in refs_top1])
+        refs_padded_top1 = [x + [x[0]] * (max_num_refs - len(x)) for x in refs_top1]
+
+        # config.bottleneck.data["prior_var_weight"] = 0.0
+
+        tgt_bleu_top1 = sacrebleu.corpus_bleu(output_top1, list(zip(*refs_padded_top1))).score
+        self_bleu_top1 = sacrebleu.corpus_bleu(output_top1, list(zip(*inputs_top1))).score
+
+        alpha = 0.8
+        ibleu_top1 = alpha * tgt_bleu_top1 - (1 - alpha) * self_bleu_top1
+
+        # Now, score the multiple outputs within each example
+        refs = [q["paras"] for q in rows]
+        N = NUM_HYPOTHESES
+        # Get the other outputs from the same grouping
+        other_outs = [
+            [q for j, q in enumerate(output[N * (i // N) : N * (i // N + 1)]) if j % N != i % N]
+            for i in range(len(output))
+        ]
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        tgt_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*other_outs))).score
+        ibleu_div = alpha * tgt_bleu_div - (1 - alpha) * self_bleu_div
+
+        return (tgt_bleu_top1, self_bleu_top1, ibleu_top1), (tgt_bleu_div, self_bleu_div, ibleu_div), output
+
+    @abstractmethod
+    def eval_gen_beam_diversity(config, agent):
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": "wikianswers-para-splitforgeneval",
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+            ],
+        }
+
+        prev_topk = config.eval.get("topk", 1)
+        config.eval.data["topk"] = 4
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+
+        NUM_HYPOTHESES = 4
+
+        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+
+        output = [q for beam in output for q in beam]
+
+        # Now, score the multiple outputs within each example
+        refs = [q["paras"] for q in rows for _ in range(NUM_HYPOTHESES)]
+        N = NUM_HYPOTHESES
+        # Get the other outputs from the same grouping
+        other_outs = [
+            [q for j, q in enumerate(output[N * (i // N) : N * (i // N + 1)]) if j % N != i % N]
+            for i in range(len(output))
+        ]
+
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        alpha = 0.8
+        tgt_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*other_outs))).score
+        ibleu_div = alpha * tgt_bleu_div - (1 - alpha) * self_bleu_div
+
+        config.eval.data["topk"] = prev_topk
+
+        return (tgt_bleu_div, self_bleu_div, ibleu_div)
