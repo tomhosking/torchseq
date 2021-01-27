@@ -84,7 +84,7 @@ class BottleneckAutoencoderModel(nn.Module):
                     batch["_global_step"],
                     forced_codes=batch.get("forced_codes", None),
                 )
-                if 'loss' in memory:
+                if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
                 if self.config.bottleneck.get("split_encoder", False):

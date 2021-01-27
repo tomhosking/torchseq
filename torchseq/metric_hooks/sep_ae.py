@@ -84,7 +84,14 @@ class SepAEMetricHook(MetricHook):
         split = "test" if test else "dev"
 
         with jsonlines.open(
-            os.path.join(config.env.data_path, (f"qqp-splitforgeneval/{split}.jsonl" if use_qqp else f"wikianswers-para-splitforgeneval/{split}.jsonl"))
+            os.path.join(
+                config.env.data_path,
+                (
+                    f"qqp-splitforgeneval/{split}.jsonl"
+                    if use_qqp
+                    else f"wikianswers-para-splitforgeneval/{split}.jsonl"
+                ),
+            )
         ) as f:
             rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
@@ -381,8 +388,14 @@ class SepAEMetricHook(MetricHook):
         split = "test" if test else "dev"
 
         with jsonlines.open(
-            os.path.join(config.env.data_path, (f"qqp-exemplarmlppredict/{split}.jsonl" if use_qqp else f"wikianswers-para-exemplarmlppredict/{split}.jsonl"))
-            
+            os.path.join(
+                config.env.data_path,
+                (
+                    f"qqp-exemplarmlppredict/{split}.jsonl"
+                    if use_qqp
+                    else f"wikianswers-para-exemplarmlppredict/{split}.jsonl"
+                ),
+            )
         ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
 
