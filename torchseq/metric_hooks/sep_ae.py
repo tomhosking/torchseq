@@ -62,11 +62,11 @@ class SepAEMetricHook(MetricHook):
         return self.scores
 
     @abstractmethod
-    def eval_gen_with_oracle(config, agent):
+    def eval_gen_with_oracle(config, agent, test=False, use_qqp=False):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
-            "path": "wikianswers-para-splitforgeneval",
+            "path": ("qqp-splitforgeneval" if use_qqp else "wikianswers-para-splitforgeneval"),
             "field_map": [
                 {"type": "copy", "from": "tgt", "to": "s2"},
                 {"type": "copy", "from": "syn_input", "to": "template"},
@@ -75,11 +75,17 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_with_templ["eval"]["topk"] = 1
 
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, (f"qqp-splitforgeneval/{split}.jsonl" if use_qqp else f"wikianswers-para-splitforgeneval/{split}.jsonl"))
+        ) as f:
             rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]
@@ -87,9 +93,6 @@ class SepAEMetricHook(MetricHook):
         # refs = [x["paras"] for x in qs_by_para_split]
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
-
-        config.bottleneck.data["prior_var_weight"] = 0.0
-        agent.model.bottleneck.quantizer._code_offset = 0
 
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
@@ -100,7 +103,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_reconstruction(config, agent):
+    def eval_reconstruction(config, agent, test=False):
         config_reconstruction = copy.deepcopy(config.data)
         config_reconstruction["dataset"] = "json"
         config_reconstruction["json_dataset"] = {
@@ -115,15 +118,19 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_reconstruction))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")
+        ) as f:
             refs = [[q["sem_input"]] for q in f][: config_reconstruction["eval"].get("truncate_dataset", None)]
 
         return sacrebleu.corpus_bleu(output, list(zip(*refs))).score
 
     @abstractmethod
-    def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=2):
+    def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=2, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -157,9 +164,13 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")
+        ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows for _ in range(5)]
         inputs = [[q["sem_input"]] for q in rows for _ in range(5)]
@@ -180,7 +191,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_diversity_with_lookup(config, agent):
+    def eval_gen_diversity_with_lookup(config, agent, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -195,9 +206,11 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarlookup/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(os.path.join(config.env.data_path, f"wikianswers-para-exemplarlookup/{split}.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]
@@ -218,7 +231,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_diversity_with_cooccurence(config, agent):
+    def eval_gen_diversity_with_cooccurence(config, agent, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -233,9 +246,13 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcooccur/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, f"wikianswers-para-exemplarcooccur/{split}.jsonl")
+        ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]
@@ -256,7 +273,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_diversity_with_nn(config, agent):
+    def eval_gen_diversity_with_nn(config, agent, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -271,9 +288,11 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarnn/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(os.path.join(config.env.data_path, f"wikianswers-para-exemplarnn/{split}.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]
@@ -294,7 +313,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_diversity_with_code_lookup(config, agent):
+    def eval_gen_diversity_with_code_lookup(config, agent, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -310,9 +329,13 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarcodelookup/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, f"wikianswers-para-exemplarcodelookup/{split}.jsonl")
+        ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows]
         inputs = [[q["sem_input"]] for q in rows]
@@ -333,11 +356,11 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_diversity_with_mlp(config, agent):
+    def eval_gen_diversity_with_mlp(config, agent, test=False, use_qqp=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
-            "path": "wikianswers-para-exemplarmlppredict",
+            "path": ("qqp-exemplarmlppredict" if use_qqp else "wikianswers-para-exemplarmlppredict"),
             "field_map": [
                 {"type": "copy", "from": "tgt", "to": "s2"},
                 {"type": "copy", "from": "sem_input", "to": "s1"},
@@ -347,13 +370,20 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_noised["eval"]["topk"] = 1
 
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        NUM_HYPOTHESES = 5
+        NUM_HYPOTHESES = 2
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-exemplarmlppredict/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, (f"qqp-exemplarmlppredict/{split}.jsonl" if use_qqp else f"wikianswers-para-exemplarmlppredict/{split}.jsonl"))
+            
+        ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
 
         # First, do top-1
@@ -390,7 +420,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu_top1, self_bleu_top1, ibleu_top1), (tgt_bleu_div, self_bleu_div, ibleu_div), output
 
     @abstractmethod
-    def eval_gen_beam_diversity(config, agent):
+    def eval_gen_beam_diversity(config, agent, test=False):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
@@ -406,11 +436,15 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
         NUM_HYPOTHESES = 4
 
-        with jsonlines.open(os.path.join(config.env.data_path, "wikianswers-para-splitforgeneval/dev.jsonl")) as f:
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")
+        ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
 
         output = [q for beam in output for q in beam]

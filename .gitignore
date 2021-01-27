@@ -7,6 +7,8 @@
 /data_bak
 /configs
 /scripts
+/baselines
+/plots
 
 .ipynb_checkpoints/
 *.DS_Store

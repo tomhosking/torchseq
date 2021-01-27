@@ -19,6 +19,7 @@ class VectorQuantizerMultiHead(nn.Module):
         residual_head_range=(0, 0),
         soft_em=True,
         warmup_steps=None,
+        code_entropy_weight=0,
     ):
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -50,6 +51,11 @@ class VectorQuantizerMultiHead(nn.Module):
         self._epsilon = epsilon
         self._residual = residual
         self._alpha = nn.Parameter(torch.Tensor(num_heads))
+        self._code_entropy_weight = code_entropy_weight
+
+        if code_entropy_weight > 0:
+            cooccur_shape = [num_embeddings] * (num_heads - (residual_head_range[1] - residual_head_range[0]))
+            self.register_buffer("_code_cooccurrence", torch.zeros(*cooccur_shape))
 
     def forward(self, inputs, global_step=None, forced_codes=None):
         # convert inputs from BCHW -> BHWC
@@ -61,6 +67,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         quantized_list = []
         vq_codes = []
+        all_encodings = []
         for head_ix, embedding in enumerate(self._embedding):
 
             this_input = flat_input[:, head_ix, :]
@@ -108,6 +115,7 @@ class VectorQuantizerMultiHead(nn.Module):
                     encodings.scatter_(1, encoding_indices, 1)
 
                 vq_codes.append(encoding_indices)
+                all_encodings.append(encodings.unsqueeze(1))
 
                 # Quantize and unflatten
                 this_quantized = torch.matmul(encodings, embedding.weight)
@@ -133,6 +141,49 @@ class VectorQuantizerMultiHead(nn.Module):
                     )
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
+        all_encodings = torch.cat(all_encodings, dim=1)
+
+        code_entropy_loss = 0
+        if self._code_entropy_weight > 0:
+
+            # h_ix x bsz
+            cooccur_ixs = list(zip(*vq_codes))
+            cooccur_mask = torch.zeros_like(self._code_cooccurrence)
+            for codes in cooccur_ixs:
+                cooccur_mask[codes] += 1.0
+
+            bsz = encodings.shape[0]
+
+            # print(self._code_cooccurrence.shape)
+            # print(cooccur_mask.shape)
+            # print(all_encodings.shape)
+
+            alpha = 1 / 100
+            self._code_cooccurrence *= 1 - alpha
+            self._code_cooccurrence += cooccur_mask * alpha / bsz
+
+            # I can't work out how to do this natively :(
+            entropy_losses = []
+            for bix in range(bsz):
+                this_weight = 1
+                for hix in range(len(vq_codes)):
+                    this_weight *= all_encodings[bix, hix, cooccur_ixs[bix][hix].item()]
+
+                # print(bix, this_weight, self._code_cooccurrence[cooccur_ixs[bix]])
+
+                this_loss = torch.log(1 + 1e-10 - self._code_cooccurrence[cooccur_ixs[bix]]) * this_weight * -1
+                entropy_losses.append(this_loss.unsqueeze(0))
+                # print(this_loss)
+            # print(entropy_losses)
+            # exit()
+
+            # if global_step > 200:
+
+            #     print(cooccur_mask)
+            #     print(self._code_cooccurrence)
+            #     print(entropy_losses)
+            #     exit()
+            code_entropy_loss = torch.cat(entropy_losses, dim=0)
 
         # Loss
         if not self._ema:
@@ -143,7 +194,7 @@ class VectorQuantizerMultiHead(nn.Module):
             q_latent_loss = 0
         e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
-        loss = self._commitment_cost * e_latent_loss + q_latent_loss
+        loss = self._commitment_cost * e_latent_loss + q_latent_loss + self._code_entropy_weight * code_entropy_loss
 
         # Straight Through Estimator
         if self._residual:

@@ -63,6 +63,7 @@ class PoolingBottleneck(nn.Module):
                 residual_head_range=residual_head_range,
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
+                code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
