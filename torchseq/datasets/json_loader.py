@@ -11,7 +11,7 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class JsonDataLoader:
-    def __init__(self, config):
+    def __init__(self, config, train_samples=None, dev_samples=None, test_samples=None):
         """
         :param config:
         """
@@ -19,8 +19,11 @@ class JsonDataLoader:
         self.logger = logging.getLogger("DataLoader")
 
         train = JsonDataset(
-            os.path.join(config.env.data_path, self.config.json_dataset.path),
             config=config,
+            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            if self.config.json_dataset.path is not None
+            else None,
+            samples=train_samples,
             dev=False,
             test=False,
             repeat=(self.config.training.data.get("epoch_steps", 0) > 0),
@@ -28,16 +31,22 @@ class JsonDataLoader:
             repeat_samples=self.config.eval.get("repeat_samples", None),
         )
         valid = JsonDataset(
-            os.path.join(config.env.data_path, self.config.json_dataset.path),
             config=config,
+            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            if self.config.json_dataset.path is not None
+            else None,
+            samples=dev_samples,
             dev=True,
             test=False,
             length_limit=self.config.eval.get("truncate_dataset", None),
             repeat_samples=self.config.eval.get("repeat_samples", None),
         )
         test = JsonDataset(
-            os.path.join(config.env.data_path, self.config.json_dataset.path),
             config=config,
+            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            if self.config.json_dataset.path is not None
+            else None,
+            samples=test_samples,
             dev=False,
             test=True,
             length_limit=self.config.eval.get("truncate_dataset", None),
@@ -49,13 +58,13 @@ class JsonDataLoader:
         # self.len_test_data = len(test)
 
         # TODO: check whether running in silent mode
-        self.logger.info(
-            "Loaded {:} training and {:} validation examples from {:}".format(
-                self.len_train_data,
-                self.len_valid_data,
-                os.path.join(config.env.data_path, self.config.json_dataset.path),
-            )
-        )
+        # self.logger.info(
+        #     "Loaded {:} training and {:} validation examples from {:}".format(
+        #         self.len_train_data,
+        #         self.len_valid_data,
+        #         os.path.join(config.env.data_path, self.config.json_dataset.path) if ,
+        #     )
+        # )
 
         # self.train_iterations = (self.len_train_data + self.config.training.batch_size - 1) // self.config.training.batch_size
         # self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
