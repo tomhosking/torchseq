@@ -30,8 +30,8 @@ setuptools.setup(
         'tqdm>=4.54',
         'scipy>=1.5',
         'nltk==3.5.0',
-        'transformers==4.0.0',
-        'tokenizers==0.9.4',
+        'transformers==4.3.2',
+        'tokenizers==0.10.1',
         'jsonlines>=1.2',
         'sacrebleu>=1.4'
     ],
