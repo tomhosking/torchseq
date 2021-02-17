@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 
 
 def onehot(indexes, N=None, ignore_index=None):
@@ -56,8 +56,10 @@ class BeamSearchSampler(nn.Module):
             scores = torch.cat([scores, scores], dim=-1)
 
         if MBART_HACK:
-            dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(250004).to(self.device)
-            output_seq = torch.cat([dummy_token, output_seq], dim=-1)
+            # lang_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(batch["tgt_lang"][0]).to(self.device)
+            lang_token = batch["tgt_lang"].unsqueeze(-1).unsqueeze(-1).expand(-1, beam_width, -1)
+            eos_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().eos_id).to(self.device)
+            output_seq = torch.cat([eos_token, lang_token], dim=-1)
             scores = torch.cat([scores, scores], dim=-1)
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
@@ -154,9 +156,9 @@ class BeamSearchSampler(nn.Module):
 
         # Sort by score
 
-        if BART_HACK or MBART_HACK:
-            output_seq = output_seq[:, :, 1:]
-            scores = scores[:, :, 1:]
+        # if BART_HACK or MBART_HACK:
+        #     output_seq = output_seq[:, :, 1:]
+        #     scores = scores[:, :, 1:]
 
         output_len = torch.sum(output_seq != Tokenizer().pad_id, dim=-1)
         length_penalty = torch.pow((5 + output_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)

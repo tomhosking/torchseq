@@ -49,10 +49,10 @@ class PretrainedAdapterModel(nn.Module):
         self.tgt_field = tgt_field
 
         if "mbart" in self.config.encdec.bert_model:
-            from transformers import BartModel
+            from transformers import MBartModel
 
             # Encoder/decoders
-            bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+            bart_model = MBartModel.from_pretrained(config.encdec.bert_model)
             self.encoder = bart_model.encoder
             self.decoder = bart_model.decoder
 
@@ -121,7 +121,7 @@ class PretrainedAdapterModel(nn.Module):
         max_ctxt_len = batch[self.src_field].shape[1]
         max_goal_len = batch[self.tgt_field].shape[1]
         # max_q_len = torch.max(batch['q_len'])
-        # curr_batch_size = batch[self.src_field].size()[0]
+        curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
 
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= batch[self.src_field + "_len"][:, None].cpu()).to(
@@ -220,12 +220,16 @@ class PretrainedAdapterModel(nn.Module):
             :, :output_max_len
         ]
 
+        decoder_attn_mask = combine_masks(output_pad_mask, tgt_mask, (curr_batch_size, output_max_len, output_max_len))
+
+        # print(batch['c'][0])
+        # print(batch['q'][0])
+        # exit()
         output = self.decoder(
-            output,
-            memory["encoding"],
-            ~context_mask,
-            output_pad_mask,
-            decoder_causal_mask=tgt_mask,
+            input_ids=output,
+            encoder_hidden_states=memory["encoding"],
+            encoder_attention_mask=~context_mask,
+            attention_mask=~output_pad_mask,
             # tgt_key_padding_mask=output_pad_mask
         )
 

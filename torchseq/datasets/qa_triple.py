@@ -19,7 +19,18 @@ def get_byte_offsets(text, character_offset):
 
 # Convert a text context-question-answer triple to a cropped tokenised encoding
 class QATriple:
-    def __init__(self, context, answer, a_pos, question=None, sent_window=0, tok_window=300, o_tag=1):
+    def __init__(
+        self,
+        context,
+        answer,
+        a_pos,
+        question=None,
+        sent_window=0,
+        tok_window=300,
+        o_tag=1,
+        src_lang=None,
+        tgt_lang=None,
+    ):
 
         self.o_tag = o_tag
 
@@ -112,8 +123,10 @@ class QATriple:
         # self._ctxt_doc_uncrop = Tokenizer().tokenise(self.context_text)
         ctxt_sent_toks = [Tokenizer().tokenise(sent) for sent in ctxt_sents]
 
-        self._ans_doc = Tokenizer().tokenise(self.answer_text)
-        self._q_doc = Tokenizer().tokenise(self.question_text, add_bos_eos=True) if self.is_training else None
+        self._ans_doc = Tokenizer().tokenise(self.answer_text, src_lang=src_lang)
+        self._q_doc = (
+            Tokenizer().tokenise(self.question_text, add_bos_eos=True, tgt_lang=tgt_lang) if self.is_training else None
+        )
 
         # Find the answer in the uncropped context
         self.a_tok_pos_uncrop = None
@@ -134,6 +147,7 @@ class QATriple:
                 if self.a_char_end_uncrop <= tok["begin"] + offset and self.a_tok_end_uncrop is None:
                     self.a_tok_end_uncrop = ix + sum([len(sent) for sent in ctxt_sent_toks[:sent_ix]]) - 1
                     break
+            # print([(tok['begin'], tok['end']) for tok in sent_toks])
 
         if self.a_tok_pos_uncrop is None:
             print("Cannot find a_tok_pos")
@@ -148,6 +162,7 @@ class QATriple:
             print(a_pos, self.a_char_end_uncrop)
             print(self.answer_text)
             print(ctxt_char_offsets)
+
             raise Exception("Couldnt find the answer token END position")
 
         # Find the sentence that contains the answer

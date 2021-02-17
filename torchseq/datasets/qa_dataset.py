@@ -8,14 +8,16 @@ from torch.utils.data import Dataset
 
 from torchseq.datasets.qa_triple import QATriple
 from torchseq.datasets.loaders import load_squad_triples
-from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 
 
 class QADataset(Dataset):
-    def __init__(self, path, config, dev=False, test=False, length_limit=None):
+    def __init__(self, config, path=None, samples=None, dev=False, test=False, length_limit=None):
         self.config = config
 
-        if config.training.dataset == "squad":
+        if samples is not None:
+            self.samples = samples
+        elif config.training.dataset == "squad":
             squad = load_squad_triples(path=path, dev=dev, test=test)
 
             self.samples = [
@@ -64,41 +66,85 @@ class QADataset(Dataset):
             o_tag=2 if self.config.prepro.bio_tagging else 1,
             concat_ctxt_ans=self.config.prepro.concat_ctxt_ans,
             roberta_style_encoding=self.config.prepro.data.get("roberta_style_encoding", False),
+            include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
         )
 
     @staticmethod
-    def to_tensor(x, sent_window=0, tok_window=300, o_tag=2, concat_ctxt_ans=False, roberta_style_encoding=False):
+    def to_tensor(
+        x,
+        sent_window=0,
+        tok_window=300,
+        o_tag=2,
+        concat_ctxt_ans=False,
+        roberta_style_encoding=False,
+        include_lang_codes=False,
+    ):
+
+        src_lang = x.get("src_lang", "en_XX")
+        tgt_lang = x.get("tgt_lang", "en_XX")
+
+        if include_lang_codes:
+            src_lang_token = FAIRSEQ_LANGUAGE_CODES[src_lang]
+            tgt_lang_token = FAIRSEQ_LANGUAGE_CODES[tgt_lang]
 
         parsed_triple = QATriple(
-            x["c"], x["a"], x["a_pos"], x["q"], sent_window=sent_window, tok_window=tok_window, o_tag=o_tag
+            x["c"],
+            x["a"],
+            x["a_pos"],
+            x.get("q", None),
+            sent_window=sent_window,
+            tok_window=tok_window,
+            o_tag=o_tag,
         )
 
         if concat_ctxt_ans:
             if roberta_style_encoding:
                 # Roberta sequence pairs look like <s>A</s></s>B</s> for no obvious reason
-                ctxt = torch.LongTensor(
-                    parsed_triple.ctxt_as_ids() + [Tokenizer().eos_id] * 2 + parsed_triple.ans_as_ids()[1:]
+                #
+                ctxt = (
+                    ([src_lang_token] if include_lang_codes else [])
+                    + parsed_triple.ans_as_ids()
+                    + [Tokenizer().eos_id] * 1
+                    + parsed_triple.ctxt_as_ids()
+                )
+
+                a_pos = (
+                    ([0] if include_lang_codes else [])
+                    + [0 for i in range(len(parsed_triple._ans_doc))]
+                    + [1]
+                    + [1 for i in range(len(parsed_triple._ctxt_doc))]
+                    # +
                 )
             else:
                 ctxt = torch.LongTensor(
                     parsed_triple.ans_as_ids() + [Tokenizer().eos_id] + parsed_triple.ctxt_as_ids()
                 )
-            sample = {
-                "c": ctxt,
-                "q": torch.LongTensor(parsed_triple.q_as_ids()),
-                "a": torch.LongTensor(parsed_triple.ans_as_ids()),
-                "a_pos": torch.LongTensor(
+                a_pos = (
                     [0 for i in range(len(parsed_triple._ans_doc))]
                     + [1]
                     + [1 for i in range(len(parsed_triple._ctxt_doc))]
-                ),
-                "c_len": torch.LongTensor([len(parsed_triple._ctxt_doc) + len(parsed_triple._ans_doc) + 1]),
+                )
+
+            q_ids = parsed_triple.q_as_ids()
+            if include_lang_codes:
+                q_ids = [tgt_lang_token] + q_ids
+
+            sample = {
+                "c": torch.LongTensor(ctxt),
+                "q": torch.LongTensor(q_ids),
+                "a": torch.LongTensor(parsed_triple.ans_as_ids()),
+                "a_pos": torch.LongTensor(a_pos),
+                "c_len": torch.LongTensor([len(ctxt)]),
                 "a_len": torch.LongTensor([len(parsed_triple._ans_doc)]),
-                "q_len": torch.LongTensor([len(parsed_triple._q_doc)]),
+                "q_len": torch.LongTensor([len(q_ids)]),
                 "c_text": x["c"],
                 "a_text": x["a"],
                 "q_text": x["q"],
             }
+            if include_lang_codes:
+                sample["src_lang"] = torch.LongTensor([src_lang_token])
+                sample["tgt_lang"] = torch.LongTensor([tgt_lang_token])
+
         else:
             sample = {
                 "c": torch.LongTensor(parsed_triple.ctxt_as_ids()),

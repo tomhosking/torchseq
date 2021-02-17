@@ -74,7 +74,18 @@ class AQAgent(ModelAgent):
         this_loss = torch.zeros(output.shape[0], dtype=torch.float).to(self.device)
 
         if self.config.training.get("xe_loss", True):
-            this_loss += self.loss(logits.permute(0, 2, 1), batch[tgt_field]).sum(dim=1) / (
+            xe_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
+            # This isn't necessary - the teacher force decoder already forces the first token
+            # if self.config.training.get("loss_offset", 0) > 0:
+            #     xe_offset = self.config.training.get("loss_offset", 0)
+            #     # xe_mask = torch.ones_like(xe_loss)
+            #     # xe_mask[:, :xe_offset] = 0
+            #     xe_loss = xe_loss[:, xe_offset:]
+            #     # print(torch.argmax(logits, dim=-1)[0])
+            #     # print(batch[tgt_field][0].shape)
+            #     # print(xe_loss[0].shape)
+            #     # exit()
+            this_loss += xe_loss.sum(dim=1) / (
                 batch[tgt_field + "_len"] - 1
             ).to(this_loss)
 

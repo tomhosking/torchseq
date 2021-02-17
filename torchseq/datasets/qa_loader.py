@@ -12,7 +12,7 @@ import logging
 
 
 class QADataLoader:
-    def __init__(self, config):
+    def __init__(self, config, train_samples=None, dev_samples=None, test_samples=None):
         """
         :param config:
         """
@@ -20,21 +20,30 @@ class QADataLoader:
         self.logger = logging.getLogger("DataLoader")
 
         train = QADataset(
-            os.path.join(config.env.data_path, config.training.dataset) + "/",
+            path=os.path.join(config.env.data_path, config.training.dataset) + "/"
+            if self.config.training.dataset is not None
+            else None,
+            samples=train_samples,
             config=config,
             dev=False,
             test=False,
             length_limit=self.config.training.get("truncate_dataset", None),
         )
         valid = QADataset(
-            os.path.join(config.env.data_path, config.training.dataset) + "/",
+            path=os.path.join(config.env.data_path, self.config.training.dataset) + "/"
+            if self.config.training.dataset is not None
+            else None,
+            samples=dev_samples,
             config=config,
             dev=True,
             test=False,
             length_limit=self.config.eval.get("truncate_dataset", None),
         )
         test = QADataset(
-            os.path.join(config.env.data_path, config.training.dataset) + "/",
+            path=os.path.join(config.env.data_path, self.config.training.dataset) + "/"
+            if self.config.training.dataset is not None
+            else None,
+            samples=test_samples,
             config=config,
             dev=False,
             test=True,

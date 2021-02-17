@@ -2,40 +2,68 @@ import torch
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
 from transformers import BartModel, BertModel, RobertaModel
-from transformers import MBartTokenizer
+from transformers import MBartTokenizerFast
 
 from torchseq.utils.singleton import Singleton
 from torchseq.utils.tokenizer_wordlevel import WordLevelTokenizer
 
 DATA_PATH = "./data/"
 
-FAIRSEQ_LANGUAGE_CODES = [
-    "ar_AR",
-    "cs_CZ",
-    "de_DE",
-    "en_XX",
-    "es_XX",
-    "et_EE",
-    "fi_FI",
-    "fr_XX",
-    "gu_IN",
-    "hi_IN",
-    "it_IT",
-    "ja_XX",
-    "kk_KZ",
-    "ko_KR",
-    "lt_LT",
-    "lv_LV",
-    "my_MM",
-    "ne_NP",
-    "nl_XX",
-    "ro_RO",
-    "ru_RU",
-    "si_LK",
-    "tr_TR",
-    "vi_VN",
-    "zh_CN",
-]
+# FAIRSEQ_LANGUAGE_CODES = [
+#     "ar_AR",
+#     "cs_CZ",
+#     "de_DE",
+#     "en_XX",
+#     "es_XX",
+#     "et_EE",
+#     "fi_FI",
+#     "fr_XX",
+#     "gu_IN",
+#     "hi_IN",
+#     "it_IT",
+#     "ja_XX",
+#     "kk_KZ",
+#     "ko_KR",
+#     "lt_LT",
+#     "lv_LV",
+#     "my_MM",
+#     "ne_NP",
+#     "nl_XX",
+#     "ro_RO",
+#     "ru_RU",
+#     "si_LK",
+#     "tr_TR",
+#     "vi_VN",
+#     "zh_CN",
+# ]
+
+FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
+    "ar_AR": 250001,
+    "cs_CZ": 250002,
+    "de_DE": 250003,
+    "en_XX": 250004,
+    "es_XX": 250005,
+    "et_EE": 250006,
+    "fi_FI": 250007,
+    "fr_XX": 250008,
+    "gu_IN": 250009,
+    "hi_IN": 250010,
+    "it_IT": 250011,
+    "ja_XX": 250012,
+    "kk_KZ": 250013,
+    "ko_KR": 250014,
+    "lt_LT": 250015,
+    "lv_LV": 250016,
+    "my_MM": 250017,
+    "ne_NP": 250018,
+    "nl_XX": 250019,
+    "ro_RO": 250020,
+    "ru_RU": 250021,
+    "si_LK": 250022,
+    "tr_TR": 250023,
+    "vi_VN": 250024,
+    "zh_CN": 250025,
+}
 
 
 class Tokenizer(metaclass=Singleton):
@@ -59,7 +87,10 @@ class Tokenizer(metaclass=Singleton):
         self.model_slug = model_slug
 
         if "mbart-" in model_slug:
-            self.engine = MBartTokenizer.from_pretrained("sshleifer/mbart-large-cc25")
+            # self.engine = MBartTokenizerFast.from_pretrained("facebook/mbart-large-cc25")
+            self.engine = MBartTokenizerFast.from_pretrained(
+                "facebook/mbart-large-50", src_lang="en_XX", tgt_lang="en_XX", add_prefix_space=True
+            )
 
             self.pad_id = self.engine.pad_token_id
             self.mask_id = self.engine.mask_token_id
@@ -126,7 +157,7 @@ class Tokenizer(metaclass=Singleton):
 
     def decode(self, token_id_tensor):
         return (
-            Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
+            Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=False)
             # .replace(" ##", "")
             # .replace("# ", "#")
         )
@@ -134,14 +165,17 @@ class Tokenizer(metaclass=Singleton):
     def get_embeddings(self, model_slug):
         return torch.load("{:}pretrained-vocabs/{:}.embeddings.pt".format(DATA_PATH, model_slug.split("/")[-1]))
 
-    def tokenise(self, text, add_bos_eos=True, src_lang_code=None, tgt_lang_code=None):
-        output = Tokenizer().engine.encode(text)
+    def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
 
         if "mbart-" in Tokenizer().model_slug:
-            token_ids = output
-            offsets = [(0, 0) for _ in range(len(token_ids))]
-            token_texts = ["?" for _ in range(len(token_ids))]
+            output = Tokenizer().engine.encode_plus(text, return_offsets_mapping=True, add_special_tokens=False)
+
+            token_ids = output["input_ids"]
+            offsets = output["offset_mapping"]
+            token_texts = ["[MBART]" for _ in range(len(token_ids))]
         else:
+            output = Tokenizer().engine.encode(text)
+
             token_ids = output.ids
             offsets = output.offsets
             token_texts = output.tokens
@@ -151,24 +185,27 @@ class Tokenizer(metaclass=Singleton):
 
         # mBART doesn't use bos tokens
         if "mbart-" in Tokenizer().model_slug:
-            bos = (
-                [{"id": self.engine.lang_code_to_id[tgt_lang_code], "text": tgt_lang_code, "begin": 0, "end": 0}]
-                if tgt_lang_code is not None
-                else []
-            ) + [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
-            eos = (
-                [
-                    {
-                        "id": self.engine.lang_code_to_id[src_lang_code],
-                        "text": src_lang_code,
-                        "begin": len(text),
-                        "end": len(text),
-                    }
-                ]
-                if src_lang_code is not None
-                else []
-            )
-            # eos = []
+            # bos = (
+            #     [{"id": self.engine.lang_code_to_id[tgt_lang_code], "text": tgt_lang_code, "begin": 0, "end": 0}]
+            #     if tgt_lang_code is not None
+            #     else []
+            # ) + [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
+            # bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
+            # eos = (
+            #     [
+            #         {
+            #             "id": self.engine.lang_code_to_id[src_lang_code],
+            #             "text": src_lang_code,
+            #             "begin": len(text),
+            #             "end": len(text),
+            #         }
+            #     ]
+            #     if src_lang_code is not None
+            #     else []
+            # )
+            eos = [{"id": Tokenizer().eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
+            # bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
+            bos = []
 
         else:
             bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]

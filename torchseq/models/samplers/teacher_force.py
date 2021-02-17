@@ -15,13 +15,21 @@ class TeacherForcedSampler(nn.Module):
         max_output_len = batch[tgt_field].size()[1]
 
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
+        MBART_HACK = self.config.eval.data.get("prepend_langcode", False)
 
         # Create vector of SOS + placeholder for first prediction
 
         logits = (
             torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-1e18")).to(self.device)
         )
-        logits[:, :, Tokenizer().bos_id] = float("1e18")
+        
+
+        if MBART_HACK:
+            # logits[:, :, Tokenizer().bos_id] = float("-1e18")
+            logits[:, :, 250004] = float("1e18")
+        else:
+            logits[:, :, Tokenizer().bos_id] = float("1e18")
+
 
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input
@@ -43,14 +51,32 @@ class TeacherForcedSampler(nn.Module):
         if BART_HACK:
             dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
             output = torch.cat([dummy_token, output], dim=1)
+        if MBART_HACK:
+            eos_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
+
+            # lang_token = batch["tgt_lang"].unsqueeze(-1)
+
+            output = torch.cat([eos_token, output], dim=1)
+            # print(output[0])
+            # exit()
 
         pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=None)
 
-        if BART_HACK:
+        if BART_HACK or MBART_HACK:
             output = output[:, 1:]
 
             pred_logits = pred_logits[:, 1:, :]
+        # if MBART_HACK:
+        #     output = output[:, 2:]
+
+        #     pred_logits = pred_logits[:, 2:, :]
 
         logits = torch.cat([logits, pred_logits], dim=1)
+
+        # print(BART_HACK, MBART_HACK)
+        # print(output)
+        # print(batch['q'])
+        # print(torch.argmax(logits, dim=-1))
+        # exit()
 
         return output, logits, None, memory
