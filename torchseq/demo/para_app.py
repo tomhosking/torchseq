@@ -11,34 +11,40 @@ from torchseq.agents.para_agent import ParaphraseAgent
 from torchseq.utils.config import Config
 from torchseq.utils.tokenizer import Tokenizer
 
+import sys
+sys.path.append('/home/tom/dev/truecase/')
+import truecase
+
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def index():
-    return redirect("/static/demo.htm")
+    return redirect("/static/para_demo.htm")
 
 
 @app.route("/api/generate")
 def generate():
 
-    s1 = request.args["s1"]
+    s1 = request.args["sem_input"]
 
     # s1 = "(l-punct (l-nsubj (l-cop w-1-what w-2-is) (l-acl (l-det (l-BIND w-4-plague v-w-4-plague) w-3-another) (l-nsubj (l-xcomp w-5-thought (l-mark (l-aux (l-dobj w-8-spread (l-det (l-amod w-11-way w-10-same) w-9-the)) w-7-have) w-6-to)) v-w-4-plague))) w-12-?)"
     # ctxt = request.args['ctxt']
     # ans = request.args['ans']
 
-    query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
+    # query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
+    query = {"sem_input": s1, "tgt": s1, "syn_input": s1}
     if "template" in request.args:
         template = request.args["template"]
         query["template"] = template
         query["syn_input"] = template
-    res, scores, _ = app.agent.infer(query, reduce_outputs=False)
+    res, scores, _ = app.agent.infer(query, reduce_outputs=True)
 
     scores = scores.tolist()
 
-    output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
+    # output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
+    return truecase.get_true_case(res[0]).replace("'S", "'s")
 
     return Response(json.dumps(output, indent=2), mimetype="application/json")
 
@@ -61,10 +67,10 @@ def init():
         # cfg_dict["task"] = "autoencoder"
         cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "beam"
-        cfg_dict["eval"]["topk"] = 32
+        cfg_dict["eval"]["topk"] = 1
         # cfg_dict["training"]["dataset"] = "squad"
         cfg_dict["nucleus_sampling"] = {"beam_width": 12, "cutoff": 0.9, "length_alpha": 0}
-        cfg_dict["beam_search"] = {"beam_width": 16, "beam_expansion": 2, "length_alpha": 0.0}
+        cfg_dict["beam_search"] = {"beam_width": 4, "beam_expansion": 2, "length_alpha": 1.0}
         cfg_dict["diverse_beam"] = {
             "beam_width": 16,
             "beam_expansion": 8,
@@ -78,10 +84,10 @@ def init():
         # }
 
         var_offset = 4
-        cfg_dict["bottleneck"]["prior_var_weight"] = (
-            [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
-        )
-        # cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+        # cfg_dict["bottleneck"]["prior_var_weight"] = (
+        #     [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
+        # )
+        cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
         # cfg_dict["encdec"]["code_offset"] = (
         #     [0] * var_offset + [50] + [50] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
         # )

@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <!-- Required meta tags -->
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+
+    <title>Separator Demo</title>
+
+    <!-- Global site tag (gtag.js) - Google Analytics -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=UA-1988451-7"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'UA-1988451-7');
+    </script>
+
+
+  </head>
+  <body>
+    <div class="container">
+
+      <h1>Separator Demo
+        <div id="connection-indicator-wrapper">
+          Connection Status:
+          <div id="connection-indicator">
+            &nbsp;
+          </div>
+        </div>
+      </h1>
+
+      <p>An interactive demo of the Separator paraphrasing model. Enter a question and an exemplar, then click generate to rephrase the question into that form.</p>
+
+      <form id="qgen-form" onsubmit="return false;">
+        <!-- <div class="form-group">
+          Load preset document:
+          <button class="btn btn-primary" onclick="seedWithMoose(); return false;" type="button">Moose</button>
+          
+        </div> -->
+        
+        <div class="form-group">
+            <label for="exampleInputEmail1">Question</label>
+            <input type="text" class="form-control" id="sem_input" placeholder="Enter a question">
+            
+          </div>
+        <div class="form-group">
+          <label for="exampleInputEmail1">Exemplar</label>
+          <input type="text" class="form-control" id="template" placeholder="Enter a target template">
+          <small class="text-muted">
+            This should be a valid template for the original question, otherwise the model will definitely produce nonsense :)
+          </small>
+        </div>
+        <button class="btn btn-primary" onclick="getQ(); return false;" type="submit">Generate</button>
+        <hr/>
+        <div class="form-group">
+          <p>Generated Paraphrase:</p>
+          <div id="response-spinner" class="spinner d-none">
+            <div class="lds-ellipsis"><div></div><div></div><div></div><div></div></div>
+          </div>
+          <div id="response"><p>Click the "Generate" button to get a paraphrase!</p></div>
+      </form>
+
+    </div>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/css/bootstrap.min.css" integrity="sha384-WskhaSGFgHYWDcbwN70/dfYBj47jz9qbsMId/iRN3ewGhXQFZCSftd1LZCfmhktB" crossorigin="anonymous">
+
+
+    <!-- Optional JavaScript -->
+    <!-- jQuery first, then Popper.js, then Bootstrap JS -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.3/umd/popper.min.js" integrity="sha384-ZMP7rVo3mIykV+2+9J3UJ46jBk0WLaUAdn689aCwoqbBJiSnjAK/l8WvCWPIPm49" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.1.1/js/bootstrap.min.js" integrity="sha384-smHYKdLADwkXOn1EmN1qk/HfnUcbVRZyYmZ4qpPea6sjB/pTJ0euyQp0Mk8ck+5T" crossorigin="anonymous"></script>
+
+    <link rel="stylesheet" href="/static/spinner.css" />
+    <link rel="stylesheet" href="/static/qgen.css" />
+
+    <script type="text/javascript" src="/static/separator.js"></script>
+
+    <script>
+    // Set up an event listener for the contact form.
+    $("#qgen-form").submit(function(event) {
+        // Stop the browser from submitting the form.
+        event.preventDefault();
+
+        // TODO
+    });
+    ping();
+    seedWithMoose();
+    </script>
+  </body>
+</html>
