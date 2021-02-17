@@ -11,8 +11,8 @@ from torchseq.agents.para_agent import ParaphraseAgent
 from torchseq.utils.config import Config
 from torchseq.utils.tokenizer import Tokenizer
 
-import sys
-sys.path.append('/home/tom/dev/truecase/')
+
+sys.path.append("/home/tom/dev/truecase/")
 import truecase
 
 
@@ -46,7 +46,7 @@ def generate():
     # output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
     return truecase.get_true_case(res[0]).replace("'S", "'s")
 
-    return Response(json.dumps(output, indent=2), mimetype="application/json")
+    # return Response(json.dumps(output, indent=2), mimetype="application/json")
 
 
 @app.route("/api/ping")
@@ -83,7 +83,7 @@ def init():
         #     "strategy": "ngram"
         # }
 
-        var_offset = 4
+        # var_offset = 4
         # cfg_dict["bottleneck"]["prior_var_weight"] = (
         #     [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         # )

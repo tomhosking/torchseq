@@ -157,7 +157,7 @@ class Tokenizer(metaclass=Singleton):
 
     def decode(self, token_id_tensor):
         return (
-            Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=False)
+            Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
             # .replace(" ##", "")
             # .replace("# ", "#")
         )

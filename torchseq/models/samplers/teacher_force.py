@@ -22,14 +22,12 @@ class TeacherForcedSampler(nn.Module):
         logits = (
             torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-1e18")).to(self.device)
         )
-        
 
         if MBART_HACK:
             # logits[:, :, Tokenizer().bos_id] = float("-1e18")
             logits[:, :, 250004] = float("1e18")
         else:
             logits[:, :, Tokenizer().bos_id] = float("1e18")
-
 
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input

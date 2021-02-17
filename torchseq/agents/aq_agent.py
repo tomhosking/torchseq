@@ -85,9 +85,7 @@ class AQAgent(ModelAgent):
             #     # print(batch[tgt_field][0].shape)
             #     # print(xe_loss[0].shape)
             #     # exit()
-            this_loss += xe_loss.sum(dim=1) / (
-                batch[tgt_field + "_len"] - 1
-            ).to(this_loss)
+            this_loss += xe_loss.sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += (
