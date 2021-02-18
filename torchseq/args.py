@@ -6,6 +6,8 @@ def parse_args():
         description="TorchSeq",
     )
 
+    parser.add_argument("-V", "--version", action="store_true", help="Display version")
+
     # Config stuff
     parser.add_argument(
         "-c", "--config", type=str, metavar="CONFIG", default="./configs/default.json", help="Path to config file"

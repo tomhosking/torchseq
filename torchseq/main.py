@@ -22,6 +22,8 @@ from torchseq.utils.logging import Logger
 
 from torchseq.datasets.builder import dataloader_from_config
 
+import transformers
+
 """
 Entry point for torchseq CLI
 """
@@ -36,8 +38,14 @@ def main():
     )
     logger = logging.getLogger("CLI")
 
+    if args.version:
+        print("Torchseq: v0.0.1")
+        return
+
     if args.debug:
         torch.autograd.set_detect_anomaly(True)
+        transformers.logging.set_verbosity_debug()
+
 
     if args.load is not None:
         args.config = os.path.join(args.load, "config.json")
