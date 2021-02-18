@@ -281,9 +281,12 @@ class ContextAnswerEncoder(nn.Module):
             config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim)
         )
 
-        if self.config.encoder.get('memory_tokens', 0) > 0:
-            w = torch.empty(self.config.encoder.get('memory_tokens', 0), config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim))
-            nn.init.xavier_uniform_(w, gain=nn.init.calculate_gain('relu'))
+        if self.config.encoder.get("memory_tokens", 0) > 0:
+            w = torch.empty(
+                self.config.encoder.get("memory_tokens", 0),
+                config.encoder.embedding_dim + (0 if config.encdec.bert_encoder else config.bio_embedding_dim),
+            )
+            nn.init.xavier_uniform_(w, gain=nn.init.calculate_gain("relu"))
             self.memory_tokens = nn.Parameter(w, requires_grad=True)
 
     def forward(self, ctxt_seq, ctxt_seq_len, a_pos, memory):
@@ -296,10 +299,9 @@ class ContextAnswerEncoder(nn.Module):
         # Get some sizes
         max_ctxt_len = ctxt_seq.shape[1]
 
-        if self.config.encoder.get('memory_tokens', 0) > 0:
-            max_ctxt_len += self.config.encoder.get('memory_tokens', 0)
-            ctxt_seq_len += self.config.encoder.get('memory_tokens', 0)
-
+        if self.config.encoder.get("memory_tokens", 0) > 0:
+            max_ctxt_len += self.config.encoder.get("memory_tokens", 0)
+            ctxt_seq_len += self.config.encoder.get("memory_tokens", 0)
 
         context_mask = (torch.arange(max_ctxt_len)[None, :].cpu() >= ctxt_seq_len[:, None].cpu()).to(ctxt_seq.device)
         memory["encoding_mask"] = context_mask
@@ -329,8 +331,10 @@ class ContextAnswerEncoder(nn.Module):
 
             ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
 
-            if self.config.encoder.get('memory_tokens', 0) > 0:
-                ctxt_embedded = torch.cat([self.memory_tokens.unsqueeze(1).expand(-1, ctxt_embedded.shape[1], -1), ctxt_embedded])
+            if self.config.encoder.get("memory_tokens", 0) > 0:
+                ctxt_embedded = torch.cat(
+                    [self.memory_tokens.unsqueeze(1).expand(-1, ctxt_embedded.shape[1], -1), ctxt_embedded]
+                )
 
             # Fwd pass through encoder
             if self.config.encdec.bert_encoder:

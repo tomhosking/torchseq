@@ -46,7 +46,6 @@ def main():
         torch.autograd.set_detect_anomaly(True)
         transformers.logging.set_verbosity_debug()
 
-
     if args.load is not None:
         args.config = os.path.join(args.load, "config.json")
 
