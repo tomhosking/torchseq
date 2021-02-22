@@ -1,0 +1,98 @@
+{
+    "name": "mbart-m2m",
+    "tag": "examples",
+    "task": "para",
+    "model": "pretrained_adapter",
+    "env": {
+        "cuda": true,
+        "data_path": "./data",
+        "gpu_device": 0
+
+    },
+    "training": {
+        "dataset": null,
+        "use_preprocessed_data": false,
+        "log_interval": 10,
+        "lr_schedule": false,
+        "lr": 5e-6,
+        "beta1": 0.9,
+        "beta2": 0.98,
+        "batch_size": 8,
+        "optim_batch_size": 64,
+        "clip_gradient": 5.0,
+        "num_epochs": 20,
+        "opt": "adam",
+        "warmup_epochs": 0,
+        "suppression_loss_weight": 0.1,
+        "label_smoothing": 0.0,
+        "early_stopping_lag": 0,
+        "reset_metrics": true,
+        "loss_dropping": 0.0,
+        "xe_loss": true,
+        "mse_loss_weight": 0,
+        "token_dropout": 0.0
+    },
+    "eval": {
+        "eval_batch_size": 8,
+        "sampler": "beam",
+        "prepend_eos": false,
+        "prepend_langcode": true,
+        "sample_outputs": true
+    },
+    "beam_search": {
+        "beam_width": 4,
+        "beam_expansion": 2,
+        "length_alpha": 1.0
+    },
+    "prepro": {
+        "vocab_size": 250054,
+        "sent_window": 0,
+        "tok_window": 300,
+        "concat_ctxt_ans": false,
+        "roberta_style_encoding": true,
+        "include_lang_codes": true,
+        "bio_tagging": true,
+        "tokenizer": "facebook/mbart-large-50"
+    },
+
+    "dropout": 0.1,
+
+    "raw_embedding_dim": 1024,
+    "embedding_dim": 1024,
+    "onehot_bio" : false,
+    "bio_embedding_dim": 8,
+    "freeze_embeddings": true,
+    "freeze_projection": true,
+    "directional_masks": true,
+
+    "encoder_outputs": {
+        "c_raw": true,
+        "a_raw": false,
+        "c_enc": true,
+        "c_enc_pool": false,
+        "a_enc": false,
+        "a_enc_pool": false,
+        "c_enc_anspool": false,
+        "c_ans_labels": false
+    },
+    "encdec": {
+        "num_encoder_layers": 4,
+        "num_decoder_layers": 4,
+        "num_heads": 16,
+        "dim_feedforward": 4096,
+        "activation": "relu",
+        "bert_encoder": false,
+        "bert_model": "facebook/mbart-large-50-many-to-many-mmt",
+        "bert_warmup_epochs": 50,
+        "freeze_encoder": true,
+        "freeze_decoder": true,
+        "adapter": false,
+        "adapter_init_scale": 0.1
+    },
+    "encoder": {
+        "embedding_dim": 1024
+    },
+    "decoder": {
+        "embedding_dim": 1024
+    }
+}

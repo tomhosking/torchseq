@@ -1,6 +1,6 @@
 {
-    "name": "optimised_bert",
-    "tag": "aq",
+    "name": "qg_transformer",
+    "tag": "examples",
     "task": "aq",
     "env": {
         "cuda": true,
@@ -15,7 +15,7 @@
         "lr": 0.003,
         "beta1": 0.9,
         "beta2": 0.98,
-        "batch_size": 8,
+        "batch_size": 16,
         "optim_batch_size": 64,
         "clip_gradient": 5,
         "num_epochs": 50,
@@ -27,12 +27,12 @@
         "token_dropout": 0.2
     },
     "eval": {
-        "eval_batch_size": 6,
+        "eval_batch_size": 8,
         "sampler": "beam"
     },
     "beam_search": {
         "beam_width": 8,
-        "beam_expansion": 8,
+        "beam_expansion": 4,
         "length_alpha": 2.0
     },
     "prepro": {
@@ -67,8 +67,7 @@
         "num_heads": 2,
         "dim_feedforward": 2048,
         "activation": "relu",
-        "bert_encoder": true,
-        "bert_model": "bert-base-uncased",
+        "bert_encoder": false,
         "bert_warmup_epochs": 20,
         "bert_finetune": false
     }

@@ -1,6 +1,6 @@
 {
-    "name": "optimised_bart",
-    "tag": "aq",
+    "name": "qg_bart",
+    "tag": "examples",
     "task": "aq",
     "model": "pretrained_modular",
     "env": {

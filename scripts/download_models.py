@@ -14,5 +14,5 @@ mod = BertForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-ma
 
 
 import nltk
-
+nltk.download('punkt', force=True)
 nltk.download('wordnet', force=True)
