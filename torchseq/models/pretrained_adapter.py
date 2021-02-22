@@ -169,9 +169,11 @@ class PretrainedAdapterModel(nn.Module):
                     ).permute(1, 0, 2)
                     # encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
                 else:
-                    encoding = self.adapter(
+                    adapter_out = self.adapter(
                         pretrained_encoding.transpose(0, 1), src_key_padding_mask=context_mask
                     ).transpose(0, 1)
+
+                    encoding = torch.cat([pretrained_encoding[:, :1, :], adapter_out[:, 1:, :]], dim=1)
             else:
                 encoding = pretrained_encoding
 

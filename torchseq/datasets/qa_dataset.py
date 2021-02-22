@@ -141,9 +141,6 @@ class QADataset(Dataset):
                 "a_text": x["a"],
                 "q_text": x["q"],
             }
-            if include_lang_codes:
-                sample["src_lang"] = torch.LongTensor([src_lang_token])
-                sample["tgt_lang"] = torch.LongTensor([tgt_lang_token])
 
         else:
             sample = {
@@ -158,6 +155,10 @@ class QADataset(Dataset):
                 "a_text": x["a"],
                 "q_text": x["q"],
             }
+
+        if include_lang_codes:
+            sample["src_lang"] = torch.LongTensor([src_lang_token])
+            sample["tgt_lang"] = torch.LongTensor([tgt_lang_token])
 
         return sample
 

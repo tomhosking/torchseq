@@ -1,16 +1,15 @@
 import os
 import json
 import jsonlines
-from itertools import cycle
+
+# from itertools import cycle
 
 import torch
 import torch.nn.functional as F
 from torch.utils.data import IterableDataset, Dataset
-
 import numpy as np
 
-
-from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 
 
 # class LangmodellingDataset(IterableDataset):
@@ -95,10 +94,22 @@ class JsonDataset(Dataset):
     #                 yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
     def __getitem__(self, idx):
-        return JsonDataset.to_tensor(self.samples[idx], self.fields, tok_window=self.config.prepro.tok_window)
+        return JsonDataset.to_tensor(
+            self.samples[idx],
+            self.fields,
+            tok_window=self.config.prepro.tok_window,
+            include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
+        )
 
     @staticmethod
-    def to_tensor(obj, fields, tok_window=64):
+    def to_tensor(obj, fields, tok_window=64, include_lang_codes=False):
+
+        src_lang = obj.get("src_lang", "en_XX")
+        tgt_lang = obj.get("tgt_lang", "en_XX")
+
+        if include_lang_codes:
+            src_lang_token = FAIRSEQ_LANGUAGE_CODES[src_lang]
+            tgt_lang_token = FAIRSEQ_LANGUAGE_CODES[tgt_lang]
 
         sample = {}
 
@@ -109,8 +120,20 @@ class JsonDataset(Dataset):
 
         sample = {k + "_text": v for k, v in sample.items()}
         for f in fields:
-            sample[f["to"]] = torch.LongTensor(parsed.field_as_ids(f["to"]))
-            sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]])])
+            # HACK: this should be in a config somewhere...
+            if include_lang_codes and f["to"] == "s1":
+                lang_tok = [src_lang_token]
+            elif include_lang_codes and f["to"] == "s2":
+                lang_tok = [tgt_lang_token]
+            else:
+                lang_tok = []
+
+            sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
+            sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
+
+        if include_lang_codes:
+            sample["src_lang"] = torch.LongTensor([src_lang_token])
+            sample["tgt_lang"] = torch.LongTensor([tgt_lang_token])
 
         return sample
 

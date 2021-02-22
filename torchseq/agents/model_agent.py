@@ -197,6 +197,8 @@ class ModelAgent(BaseAgent):
         """
         Run inference on a dictionary of raw inputs
         """
+        self.logger.warn("infer() method is deprecated - use inference() with a real dataset instead")
+
         batch = self.text_to_batch(input, self.device)
 
         _, output, output_lens, scores, logits, memory = self.step_validate(
