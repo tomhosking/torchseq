@@ -8,8 +8,23 @@
         "gpu_device": 0
 
     },
+    "json_dataset": {
+        "path": "wikianswers-pp",
+        "field_map": [
+            {
+                "type": "sample",
+                "from": "qs",
+                "to": "s1"
+            },
+            {
+                "type": "sample",
+                "from": "qs",
+                "to": "s2"
+            }
+        ]
+    },
     "training": {
-        "dataset": "wikianswers",
+        "dataset": "json",
         "use_preprocessed_data": false,
         "log_interval": 100,
         "lr_schedule": true,

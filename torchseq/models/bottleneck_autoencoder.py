@@ -131,7 +131,12 @@ class BottleneckAutoencoderModel(nn.Module):
                         # print(sep_splice_ix)
                         # print(encoding_pooled.shape)
                         # exit()
-                        encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
+                        if self.config.bottleneck.get("unpooled_semantic_path", False):
+                            encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[
+                                :, :1, sep_splice_ix:
+                            ].expand(-1, encoding_pooled.shape[1], -1)
+                        else:
+                            encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:

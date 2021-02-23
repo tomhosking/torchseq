@@ -71,5 +71,11 @@
         "bert_model": "bert-base-uncased",
         "bert_warmup_epochs": 20,
         "bert_finetune": false
+    },
+    "encoder": {
+        "embedding_dim": 768
+    },
+    "decoder": {
+        "embedding_dim": 768
     }
 }

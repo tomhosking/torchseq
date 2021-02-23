@@ -177,4 +177,18 @@ class PoolingBottleneck(nn.Module):
                 memory["loss"] = 0
             memory["loss"] += kl_loss * kl_weight
 
+        # HACK: this whole module needs a refactor so that this option below becomes a combination of other (more normal) options
+        if self.config.bottleneck.get("unpooled_semantic_path", False):
+            # Take the full (unpooled) sem encoding, and combine with the pooled+quantized syn encoding
+            splice_ix = (
+                self.config.bottleneck.embedding_dim
+                // self.config.bottleneck.get("quantizer_heads", 1)
+                * self.config.bottleneck.get("quantizer_num_residual", 0)
+            )
+
+            encoding_pooled = torch.cat(
+                [encoding[:, :, :splice_ix], encoding_pooled[:, :1, splice_ix:].expand(-1, encoding.shape[1], -1)],
+                dim=-1,
+            )
+
         return encoding_pooled, memory

@@ -56,7 +56,6 @@ class PretrainedAdapterModel(nn.Module):
             self.encoder = bart_model.encoder
             self.decoder = bart_model.decoder
 
-        # TODO: This check will fail for local checkpoints that haven't been carefully named! Need to split the chkpt path and the model arch
         elif "bart" in self.config.encdec.bert_model:
             from transformers import BartModel
 

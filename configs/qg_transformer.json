@@ -70,5 +70,11 @@
         "bert_encoder": false,
         "bert_warmup_epochs": 20,
         "bert_finetune": false
+    },
+    "encoder": {
+        "embedding_dim": 768
+    },
+    "decoder": {
+        "embedding_dim": 768
     }
 }

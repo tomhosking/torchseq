@@ -1,5 +1,5 @@
 tensorboard==2.2.2
-torch==1.7.0
+torch==1.7.1
 tqdm>=4.54
 scipy>=1.5
 

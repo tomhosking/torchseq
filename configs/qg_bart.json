@@ -2,7 +2,7 @@
     "name": "qg_bart",
     "tag": "examples",
     "task": "aq",
-    "model": "pretrained_modular",
+    "model": "pretrained_adapter",
     "env": {
         "cuda": true,
         "data_path": "./data",
@@ -42,7 +42,7 @@
     },
     "prepro": {
         "vocab_size": 50265,
-        "sent_window": 2,
+        "sent_window": 1,
         "tok_window": 300,
         "concat_ctxt_ans": true,
         "roberta_style_encoding": true,
@@ -81,5 +81,11 @@
         "bert_warmup_epochs": 50,
         "freeze_encoder": false,
         "freeze_decoder": true
+    },
+    "encoder": {
+        "embedding_dim": 1024
+    },
+    "decoder": {
+        "embedding_dim": 1024
     }
 }
