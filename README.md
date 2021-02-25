@@ -33,7 +33,7 @@ from torchseq.utils.config import Config
 from torchseq.metric_hooks.textual import TextualMetricHook
 import torch
 
-model_path = '../runs/examples/20210223_191015_qg_bart/'
+model_path = '../models/examples/20210223_191015_qg_bart/'
 
 
 # Load the config
@@ -85,19 +85,21 @@ print(pred_output)
 
 ## Pretrained models
 
+Unzip the models to their own folder within `./models/examples/`, e.g. `./models/examples/20210222_145034_qg_transformer/` - then load the model into torchseq using the flag `--load ./models/examples/20210222_145034_qg_transformer/` or the snippet above.
+
 ### Question Generation
 
-A transformer model trained on SQuAD - \[Config\] \[Download checkpoint\] \[Download dataset\] 
+A transformer model trained on SQuAD - \[ [Download](http://tomho.sk/models/torchseq/qg_transformer.zip) \]
 
-A transformer model using BERT encodings trained on SQuAD
+A transformer model using BERT encodings trained on SQuAD - \[ [Download](http://tomho.sk/models/torchseq/qg_bert.zip) \]
 
-BART fine tuned on SQuAD
+BART fine tuned on SQuAD - \[ [Download](http://tomho.sk/models/torchseq/qg_bart.zip) \]
 
 ### Paraphrasing
 
 A vanilla autoencoder trained on Paralex
 
-A VAE model trained on Paralex
+A VAE model trained on Paralex - \[ [Download](http://tomho.sk/models/torchseq/paraphrasing_vae.zip) \]
 
 A VQ-VAE model trained on Paralex
 
