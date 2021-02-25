@@ -7,6 +7,7 @@ import sys
 from flask import Flask, Response, current_app, redirect, request
 
 from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.datasets.json_loader import JsonDataLoader
 
 from torchseq.utils.config import Config
 from torchseq.utils.tokenizer import Tokenizer
@@ -39,12 +40,14 @@ def generate():
         template = request.args["template"]
         query["template"] = template
         query["syn_input"] = template
-    res, scores, _ = app.agent.infer(query, reduce_outputs=True)
 
-    scores = scores.tolist()
+    data_loader = JsonDataLoader(app.agent.config, test_samples=[query])
+    loss, metrics, (pred_output, gold_output, gold_input), memory = app.agent.inference(data_loader.test_loader)
+
+    # scores = scores.tolist()
 
     # output = [list(zip(res[ix], scores[ix])) for ix in range(len(res))]
-    return truecase.get_true_case(res[0]).replace("'S", "'s")
+    return truecase.get_true_case(pred_output[0]).replace("'S", "'s")
 
     # return Response(json.dumps(output, indent=2), mimetype="application/json")
 

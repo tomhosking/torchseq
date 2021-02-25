@@ -193,34 +193,34 @@ class ModelAgent(BaseAgent):
         """
         raise NotImplementedError("Your model is missing a text_to_batch method!")
 
-    def infer(self, input, reduce_outputs=True, sample_outputs=True, calculate_loss=False):
-        """
-        Run inference on a dictionary of raw inputs
-        """
-        self.logger.warn("infer() method is deprecated - use inference() with a real dataset instead")
+    # def infer(self, input, reduce_outputs=True, sample_outputs=True, calculate_loss=False):
+    #     """
+    #     Run inference on a dictionary of raw inputs
+    #     """
+    #     self.logger.warn("infer() method is deprecated - use inference() with a real dataset instead")
 
-        batch = self.text_to_batch(input, self.device)
+    #     batch = self.text_to_batch(input, self.device)
 
-        _, output, output_lens, scores, logits, memory = self.step_validate(
-            batch,
-            tgt_field=self.tgt_field,
-            sample_outputs=sample_outputs,
-            calculate_loss=calculate_loss,
-            reduce_outputs=reduce_outputs,
-        )
+    #     _, output, output_lens, scores, logits, memory = self.step_validate(
+    #         batch,
+    #         tgt_field=self.tgt_field,
+    #         sample_outputs=sample_outputs,
+    #         calculate_loss=calculate_loss,
+    #         reduce_outputs=reduce_outputs,
+    #     )
 
-        if sample_outputs and reduce_outputs:
-            output_strings = [Tokenizer().decode(output.data[ix][: output_lens[ix]]) for ix in range(len(output_lens))]
-        elif sample_outputs:
-            # There's an extra dim of nesting
-            output_strings = [
-                [Tokenizer().decode(output.data[i][j][: output_lens[i][j]]) for j in range(len(output_lens[i]))]
-                for i in range(len(output_lens))
-            ]
-        else:
-            output_strings = None
+    #     if sample_outputs and reduce_outputs:
+    #         output_strings = [Tokenizer().decode(output.data[ix][: output_lens[ix]]) for ix in range(len(output_lens))]
+    #     elif sample_outputs:
+    #         # There's an extra dim of nesting
+    #         output_strings = [
+    #             [Tokenizer().decode(output.data[i][j][: output_lens[i][j]]) for j in range(len(output_lens[i]))]
+    #             for i in range(len(output_lens))
+    #         ]
+    #     else:
+    #         output_strings = None
 
-        return output_strings, scores, memory
+    #     return output_strings, scores, memory
 
     def step_train(self, batch, tgt_field):
         """

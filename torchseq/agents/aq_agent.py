@@ -105,22 +105,22 @@ class AQAgent(ModelAgent):
 
         return this_loss
 
-    def text_to_batch(self, x, device):
+    # def text_to_batch(self, x, device):
 
-        if "q" not in x:
-            x["q"] = ""
+    #     if "q" not in x:
+    #         x["q"] = ""
 
-        return {
-            k: (v.to(self.device) if k[-5:] != "_text" else v)
-            for k, v in QADataset.pad_and_order_sequences(
-                [
-                    QADataset.to_tensor(
-                        x,
-                        sent_window=self.config.prepro.sent_window,
-                        tok_window=self.config.prepro.tok_window,
-                        o_tag=2 if self.config.prepro.bio_tagging else 1,
-                        concat_ctxt_ans=self.config.prepro.concat_ctxt_ans,
-                    )
-                ]
-            ).items()
-        }
+    #     return {
+    #         k: (v.to(self.device) if k[-5:] != "_text" else v)
+    #         for k, v in QADataset.pad_and_order_sequences(
+    #             [
+    #                 QADataset.to_tensor(
+    #                     x,
+    #                     sent_window=self.config.prepro.sent_window,
+    #                     tok_window=self.config.prepro.tok_window,
+    #                     o_tag=2 if self.config.prepro.bio_tagging else 1,
+    #                     concat_ctxt_ans=self.config.prepro.concat_ctxt_ans,
+    #                 )
+    #             ]
+    #         ).items()
+    #     }

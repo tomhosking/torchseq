@@ -91,39 +91,39 @@ class ParaphraseAgent(ModelAgent):
 
         return this_loss
 
-    def text_to_batch(self, x, device):
-        if self.config.training.dataset in ["squad"]:
-            # x["s2"] = ""
+    # def text_to_batch(self, x, device):
+    #     if self.config.training.dataset in ["squad"]:
+    #         # x["s2"] = ""
 
-            return {
-                k: (v.to(self.device) if k[-5:] != "_text" else v)
-                for k, v in QADataset.pad_and_order_sequences(
-                    [QADataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
-                ).items()
-            }
-        elif self.config.training.dataset == "json":
-            if self.tgt_field not in x:
-                x[self.tgt_field] = ""
-            if "s1" not in x:
-                x["s1"] = ""
+    #         return {
+    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
+    #             for k, v in QADataset.pad_and_order_sequences(
+    #                 [QADataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
+    #             ).items()
+    #         }
+    #     elif self.config.training.dataset == "json":
+    #         if self.tgt_field not in x:
+    #             x[self.tgt_field] = ""
+    #         if "s1" not in x:
+    #             x["s1"] = ""
 
-            fields = self.config.json_dataset.data["field_map"]
+    #         fields = self.config.json_dataset.data["field_map"]
 
-            return {
-                k: (v.to(self.device) if k[-5:] != "_text" else v)
-                for k, v in JsonDataset.pad_and_order_sequences(
-                    [JsonDataset.to_tensor(x, tok_window=self.config.prepro.tok_window, fields=fields)]
-                ).items()
-            }
-        else:
-            if self.tgt_field not in x:
-                x[self.tgt_field] = ""
-            if "s1" not in x:
-                x["s1"] = ""
+    #         return {
+    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
+    #             for k, v in JsonDataset.pad_and_order_sequences(
+    #                 [JsonDataset.to_tensor(x, tok_window=self.config.prepro.tok_window, fields=fields)]
+    #             ).items()
+    #         }
+    #     else:
+    #         if self.tgt_field not in x:
+    #             x[self.tgt_field] = ""
+    #         if "s1" not in x:
+    #             x["s1"] = ""
 
-            return {
-                k: (v.to(self.device) if k[-5:] != "_text" else v)
-                for k, v in ParaphraseDataset.pad_and_order_sequences(
-                    [ParaphraseDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
-                ).items()
-            }
+    #         return {
+    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
+    #             for k, v in ParaphraseDataset.pad_and_order_sequences(
+    #                 [ParaphraseDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
+    #             ).items()
+    #         }
