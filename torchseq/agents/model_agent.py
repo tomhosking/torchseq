@@ -545,11 +545,6 @@ class ModelAgent(BaseAgent):
         if self.tgt_field is None:
             raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
-        if data_loader is None:
-            raise Exception(
-                "Agent was created with a null dataset - you can only use this for on-the-fly inference, not validation!"
-            )
-
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()
 

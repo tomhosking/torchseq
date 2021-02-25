@@ -30,19 +30,21 @@ import json
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.utils.config import Config
+from torchseq.metric_hooks.textual import TextualMetricHook
 import torch
 
-model_path = '../runs/examples/qg_bart/'
+model_path = '../runs/examples/20210223_191015_qg_bart/'
+
 
 # Load the config
-with open(model_path + 'configs/aq.json') as f:
+with open(model_path + 'config.json') as f:
     cfg_dict = json.load(f)
 cfg_dict["env"]["data_path"] = "../data/"
 
 config = Config(cfg_dict)
 
 # Load the model
-instance = AQAgent(config=config, run_id=None, output_path="./runs/examples/qg_bart_eval", silent=False, verbose=False)
+instance = AQAgent(config=config, run_id=None, output_path="./runs/examples/qg_bert_eval", silent=False, verbose=False)
 instance.load_checkpoint(model_path + 'model/checkpoint.pt')
 instance.model.eval()
 
@@ -50,11 +52,13 @@ instance.model.eval()
 data_loader = QADataLoader(config)
 
 # Run inference on the test split
-test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = instance.inference(data_loader.test_loader)
+test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = instance.inference(data_loader.test_loader, metric_hooks=[TextualMetricHook(config, 'c', 'q')])
 
 # Done!
 print(all_metrics['bleu'])
 ```
+> 21.065812894587264
+
 
 
 You can also easily run your model on a custom dataset:
@@ -76,6 +80,8 @@ test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to
 
 print(pred_output)
 ```
+> ['Who was the oldest cat?', 'How long did Creme Puff live?']
+
 
 ## Pretrained models
 
@@ -89,7 +95,14 @@ BART fine tuned on SQuAD
 
 ### Paraphrasing
 
+A vanilla autoencoder trained on Paralex
+
 A VAE model trained on Paralex
+
+A VQ-VAE model trained on Paralex
+
+Separator for Paralex and QQP
+
 
 ## Citation
 
