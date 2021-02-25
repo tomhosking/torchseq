@@ -56,11 +56,13 @@ def ping():
 
 def init():
     # Get the config
-    MODEL_PATH = (
-        "./runs/sep_ae/20201207_224719_vae_wikianswers-triples-chunk-extendstop-realexemplars-uniform-drop10-N10-R100"
-    )
+    # MODEL_PATH = (
+    #     "./runs/sep_ae/20201207_224719_vae_wikianswers-triples-chunk-extendstop-realexemplars-uniform-drop10-N10-R100"
 
-    # MODEL_PATH = "./runs/paraphrase/20200519_151820_ae_nqnewsqa"
+    # )
+
+    # MODEL_PATH = "./runs/sep_ae/20201230_132811_vae_wa_6h_quantized_256_16qh_chunk-drop30"
+    MODEL_PATH = "./models/examples/separator-wa"
 
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)

@@ -12,12 +12,21 @@ From a fresh venv, run:
 ```
 pip install -r requirements.txt
 pip install -e .
+```
+
+```
+# Optional: this will download a bunch of pretrained models from HuggingFace
 python3 ./scripts/download_models.py
 ```
 
+Datasets go in `./data/` by default, e.g. `./data/squad/`.
+
+Download our cleaned and clustered split of Paralex [here](http://tomho.sk/models/torchseq/paralex.zip), which goes in `./data/wikianswers-pp/`.
+
+
 ## Quickstart
 
-Have a look in `examples/` for some notebooks that show how to interact with pretrained models, or try training your own models using the configuration files in `configs/`:
+Have a look in `./examples/` for some notebooks that show how to interact with pretrained models, or try training your own models using the configuration files in `./configs/`:
 
 ```
 torchseq --train --config ./configs/qg_bart.json
