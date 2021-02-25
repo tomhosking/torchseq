@@ -64,8 +64,8 @@ def init():
 
     # )
 
-    # MODEL_PATH = "./runs/sep_ae/20201230_132811_vae_wa_6h_quantized_256_16qh_chunk-drop30"
-    MODEL_PATH = "./models/examples/separator-wa"
+    MODEL_PATH = "./runs/separator/20210222_161432_wikianswers-unpooled"
+    # MODEL_PATH = "./models/examples/separator-wa"
 
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)

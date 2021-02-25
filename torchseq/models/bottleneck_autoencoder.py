@@ -193,8 +193,8 @@ class BottleneckAutoencoderModel(nn.Module):
             memory["encoding"] = encoding_pooled
             memory["encoding_mask"] = None
 
-            memory["sep_encoding_1"] = encoding_pooled[:, :, :sep_splice_ix].detach()
-            memory["sep_encoding_2"] = encoding_pooled[:, :, sep_splice_ix:].detach()
+            memory["sep_encoding_1"] = encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
+            memory["sep_encoding_2"] = encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
 
         # Fwd pass through decoder block
         logits, memory = self.seq_decoder(output, memory)
