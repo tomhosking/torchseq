@@ -153,6 +153,7 @@ def test_qg_transformer():
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 18.38744) < 1e-2, "BLEU score is different to expected!"
 
+
 # @test_utils.slow
 # def test_qg_bart():
 
@@ -209,9 +210,11 @@ def test_separator():
     assert use_cuda, "This test needs to run on GPU!"
 
     examples = [
-        {'sem_input': "What is the weight of an average moose?",
-        "syn_input": "How much is a surgeon's income?",
-        "tgt": "how much is a moose's weight?"}
+        {
+            "sem_input": "What is the weight of an average moose?",
+            "syn_input": "How much is a surgeon's income?",
+            "tgt": "how much is a moose's weight?",
+        }
     ]
 
     with open(CONFIG) as f:
@@ -239,4 +242,4 @@ def test_separator():
     loss, metrics, (pred_output, gold_output, gold_input), memory = agent.inference(data_loader.test_loader)
 
     # Now check the output (for first 100 samples)
-    assert pred_output[0] == examples[0]['tgt']
+    assert pred_output[0] == examples[0]["tgt"]
