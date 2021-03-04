@@ -8,7 +8,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
-from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
+from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.kl_divergence import get_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian

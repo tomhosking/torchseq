@@ -154,7 +154,7 @@ class PretrainedAdapterModel(nn.Module):
             if self.config.encdec.freeze_encoder:
                 pretrained_encoding = pretrained_encoding.detach()
 
-            if self.config.encdec.data.get("adapter", False):
+            if self.config.encdec.get("adapter", False):
                 if self.config.encdec.get("aq_adapter", False):
                     sideinfo_mask = batch["a_pos"] == 0
 
@@ -178,7 +178,7 @@ class PretrainedAdapterModel(nn.Module):
 
             memory["encoding"] = encoding
 
-            if self.config.encdec.data.get("adapter", False) and self.config.training.get("mse_loss_weight", 0) > 0:
+            if self.config.encdec.get("adapter", False) and self.config.training.get("mse_loss_weight", 0) > 0:
 
                 # calculate loss
                 goal_pad_mask = (

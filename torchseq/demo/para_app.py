@@ -103,7 +103,7 @@ def init():
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pt"
 
-    app.agent = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/")
+    app.agent = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/", silent=True, verbose=False)
 
     app.agent.load_checkpoint(checkpoint_path)
     app.agent.model.eval()
