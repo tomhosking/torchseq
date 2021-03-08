@@ -198,8 +198,8 @@ def test_qg_transformer():
 @test_utils.slow
 def test_separator():
 
-    CONFIG = "./models/examples/separator-wa/config.json"
-    CHKPT = "./models/examples/separator-wa/model/checkpoint.pt"
+    CONFIG = "./models/examples/separator-wa-v1.1/config.json"
+    CHKPT = "./models/examples/separator-wa-v1.1/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -231,9 +231,9 @@ def test_separator():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
 
     data_loader = JsonDataLoader(config, test_samples=examples)
 

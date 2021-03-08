@@ -71,7 +71,7 @@ def init():
 
     # Tokenizer(config.prepro.tokenizer)
 
-    app.agent = AQAgent(config=config, run_id=None, output_path="./runs/parademo/")
+    app.agent = AQAgent(config=config, run_id=None, output_path="./runs/parademo/", training_mode=True)
 
     app.agent.load_checkpoint(checkpoint_path)
     app.agent.model.eval()

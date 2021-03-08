@@ -47,23 +47,29 @@ class PoolingBottleneck(nn.Module):
         # VQ-VAE bottleneck
         if self.config.bottleneck.get("vector_quantized", False):
             if self.config.bottleneck.get("residual_head_range", None) is None:
-                residual_head_range = (0, self.config.bottleneck.get("quantizer_num_residual", 0))
+                self.residual_head_range = (0, self.config.bottleneck.get("quantizer_num_residual", 0))
             else:
-                residual_head_range = self.config.bottleneck.get("residual_head_range", (0, 0))
-                assert len(residual_head_range) == 2, "bottlneck residual_head_range must be length 2! (lower, upper)"
+                self.residual_head_range = self.config.bottleneck.get("residual_head_range", (0, 0))
+                assert (
+                    len(self.residual_head_range) == 2
+                ), "bottlneck residual_head_range must be length 2! (lower, upper)"
+
+            total_quantizer_heads = self.config.bottleneck.get("quantizer_heads", 1)
+            num_quantizer_heads = total_quantizer_heads - self.residual_head_range[1] - self.residual_head_range[0]
 
             self.quantizer = VectorQuantizerMultiHead(
                 self.config.bottleneck.codebook_size,
-                self.config.bottleneck.embedding_dim,
+                (self.config.bottleneck.embedding_dim * num_quantizer_heads) // total_quantizer_heads,
                 commitment_cost=0.25,
                 decay=0.99,
-                num_heads=self.config.bottleneck.get("quantizer_heads", 1),
+                num_heads=num_quantizer_heads,
                 residual=self.config.bottleneck.get("quantizer_residual", False),
                 code_offset=self.config.bottleneck.get("code_offset", 0),
-                residual_head_range=residual_head_range,
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
+                hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),
+                hierarchical_balance_dims=self.config.bottleneck.get("hierarchical_balance_dims", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
@@ -77,7 +83,23 @@ class PoolingBottleneck(nn.Module):
 
         # Quantize
         if self.config.bottleneck.get("vector_quantized", False):
-            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step, forced_codes)
+            # splice_begin, splice_end = self.residual_head_range
+            # splice_begin *= self.config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1)
+            # splice_end *= self.config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1)
+
+            splice_ix = (
+                self.config.bottleneck.embedding_dim
+                // self.config.bottleneck.get("quantizer_heads", 1)
+                * self.config.bottleneck.get("quantizer_num_residual", 0)
+            )
+            # if splice_begin > 0:
+            #     raise Exception("Arbitrary quantizer residual ranges are not currently supported")
+
+            vq_loss, quantized_encoding, quantizer_indices = self.quantizer(
+                encoding_pooled[:, :, splice_ix:], global_step, forced_codes
+            )
+
+            encoding_pooled = torch.cat([encoding_pooled[:, :, :splice_ix], quantized_encoding], dim=-1)
 
             if "loss" not in memory:
                 memory["loss"] = 0
