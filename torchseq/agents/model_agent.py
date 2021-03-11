@@ -314,7 +314,7 @@ class ModelAgent(BaseAgent):
             )
 
             pbar.set_postfix(
-                {"loss": loss.item() * float(self.config.training.optim_batch_size) / float(curr_batch_size)}
+                {"loss": loss.detach().item() * float(self.config.training.optim_batch_size) / float(curr_batch_size)}
             )
 
             loss.backward()

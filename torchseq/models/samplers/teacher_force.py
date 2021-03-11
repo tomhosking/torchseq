@@ -58,7 +58,8 @@ class TeacherForcedSampler(nn.Module):
             # print(output[0])
             # exit()
 
-        pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=None)
+        memory = {}
+        pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=memory)
 
         if BART_HACK or MBART_HACK:
             output = output[:, 1:]

@@ -70,6 +70,7 @@ class PoolingBottleneck(nn.Module):
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
                 hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),
                 hierarchical_balance_dims=self.config.bottleneck.get("hierarchical_balance_dims", False),
+                transitions=self.config.bottleneck.get("quantizer_transitions", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
@@ -104,7 +105,7 @@ class PoolingBottleneck(nn.Module):
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += vq_loss
-            memory["vq_codes"] = torch.cat([x.unsqueeze(1) for x in quantizer_indices], dim=1)
+            memory["vq_codes"] = torch.cat([x.unsqueeze(1).detach() for x in quantizer_indices], dim=1)
 
         if self.config.bottleneck.get("use_vmf", False):
             if self.config.bottleneck.get("quantizer_heads", 1) > 1:

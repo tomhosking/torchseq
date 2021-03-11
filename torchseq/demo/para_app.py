@@ -64,7 +64,7 @@ def init():
 
     # )
 
-    MODEL_PATH = "./runs/separator/20210222_161432_wikianswers-unpooled"
+    MODEL_PATH = "./runs/separatorv2/20210308_113131_wa_hierarchical_4codes"
     # MODEL_PATH = "./models/examples/separator-wa"
 
     with open(MODEL_PATH + "/config.json") as f:
@@ -88,14 +88,13 @@ def init():
         #     "strategy": "ngram"
         # }
 
-        # var_offset = 4
         # cfg_dict["bottleneck"]["prior_var_weight"] = (
         #     [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         # )
         cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
-        # cfg_dict["encdec"]["code_offset"] = (
-        #     [0] * var_offset + [50] + [50] * (cfg_dict["encdec"]["quantizer_heads"] - var_offset - 1)
-        # )
+        var_offset = 3
+        num_heads = 4
+        cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [1] + [0] * (num_heads - var_offset - 1)
         config = Config(cfg_dict)
 
     # Tokenizer(config.prepro.tokenizer)

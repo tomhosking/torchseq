@@ -23,6 +23,8 @@ class VectorQuantizerMultiHead(nn.Module):
         code_entropy_weight=0,
         hierarchical=False,
         hierarchical_balance_dims=False,
+        hierarchical_greedy=False,
+        transitions=True,
     ):
 
         # residual_head_range=(0, 0),
@@ -39,6 +41,8 @@ class VectorQuantizerMultiHead(nn.Module):
         self._warmup_steps = warmup_steps
         self._hierarchical = hierarchical
         self._hierarchical_balance_dims = hierarchical_balance_dims
+        self._hierarchical_greedy = hierarchical_greedy
+        self._use_transitions = transitions
 
         if hierarchical:
             # if self._residual_head_range[0] != 0:
@@ -72,6 +76,10 @@ class VectorQuantizerMultiHead(nn.Module):
                 [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
             )
 
+        if self._use_transitions:
+            self._transitions = nn.ModuleList([nn.Linear(num_embeddings, num_embeddings) for d in self.dims])
+            # self._transition = nn.Linear(num_embeddings, num_embeddings)
+
         for embedding in self._embedding:
             embedding.weight.data.normal_()
         self._commitment_cost = commitment_cost
@@ -102,7 +110,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         quantized_list = []
         vq_codes = []
-        all_encodings = []
+        all_probs = []
         for head_ix, embedding in enumerate(self._embedding):
             # this_input = flat_input[:, head_ix, :]
             head_begin, head_end = sum(self.dims[:head_ix]), sum(self.dims[: head_ix + 1])
@@ -122,62 +130,76 @@ class VectorQuantizerMultiHead(nn.Module):
                 - 2 * torch.matmul(this_input, embedding.weight.t())
             )
 
-            # Encoding
-            if forced_codes is not None:
-                assert (
-                    forced_codes.shape[1] == self._num_heads
-                ), "If forced_codes is supplied, it must be the same length as the number of quantizer heads!"
-                encoding_indices = forced_codes[:, head_ix].unsqueeze(1)
+            # Convert distances into log probs
+            probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
+            if self._hierarchical and len(all_probs) > 0:
+                # For the hierarchical case, weight the current probs by the prob of their parent node
+                probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
 
-                encodings = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
-                encodings.scatter_(1, encoding_indices, 1)
+            if self._use_transitions and len(all_probs) > 0:
+                # print(all_probs[-1].shape, probs.shape, self._transitions[head_ix].weight.shape)
+                
+                # transition = self._transitions[head_ix]
+                probs = probs + torch.log_softmax(
+                    self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).squeeze(1)), dim=-1
+                ).detach()
+            probs = torch.exp(probs)
 
-            elif not isinstance(self._code_offset, int) or self._code_offset > 0:
-                if self._hierarchical:
-                    raise Exception("Hierarchical vqvae not yet supported with code offsets")
-                # Allow for nudging the encodings away from nearest
-                this_offset = (
-                    self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
-                )
-                min_k = torch.topk(distances, this_offset + 1, dim=1, largest=False).indices
-                encoding_indices = min_k[:, this_offset].unsqueeze(1)
+            # # Encoding
+            # if forced_codes is not None:
+            #     assert (
+            #         forced_codes.shape[1] == self._num_heads
+            #     ), "If forced_codes is supplied, it must be the same length as the number of quantizer heads!"
+            #     encoding_indices = forced_codes[:, head_ix].unsqueeze(1)
 
-                encodings = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
-                encodings.scatter_(1, encoding_indices, 1)
+            #     probs = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
+            #     probs.scatter_(1, encoding_indices, 1)
 
-            elif self._soft_em and self.training:
-                encodings = torch.log_softmax(-1.0 * distances, dim=-1).detach()
-                if self._hierarchical and len(all_encodings) > 0:
-                    # For the hierarchical case, weight the current probs by the prob of their parent node
+            # elif not isinstance(self._code_offset, int) or self._code_offset > 0:
+            #     probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
+            #     if self._hierarchical and len(all_probs) > 0:
+            #         # For the hierarchical case, weight the current probs by the prob of their parent node
+            #         probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
+            #     # Allow for nudging the probs away from nearest
+            #     this_offset = (
+            #         self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
+            #     )
 
-                    encodings += (
-                        torch.log(all_encodings[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
-                    )
-                encoding_indices = torch.argmax(encodings, dim=-1)
-                encodings = torch.exp(encodings)
-            else:
-                probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
-                if self._hierarchical and len(all_encodings) > 0:
-                    # For the hierarchical case, weight the current probs by the prob of their parent node
-                    probs += (
-                        torch.log(all_encodings[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
-                    )
-                encoding_indices = torch.argmax(probs, dim=1).unsqueeze(1)
+            #     min_k = torch.topk(probs, this_offset + 1, dim=1, largest=False).indices
+            #     # encoding_indices = min_k[:, this_offset].unsqueeze(1)
 
-                encodings = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
-                encodings.scatter_(1, encoding_indices, 1)
+            #     probs = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
+            #     probs.scatter_(1, encoding_indices, 1)
 
-            vq_codes.append(encoding_indices)
-            all_encodings.append(encodings.unsqueeze(1))
+            # elif self._soft_em and self.training:
+            #     probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
+            #     if self._hierarchical and len(all_probs) > 0:
+            #         # For the hierarchical case, weight the current probs by the prob of their parent node
+
+            #         probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
+            #     # encoding_indices = torch.argmax(probs, dim=-1)
+            #     probs = torch.exp(probs)
+            # else:
+            #     probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
+            #     if self._hierarchical and len(all_probs) > 0:
+            #         # For the hierarchical case, weight the current probs by the prob of their parent node
+            #         probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
+            #     # encoding_indices = torch.argmax(probs, dim=1).unsqueeze(1)
+
+            #     probs = torch.zeros(encoding_indices.shape[0], embedding.weight.shape[0], device=inputs.device)
+            #     probs.scatter_(1, encoding_indices, 1)
+
+            # vq_codes.append(encoding_indices)
+            all_probs.append(probs.unsqueeze(1))
 
             # Quantize and unflatten
-            this_quantized = torch.matmul(encodings, embedding.weight)
-            quantized_list.append(this_quantized)
+            # this_quantized = torch.matmul(probs, embedding.weight)
+            # quantized_list.append(this_quantized)
 
             # Use EMA to update the embedding vectors
             if self.training and self._ema:
                 _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
-                _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(encodings, 0)
+                _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(probs, 0)
 
                 # Laplace smoothing of the cluster size
                 n = torch.sum(_ema_cluster_size.data)
@@ -186,10 +208,37 @@ class VectorQuantizerMultiHead(nn.Module):
                 )
                 setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
 
-                dw = torch.matmul(encodings.t(), this_input)
+                dw = torch.matmul(probs.t(), this_input)
                 self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
 
                 self._embedding[head_ix].weight = nn.Parameter(self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1))
+
+        if self._hierarchical and not self._hierarchical_greedy:
+            # work backwards!
+            for head_ix in reversed(range(self._num_heads)):
+                this_probs = all_probs[head_ix]
+                if len(vq_codes) > 0:
+                    mask = torch.where(
+                        torch.arange(this_probs.shape[-1]).to(this_probs.device) // self.dims[head_ix] == vq_codes[0],
+                        1.0,
+                        0.0,
+                    )
+                    # print(this_probs.shape, mask.shape)
+                    this_probs *= mask.unsqueeze(1)
+
+                vq_codes.insert(0, torch.argmax(this_probs, dim=-1))
+        else:
+            vq_codes = [torch.argmax(probs, dim=-1) for probs in all_probs]
+
+        # Now that we have the codes, calculate their embeddings
+        for head_ix, embedding in enumerate(self._embedding):
+            # If soft training, use distribution
+            if self._soft_em and self.training:
+                this_quantized = torch.matmul(probs, embedding.weight)
+            # otherwise use one hot
+            else:
+                this_quantized = embedding(vq_codes[head_ix])
+            quantized_list.append(this_quantized)
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
 
@@ -198,7 +247,7 @@ class VectorQuantizerMultiHead(nn.Module):
             if self._hierarchical:
                 raise Exception("Hierarchical vqvae is not currently compatible with code entropy")
 
-            all_encodings = torch.cat(all_encodings, dim=1)
+            all_probs = torch.cat(all_probs, dim=1)
 
             # h_ix x bsz
             cooccur_ixs = list(zip(*vq_codes))
@@ -206,11 +255,11 @@ class VectorQuantizerMultiHead(nn.Module):
             for codes in cooccur_ixs:
                 cooccur_mask[codes] += 1.0
 
-            bsz = encodings.shape[0]
+            bsz = probs.shape[0]
 
             # print(self._code_cooccurrence.shape)
             # print(cooccur_mask.shape)
-            # print(all_encodings.shape)
+            # print(all_probs.shape)
 
             alpha = 1 / 100
             self._code_cooccurrence *= 1 - alpha
@@ -221,7 +270,7 @@ class VectorQuantizerMultiHead(nn.Module):
             for bix in range(bsz):
                 this_weight = 1
                 for hix in range(len(vq_codes)):
-                    this_weight *= all_encodings[bix, hix, cooccur_ixs[bix][hix].item()]
+                    this_weight *= all_probs[bix, hix, cooccur_ixs[bix][hix].item()]
 
                 # print(bix, this_weight, self._code_cooccurrence[cooccur_ixs[bix]])
 

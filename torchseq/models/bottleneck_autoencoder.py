@@ -42,7 +42,7 @@ class BottleneckAutoencoderModel(nn.Module):
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
-            memory = dict()
+            memory = {}
 
         # First pass? Construct the encoding
         if "encoding" not in memory:
@@ -193,7 +193,10 @@ class BottleneckAutoencoderModel(nn.Module):
             memory["encoding"] = encoding_pooled
             memory["encoding_mask"] = None
 
-            memory["sep_encoding_1"] = encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
+            if sep_splice_ix > 0:
+                memory["sep_encoding_1"] = (
+                    encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
+                )
             memory["sep_encoding_2"] = encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
 
         # Fwd pass through decoder block

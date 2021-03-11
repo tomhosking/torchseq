@@ -47,6 +47,7 @@ class PreTrainedQA:
         tokenized = self.tokenizer.batch_encode_plus(
             list(zip(question_list, context_list)),
             max_length=MAX_LEN,
+            truncation=True,
             return_overflowing_tokens=True,
             stride=CHUNK_STRIDE,
             truncation_strategy="only_second",
