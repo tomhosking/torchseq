@@ -138,11 +138,14 @@ class VectorQuantizerMultiHead(nn.Module):
 
             if self._use_transitions and len(all_probs) > 0:
                 # print(all_probs[-1].shape, probs.shape, self._transitions[head_ix].weight.shape)
-                
+
                 # transition = self._transitions[head_ix]
-                probs = probs + torch.log_softmax(
-                    self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).squeeze(1)), dim=-1
-                ).detach()
+                probs = (
+                    probs
+                    + torch.log_softmax(
+                        self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).squeeze(1)), dim=-1
+                    ).detach()
+                )
             probs = torch.exp(probs)
 
             # # Encoding
