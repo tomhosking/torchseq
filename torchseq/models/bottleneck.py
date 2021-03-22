@@ -108,6 +108,21 @@ class PoolingBottleneck(nn.Module):
             memory["loss"] += vq_loss
             memory["vq_codes"] = torch.cat([x.unsqueeze(1).detach() for x in quantizer_indices], dim=1)
 
+        if self.config.bottleneck.get("pooling_range", None) is not None:
+            begin_hix, end_hix = self.config.bottleneck.get("pooling_range", (0, 0))
+            begin_ix = (
+                self.config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1) * begin_hix
+            )
+            end_ix = self.config.bottleneck.embedding_dim // self.config.bottleneck.get("quantizer_heads", 1) * end_hix
+            encoding_pooled = torch.cat(
+                [
+                    encoding[:, :, :begin_ix],
+                    encoding_pooled[:, :, begin_ix:end_ix].expand(-1, encoding.shape[1], -1),
+                    encoding[:, :, end_ix:],
+                ],
+                dim=-1,
+            )
+
         if self.config.bottleneck.get("use_vmf", False):
             if self.config.bottleneck.get("quantizer_heads", 1) > 1:
                 num_heads = self.config.bottleneck.get("quantizer_heads", 1)
@@ -201,18 +216,18 @@ class PoolingBottleneck(nn.Module):
                 memory["loss"] = 0
             memory["loss"] += kl_loss * kl_weight
 
-        # HACK: this whole module needs a refactor so that this option below becomes a combination of other (more normal) options
-        if self.config.bottleneck.get("unpooled_semantic_path", False):
-            # Take the full (unpooled) sem encoding, and combine with the pooled+quantized syn encoding
-            splice_ix = (
-                self.config.bottleneck.embedding_dim
-                // self.config.bottleneck.get("quantizer_heads", 1)
-                * self.config.bottleneck.get("quantizer_num_residual", 0)
-            )
+        # # HACK: this whole module needs a refactor so that this option below becomes a combination of other (more normal) options
+        # if self.config.bottleneck.get("unpooled_semantic_path", False):
+        #     # Take the full (unpooled) sem encoding, and combine with the pooled+quantized syn encoding
+        #     splice_ix = (
+        #         self.config.bottleneck.embedding_dim
+        #         // self.config.bottleneck.get("quantizer_heads", 1)
+        #         * self.config.bottleneck.get("quantizer_num_residual", 0)
+        #     )
 
-            encoding_pooled = torch.cat(
-                [encoding[:, :, :splice_ix], encoding_pooled[:, :1, splice_ix:].expand(-1, encoding.shape[1], -1)],
-                dim=-1,
-            )
+        #     encoding_pooled = torch.cat(
+        #         [encoding[:, :, :splice_ix], encoding_pooled[:, :1, splice_ix:].expand(-1, encoding.shape[1], -1)],
+        #         dim=-1,
+        #     )
 
         return encoding_pooled, memory
