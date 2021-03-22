@@ -66,6 +66,7 @@ class PoolingBottleneck(nn.Module):
                 residual=self.config.bottleneck.get("quantizer_residual", False),
                 code_offset=self.config.bottleneck.get("code_offset", 0),
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
+                ema=self.config.bottleneck.get("quantizer_ema", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
                 hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),

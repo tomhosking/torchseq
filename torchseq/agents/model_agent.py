@@ -319,6 +319,10 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
+            # print(self.model.bottleneck.quantizer._embedding[1].weight.grad)
+            # print(self.model.bottleneck.quantizer._transitions[1].weight.grad)
+            # exit()
+
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
@@ -611,6 +615,8 @@ class ModelAgent(BaseAgent):
                 and (self.current_epoch - self.best_epoch) <= self.config.training.early_stopping_lag > 0
             )
         ):
+            if "bleu" in self.all_metrics_at_best:
+                self.logger.info("Current best BLEU: {:}".format(self.all_metrics_at_best["bleu"]))
 
             if self.best_metric is None:
                 self.best_epoch = self.current_epoch

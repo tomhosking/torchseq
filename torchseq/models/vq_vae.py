@@ -77,7 +77,9 @@ class VectorQuantizerMultiHead(nn.Module):
             )
 
         if self._use_transitions:
-            self._transitions = nn.ModuleList([nn.Linear(num_embeddings, num_embeddings) for d in self.dims])
+            self._transitions = nn.ModuleList(
+                [nn.Linear(num_embeddings, num_embeddings, bias=False) for d in self.dims]
+            )
             # self._transition = nn.Linear(num_embeddings, num_embeddings)
 
         for embedding in self._embedding:
@@ -131,7 +133,7 @@ class VectorQuantizerMultiHead(nn.Module):
             )
 
             # Convert distances into log probs
-            probs = torch.log_softmax(-1.0 * distances, dim=-1).detach()
+            probs = -1.0 * distances.detach()
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
                 probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
@@ -140,13 +142,9 @@ class VectorQuantizerMultiHead(nn.Module):
                 # print(all_probs[-1].shape, probs.shape, self._transitions[head_ix].weight.shape)
 
                 # transition = self._transitions[head_ix]
-                probs = (
-                    probs
-                    + torch.log_softmax(
-                        self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).squeeze(1)), dim=-1
-                    ).detach()
-                )
-            probs = torch.exp(probs)
+                probs = probs + self._transitions[head_ix](all_probs[-1]).squeeze(1).detach()
+
+            probs = torch.softmax(probs, dim=-1)
 
             # # Encoding
             # if forced_codes is not None:
@@ -236,11 +234,15 @@ class VectorQuantizerMultiHead(nn.Module):
         # Now that we have the codes, calculate their embeddings
         for head_ix, embedding in enumerate(self._embedding):
             # If soft training, use distribution
-            if self._soft_em and self.training:
-                this_quantized = torch.matmul(probs, embedding.weight)
+            if self.training and (self._soft_em or self._transitions):
+                this_quantized = torch.matmul(
+                    all_probs[head_ix], embedding.weight.detach() if self._ema else embedding.weight
+                )
+
             # otherwise use one hot
             else:
                 this_quantized = embedding(vq_codes[head_ix])
+
             quantized_list.append(this_quantized)
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
@@ -292,12 +294,10 @@ class VectorQuantizerMultiHead(nn.Module):
             code_entropy_loss = torch.cat(entropy_losses, dim=0)
 
         # Loss
-        if not self._ema:
-            q_latent_loss = (
-                nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
-            )
-        else:
-            q_latent_loss = 0
+        # if not self._ema:
+        q_latent_loss = nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
+        # else:
+        #     q_latent_loss = 0
         e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
         loss = self._commitment_cost * e_latent_loss + q_latent_loss + self._code_entropy_weight * code_entropy_loss
