@@ -13,6 +13,8 @@ from torchseq.models.kl_divergence import get_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 
+import torch.autograd.profiler as profiler
+
 
 class PoolingBottleneck(nn.Module):
     def __init__(self, config, embeddings=None):
@@ -72,6 +74,10 @@ class PoolingBottleneck(nn.Module):
                 hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),
                 hierarchical_balance_dims=self.config.bottleneck.get("hierarchical_balance_dims", False),
                 transitions=self.config.bottleneck.get("quantizer_transitions", False),
+                transitions_bias=self.config.bottleneck.get("quantizer_transitions_bias", False),
+                transitions_embed=self.config.bottleneck.get("quantizer_transitions_embed", False),
+                transitions_log=self.config.bottleneck.get("quantizer_transitions_log", False),
+                use_cosine_similarities=self.config.bottleneck.get("quantizer_cosine", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
@@ -189,11 +195,11 @@ class PoolingBottleneck(nn.Module):
 
                 # Reparametrisation trick, only for the residual heads
                 var_encoding = reparameterize_gaussian(
-                    mu[:, :1, :splice_ix], logvar[:, :1, :splice_ix], var_weight=var_weight
+                    mu[:, :, :splice_ix], logvar[:, :, :splice_ix], var_weight=var_weight
                 )
-                encoding_pooled = torch.cat([var_encoding, encoding_pooled[:, :1, splice_ix:]], dim=-1)
+                encoding_pooled = torch.cat([var_encoding, encoding_pooled[:, :, splice_ix:]], dim=-1)
 
-                kl_loss = torch.mean(get_kl(mu[:, :1, :splice_ix], logvar[:, :1, :splice_ix]), dim=1)
+                kl_loss = torch.mean(get_kl(mu[:, :, :splice_ix], logvar[:, :, :splice_ix]), dim=1)
             else:
 
                 encoding_pooled = reparameterize_gaussian(mu, logvar, var_weight=var_weight)

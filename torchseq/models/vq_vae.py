@@ -1,3 +1,4 @@
+from torchseq.utils.functions import cos_sim
 import torch
 import torch.nn as nn
 
@@ -24,7 +25,11 @@ class VectorQuantizerMultiHead(nn.Module):
         hierarchical=False,
         hierarchical_balance_dims=False,
         hierarchical_greedy=False,
-        transitions=True,
+        transitions=False,
+        transitions_bias=False,
+        transitions_embed=False,
+        transitions_log=False,
+        use_cosine_similarities=False,
     ):
 
         # residual_head_range=(0, 0),
@@ -42,7 +47,13 @@ class VectorQuantizerMultiHead(nn.Module):
         self._hierarchical = hierarchical
         self._hierarchical_balance_dims = hierarchical_balance_dims
         self._hierarchical_greedy = hierarchical_greedy
+
         self._use_transitions = transitions
+        self._transitions_bias = transitions_bias
+        self._transitions_embed = transitions_embed
+        self._transitions_log = transitions_log
+
+        self._cos_sim = use_cosine_similarities
 
         if hierarchical:
             # if self._residual_head_range[0] != 0:
@@ -78,8 +89,15 @@ class VectorQuantizerMultiHead(nn.Module):
 
         if self._use_transitions:
             self._transitions = nn.ModuleList(
-                [nn.Linear(num_embeddings, num_embeddings, bias=False) for d in self.dims]
+                [
+                    nn.Linear(
+                        d if self._transitions_embed else num_embeddings, num_embeddings, bias=self._transitions_bias
+                    )
+                    for d in self.dims
+                ]
             )
+            # for trans in self._transitions:
+            #     nn.init.xavier_uniform_(trans.weight, gain=10)
             # self._transition = nn.Linear(num_embeddings, num_embeddings)
 
         for embedding in self._embedding:
@@ -113,26 +131,44 @@ class VectorQuantizerMultiHead(nn.Module):
         quantized_list = []
         vq_codes = []
         all_probs = []
+
+        transition_logits = []
+        all_distances = []
         for head_ix, embedding in enumerate(self._embedding):
             # this_input = flat_input[:, head_ix, :]
             head_begin, head_end = sum(self.dims[:head_ix]), sum(self.dims[: head_ix + 1])
             this_input = inputs[:, 0, head_begin:head_end]
 
             # Calculate distances
-            distances = (
-                torch.sum(this_input ** 2, dim=1, keepdim=True)
-                + torch.sum(embedding.weight ** 2, dim=1)
-                - 2 * torch.matmul(this_input, embedding.weight.t())
-            )
+            if self._cos_sim:
+                distances = cos_sim(this_input, embedding.weight)
+            else:
+                distances = -1.0 * (
+                    torch.sum(this_input ** 2, dim=1, keepdim=True)
+                    + torch.sum(embedding.weight ** 2, dim=1)
+                    - 2 * torch.matmul(this_input, embedding.weight.t())
+                )
 
             # Convert distances into log probs
-            probs = -1.0 * distances.detach()
+            probs = distances.detach()
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
                 probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
 
             if self._use_transitions and len(all_probs) > 0:
-                probs = probs + self._transitions[head_ix](all_probs[-1]).squeeze(1).detach()
+
+                if self._transitions_embed:
+                    prev_quantized = torch.matmul(all_probs[head_ix - 1], self._embedding[head_ix - 1].weight.detach())
+                    trans_logits = self._transitions[head_ix](prev_quantized.detach()).squeeze(1)
+                elif self._transitions_log:
+                    trans_logits = self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).detach()).squeeze(1)
+                else:
+                    trans_logits = self._transitions[head_ix](all_probs[-1].detach()).squeeze(1)
+
+                probs = probs + trans_logits
+
+                transition_logits.append(trans_logits)
+                all_distances.append(distances)
 
             probs = torch.softmax(probs, dim=-1)
 
@@ -154,6 +190,9 @@ class VectorQuantizerMultiHead(nn.Module):
                 self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
 
                 self._embedding[head_ix].weight = nn.Parameter(self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1))
+
+        # torch.save({'distances': all_distances, 'transition_logits': transition_logits, 'transitions': self._transitions.state_dict()}, './vq_internals.pt')
+        # exit()
 
         if forced_codes is not None:
             assert (
