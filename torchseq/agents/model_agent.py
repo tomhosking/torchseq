@@ -38,6 +38,8 @@ from torchseq.metric_hooks.textual import TextualMetricHook
 from torchseq.metric_hooks.default import DefaultMetricHook
 from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 
+import torch.autograd.profiler as profiler
+
 
 # Variable length sequences = worse performance if we try to optimise
 from torch.backends import cudnn
@@ -46,7 +48,7 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True, profile=False):
         """
         Main constructor for an Agent
         """
@@ -57,6 +59,7 @@ class ModelAgent(BaseAgent):
         self.verbose = verbose
         self.output_path = output_path
         self.training_mode = training_mode
+        self.profile = profile
 
         set_seed(config.get("seed", 123))
 
@@ -264,17 +267,34 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            _ = self.validate(data_loader, save=True)
+            if self.profile:
+                with profiler.record_function("validate"):
+                    _ = self.validate(data_loader, save=True)
+                print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+            else:
+                _ = self.validate(data_loader, save=True)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
 
-            self.train_one_epoch(data_loader)
+            if self.profile:
+                with profiler.record_function("train_one_epoch"):
+                    self.train_one_epoch(data_loader)
+
+                print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+
+            else:
+                self.train_one_epoch(data_loader)
 
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                _ = self.validate(data_loader, save=True)
+                if self.profile:
+                    with profiler.record_function("validate"):
+                        _ = self.validate(data_loader, save=True)
+                    print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+                else:
+                    _ = self.validate(data_loader, save=True)
             else:
                 # We won't have metrics - but we should update the progress tracker
                 self.update_dashboard()
@@ -307,26 +327,45 @@ class ModelAgent(BaseAgent):
             # self.global_step += curr_batch_size
 
             # Weight the loss by the ratio of this batch to optimiser step size, so that LR is equivalent even when grad accumulation happens
-            loss = (
-                self.step_train(batch, self.tgt_field)
-                * float(curr_batch_size)
-                / float(self.config.training.optim_batch_size)
-            )
 
-            pbar.set_postfix(
-                {"loss": loss.detach().item() * float(self.config.training.optim_batch_size) / float(curr_batch_size)}
-            )
+            #     tr.print_diff()
+            # with profiler.record_function("validate"):
+            #             _ = self.validate(data_loader, save=True)
+            #         print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+            if self.profile:
+                with profiler.profile(profile_memory=True) as prof:
+                    with profiler.record_function("train_step"):
+                        loss = (
+                            self.step_train(batch, self.tgt_field)
+                            * float(curr_batch_size)
+                            / float(self.config.training.optim_batch_size)
+                        )
+                print(prof.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
+            else:
+                loss = (
+                    self.step_train(batch, self.tgt_field)
+                    * float(curr_batch_size)
+                    / float(self.config.training.optim_batch_size)
+                )
+            if not self.silent:
+                pbar.set_postfix(
+                    {
+                        "loss": loss.detach().item()
+                        * float(self.config.training.optim_batch_size)
+                        / float(curr_batch_size)
+                    }
+                )
 
             loss.backward()
 
             # print(self.model.bottleneck.quantizer._embedding[1].weight.grad)
-            # print(self.model.bottleneck.quantizer._transitions[1].weight.grad)
+            # print(self.model.bottleneck.quantizer._transitions[1].weight.grad.norm())
             # exit()
 
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
-
+            
             lr = get_lr(
                 self.config.training.lr,
                 self.global_step,
@@ -426,9 +465,9 @@ class ModelAgent(BaseAgent):
                 torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
             )
 
-            if self.config.encdec.get("vector_quantized", False):
-                for h_ix in range(memory["vq_codes"].shape[1]):
-                    self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix, :].tolist())
+            # if self.config.encdec.get("vector_quantized", False):
+            #     for h_ix in range(memory["vq_codes"].shape[1]):
+            #         self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix, :].tolist())
 
         else:
             logits = None
@@ -579,12 +618,12 @@ class ModelAgent(BaseAgent):
             valid_loader, memory_keys_to_return, metric_hooks
         )
 
-        for h_ix, codes in self.vq_codes.items():
-            Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
+        # for h_ix, codes in self.vq_codes.items():
+        #     Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
 
-        if len(self.vq_codes) > 0 and self.run_id is not None:
-            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
-                json.dump(self.vq_codes, f)
+        # if len(self.vq_codes) > 0 and self.run_id is not None:
+        #     with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
+        #         json.dump(self.vq_codes, f)
 
         # TODO: sort this out - there's got to be a more compact way of doing it all
         if (

@@ -126,6 +126,7 @@ class BottleneckAutoencoderModel(nn.Module):
                         # print(encoding_pooled.shape)
                         # exit()
                         encoding_pooled[:, :, :sep_splice_ix] = template_encoding_pooled[:, :, :sep_splice_ix]
+
                     else:
                         # print("Not Flipped")
                         # print(sep_splice_ix)
@@ -135,6 +136,7 @@ class BottleneckAutoencoderModel(nn.Module):
                         encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :1, sep_splice_ix:].expand(
                             -1, encoding_pooled.shape[1], -1
                         )
+
                         # else:
                         #     encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
 

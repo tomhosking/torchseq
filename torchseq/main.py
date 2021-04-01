@@ -100,7 +100,13 @@ def main():
     agents = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
 
     agent = agents[config.task](
-        config, run_id, args.output_path, silent=args.silent, verbose=(not args.silent), training_mode=args.train
+        config,
+        run_id,
+        args.output_path,
+        silent=args.silent,
+        verbose=(not args.silent),
+        training_mode=args.train,
+        profile=args.profile,
     )
 
     if args.load_chkpt is not None:

@@ -16,8 +16,8 @@ from torchseq.datasets.json_dataset import JsonDataset
 
 
 class ParaphraseAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
-        super().__init__(config, run_id, output_path, silent, training_mode, verbose)
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True, profile=False):
+        super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile)
 
         self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
 

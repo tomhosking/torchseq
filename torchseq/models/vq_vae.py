@@ -93,7 +93,7 @@ class VectorQuantizerMultiHead(nn.Module):
                     nn.Linear(
                         d if self._transitions_embed else num_embeddings, num_embeddings, bias=self._transitions_bias
                     )
-                    for d in self.dims
+                    for d in self.dims[1:]
                 ]
             )
             # for trans in self._transitions:
@@ -132,7 +132,7 @@ class VectorQuantizerMultiHead(nn.Module):
         vq_codes = []
         all_probs = []
 
-        transition_logits = []
+        # self.transition_logits = []
         all_distances = []
         for head_ix, embedding in enumerate(self._embedding):
             # this_input = flat_input[:, head_ix, :]
@@ -159,15 +159,19 @@ class VectorQuantizerMultiHead(nn.Module):
 
                 if self._transitions_embed:
                     prev_quantized = torch.matmul(all_probs[head_ix - 1], self._embedding[head_ix - 1].weight.detach())
-                    trans_logits = self._transitions[head_ix](prev_quantized.detach()).squeeze(1)
+                    trans_logits = self._transitions[head_ix - 1](prev_quantized).squeeze(1)
                 elif self._transitions_log:
-                    trans_logits = self._transitions[head_ix](torch.log(all_probs[-1] + 1e-10).detach()).squeeze(1)
+                    trans_logits = self._transitions[head_ix - 1](torch.log(all_probs[head_ix - 1] + 1e-10)).squeeze(1)
                 else:
-                    trans_logits = self._transitions[head_ix](all_probs[-1].detach()).squeeze(1)
+                    # trans_logits = self._transitions[head_ix](all_probs[-1].detach()).squeeze(1)
+                    trans = self._transitions[head_ix - 1]
+                    prev_prob = all_probs[head_ix - 1].squeeze(1)  # .detach()
+                    trans_logits = trans(prev_prob)
 
+                    # print(head_ix, trans_logits.grad_fn)
+                # self.transition_logits.append(trans_logits)
                 probs = probs + trans_logits
 
-                transition_logits.append(trans_logits)
                 all_distances.append(distances)
 
             probs = torch.softmax(probs, dim=-1)
@@ -176,20 +180,23 @@ class VectorQuantizerMultiHead(nn.Module):
 
             # Use EMA to update the embedding vectors
             if self.training and self._ema:
-                _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
-                _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(probs, 0)
+                with torch.no_grad():
+                    _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
+                    _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(probs, 0)
 
-                # Laplace smoothing of the cluster size
-                n = torch.sum(_ema_cluster_size.data)
-                _ema_cluster_size = (
-                    (_ema_cluster_size + self._epsilon) / (n + self._num_embeddings * self._epsilon) * n
-                )
-                setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
+                    # Laplace smoothing of the cluster size
+                    n = torch.sum(_ema_cluster_size.data)
+                    _ema_cluster_size = (
+                        (_ema_cluster_size + self._epsilon) / (n + self._num_embeddings * self._epsilon) * n
+                    )
+                    setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
 
-                dw = torch.matmul(probs.t(), this_input)
-                self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
+                    dw = torch.matmul(probs.t(), this_input)
+                    self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
 
-                self._embedding[head_ix].weight = nn.Parameter(self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1))
+                    self._embedding[head_ix].weight.data = nn.Parameter(
+                        self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1)
+                    ).detach()
 
         # torch.save({'distances': all_distances, 'transition_logits': transition_logits, 'transitions': self._transitions.state_dict()}, './vq_internals.pt')
         # exit()
@@ -241,60 +248,11 @@ class VectorQuantizerMultiHead(nn.Module):
 
         quantized = torch.cat(quantized_list, dim=1).view(input_shape)
 
-        # code_entropy_loss = 0
-        # if self._code_entropy_weight > 0:
-        #     if self._hierarchical:
-        #         raise Exception("Hierarchical vqvae is not currently compatible with code entropy")
-
-        #     all_probs = torch.cat(all_probs, dim=1)
-
-        #     # h_ix x bsz
-        #     cooccur_ixs = list(zip(*vq_codes))
-        #     cooccur_mask = torch.zeros_like(self._code_cooccurrence)
-        #     for codes in cooccur_ixs:
-        #         cooccur_mask[codes] += 1.0
-
-        #     bsz = probs.shape[0]
-
-        #     # print(self._code_cooccurrence.shape)
-        #     # print(cooccur_mask.shape)
-        #     # print(all_probs.shape)
-
-        #     alpha = 1 / 100
-        #     self._code_cooccurrence *= 1 - alpha
-        #     self._code_cooccurrence += cooccur_mask * alpha / bsz
-
-        #     # I can't work out how to do this natively :(
-        #     entropy_losses = []
-        #     for bix in range(bsz):
-        #         this_weight = 1
-        #         for hix in range(len(vq_codes)):
-        #             this_weight *= all_probs[bix, hix, cooccur_ixs[bix][hix].item()]
-
-        #         # print(bix, this_weight, self._code_cooccurrence[cooccur_ixs[bix]])
-
-        #         this_loss = torch.log(1 + 1e-10 - self._code_cooccurrence[cooccur_ixs[bix]]) * this_weight * -1
-        #         entropy_losses.append(this_loss.unsqueeze(0))
-        #         # print(this_loss)
-        #     # print(entropy_losses)
-        #     # exit()
-
-        #     # if global_step > 200:
-
-        #     #     print(cooccur_mask)
-        #     #     print(self._code_cooccurrence)
-        #     #     print(entropy_losses)
-        #     #     exit()
-        #     code_entropy_loss = torch.cat(entropy_losses, dim=0)
-
-        # Loss
-        # if not self._ema:
+        # Losses
         q_latent_loss = nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
-        # else:
-        #     q_latent_loss = 0
         e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
-        loss = self._commitment_cost * e_latent_loss + q_latent_loss  # + self._code_entropy_weight * code_entropy_loss
+        loss = self._commitment_cost * e_latent_loss + q_latent_loss
 
         # Straight Through Estimator
         if self._residual:

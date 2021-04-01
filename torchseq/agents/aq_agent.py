@@ -29,8 +29,8 @@ from torchseq.utils.loss_dropper import LossDropper
 
 
 class AQAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
-        super().__init__(config, run_id, output_path, silent, training_mode, verbose)
+    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True, profile=False):
+        super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile)
 
         self.src_field = "c"
         self.tgt_field = "q"
