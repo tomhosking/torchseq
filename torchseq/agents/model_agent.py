@@ -365,7 +365,7 @@ class ModelAgent(BaseAgent):
             steps_accum += curr_batch_size
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
-            
+
             lr = get_lr(
                 self.config.training.lr,
                 self.global_step,
