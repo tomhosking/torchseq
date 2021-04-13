@@ -30,7 +30,9 @@ class JsonDataset(Dataset):
         self.repeat = repeat
 
         self.path = path
-        self.variant = "dev" if dev else ("test" if test else "train")
+
+        split = "dev" if dev else ("test" if test else "train")
+        self.variant = self.config.json_dataset.get("filename", "{split}").format(split=split)
 
         self.exists = True
 
