@@ -30,6 +30,8 @@ class VectorQuantizerMultiHead(nn.Module):
         transitions_embed=False,
         transitions_log=False,
         use_cosine_similarities=False,
+        use_gumbel=False,
+        separate_output_embedding=False,
     ):
 
         # residual_head_range=(0, 0),
@@ -41,8 +43,10 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._ema = ema
         self._code_offset = code_offset
-        # self._residual_head_range = residual_head_range
+
         self._soft_em = soft_em
+        self._use_gumbel = use_gumbel
+
         self._warmup_steps = warmup_steps
         self._hierarchical = hierarchical
         self._hierarchical_balance_dims = hierarchical_balance_dims
@@ -56,9 +60,6 @@ class VectorQuantizerMultiHead(nn.Module):
         self._cos_sim = use_cosine_similarities
 
         if hierarchical:
-            # if self._residual_head_range[0] != 0:
-            #     raise Exception("If using hierarchical mode in the VQVAE, the residual range must start at 0")
-            # offset = self._residual_head_range[1]
 
             if self._hierarchical_balance_dims:
                 dim_weights = [2 ** x for x in range(self._num_heads)]
@@ -86,6 +87,17 @@ class VectorQuantizerMultiHead(nn.Module):
             self._ema_w = nn.ParameterList(
                 [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
             )
+        for embedding in self._embedding:
+            embedding.weight.data.normal_()
+
+        if separate_output_embedding:
+            self._output_embedding = nn.ModuleList(
+                [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
+            )
+            for embedding in self._output_embedding:
+                embedding.weight.data.normal_()
+        else:
+            self._output_embedding = None
 
         if self._use_transitions:
             self._transitions = nn.ModuleList(
@@ -100,8 +112,6 @@ class VectorQuantizerMultiHead(nn.Module):
             #     nn.init.xavier_uniform_(trans.weight, gain=10)
             # self._transition = nn.Linear(num_embeddings, num_embeddings)
 
-        for embedding in self._embedding:
-            embedding.weight.data.normal_()
         self._commitment_cost = commitment_cost
 
         for ix in range(self._num_heads):
@@ -121,18 +131,12 @@ class VectorQuantizerMultiHead(nn.Module):
             self.register_buffer("_code_cooccurrence", torch.zeros(*cooccur_shape))
 
     def forward(self, inputs, global_step=None, forced_codes=None):
-        # convert inputs from BCHW -> BHWC
-        # inputs = inputs.permute(0, 2, 3, 1).contiguous()
         input_shape = inputs.shape
-
-        # Flatten input
-        # flat_input = inputs.view(-1, self._num_heads, self._embedding_dim)
 
         quantized_list = []
         vq_codes = []
         all_probs = []
 
-        # self.transition_logits = []
         all_distances = []
         for head_ix, embedding in enumerate(self._embedding):
             # this_input = flat_input[:, head_ix, :]
@@ -145,15 +149,15 @@ class VectorQuantizerMultiHead(nn.Module):
             else:
                 distances = -1.0 * (
                     torch.sum(this_input ** 2, dim=1, keepdim=True)
-                    + torch.sum(embedding.weight ** 2, dim=1)
-                    - 2 * torch.matmul(this_input, embedding.weight.t())
+                    + torch.sum(embedding.weight.detach() ** 2, dim=1)
+                    - 2 * torch.matmul(this_input, embedding.weight.t().detach())
                 )
 
             # Convert distances into log probs
-            probs = distances.detach()
+            logits = distances if self._use_gumbel else distances.detach()
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
-                probs += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
+                logits += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
 
             if self._use_transitions and len(all_probs) > 0:
 
@@ -163,18 +167,20 @@ class VectorQuantizerMultiHead(nn.Module):
                 elif self._transitions_log:
                     trans_logits = self._transitions[head_ix - 1](torch.log(all_probs[head_ix - 1] + 1e-10)).squeeze(1)
                 else:
-                    # trans_logits = self._transitions[head_ix](all_probs[-1].detach()).squeeze(1)
                     trans = self._transitions[head_ix - 1]
                     prev_prob = all_probs[head_ix - 1].squeeze(1)  # .detach()
                     trans_logits = trans(prev_prob)
 
-                    # print(head_ix, trans_logits.grad_fn)
-                # self.transition_logits.append(trans_logits)
-                probs = probs + trans_logits
+                logits = logits + trans_logits
 
                 all_distances.append(distances)
 
-            probs = torch.softmax(probs, dim=-1)
+            if self._use_gumbel:
+                hard_probs = torch.nn.functional.gumbel_softmax(logits, tau=1, hard=True, dim=-1)
+                soft_probs = torch.nn.functional.gumbel_softmax(logits, tau=1, hard=False, dim=-1)
+                probs = hard_probs - soft_probs.detach() + soft_probs
+            else:
+                probs = torch.softmax(logits, dim=-1)
 
             all_probs.append(probs.unsqueeze(1))
 
@@ -233,11 +239,14 @@ class VectorQuantizerMultiHead(nn.Module):
             vq_codes = [torch.argmax(probs, dim=-1) for probs in all_probs]
 
         # Now that we have the codes, calculate their embeddings
-        for head_ix, embedding in enumerate(self._embedding):
+        for head_ix, embedding in enumerate(
+            self._output_embedding if self._output_embedding is not None else self._embedding
+        ):
             # If soft training, use distribution
             if self.training and (self._soft_em or self._transitions):
                 this_quantized = torch.matmul(
-                    all_probs[head_ix], embedding.weight.detach() if self._ema else embedding.weight
+                    all_probs[head_ix],
+                    embedding.weight.detach() if (self._ema and self._output_embedding is None) else embedding.weight,
                 )
 
             # otherwise use one hot
@@ -266,7 +275,7 @@ class VectorQuantizerMultiHead(nn.Module):
                 inputs.view(-1, self._num_heads, self._embedding_dim) * resid_weight
                 + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
             ).view(input_shape)
-        else:
+        elif not self._use_gumbel:
             if self._warmup_steps is not None and global_step is not None:
                 w = min(global_step / self._warmup_steps, 1.0)
                 quantized = inputs + (w * quantized - w * inputs).detach()

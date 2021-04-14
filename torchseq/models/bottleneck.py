@@ -69,6 +69,7 @@ class PoolingBottleneck(nn.Module):
                 code_offset=self.config.bottleneck.get("code_offset", 0),
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 ema=self.config.bottleneck.get("quantizer_ema", True),
+                use_gumbel=self.config.bottleneck.get("quantizer_gumbel", False),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
                 hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),
@@ -78,6 +79,7 @@ class PoolingBottleneck(nn.Module):
                 transitions_embed=self.config.bottleneck.get("quantizer_transitions_embed", False),
                 transitions_log=self.config.bottleneck.get("quantizer_transitions_log", False),
                 use_cosine_similarities=self.config.bottleneck.get("quantizer_cosine", False),
+                separate_output_embedding=self.config.bottleneck.get("quantizer_separate_output_embedding", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
