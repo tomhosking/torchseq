@@ -35,7 +35,7 @@ def generate():
     # ans = request.args['ans']
 
     # query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
-    query = {"sem_input": s1, "tgt": s1, "syn_input": s1}
+    query = {"sem_input": s1, "tgt": s1, "syn_input": s1, "question": "?", "answer": s1}
     if "template" in request.args:
         template = request.args["template"]
         query["template"] = template
@@ -91,10 +91,11 @@ def init():
         # cfg_dict["bottleneck"]["prior_var_weight"] = (
         #     [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         # )
-        cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
-        var_offset = 3
-        num_heads = 4
-        cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [1] + [0] * (num_heads - var_offset - 1)
+        if "bottleneck" in cfg_dict:
+            cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+            var_offset = 3
+            num_heads = 4
+            cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [1] + [0] * (num_heads - var_offset - 1)
         config = Config(cfg_dict)
 
     # Tokenizer(config.prepro.tokenizer)

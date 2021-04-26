@@ -24,8 +24,7 @@ class TeacherForcedSampler(nn.Module):
         )
 
         if MBART_HACK:
-            # TODO: Use the actual lang id here!!
-            logits[:, :, 250004] = float("1e18")
+            logits.scatter_(-1, batch["tgt_lang"].unsqueeze(1).unsqueeze(2), float("1e18"))
         else:
             logits[:, :, Tokenizer().bos_id] = float("1e18")
 

@@ -11,6 +11,7 @@ from torchseq.utils.tokenizer import Tokenizer
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.kl_divergence import get_kl
 from torchseq.models.vmf import vMF
+from torchseq.models.hyperbolic import HyperbolicBottleneck
 from torchseq.utils.functions import reparameterize_gaussian
 
 import torch.autograd.profiler as profiler
@@ -38,6 +39,9 @@ class PoolingBottleneck(nn.Module):
                 model_dim_out=config.bottleneck.embedding_dim,
                 use_final_linear=False,
             )
+
+        if self.config.bottleneck.get("hyperbolic", False):
+            self.hyperbolic_bottleneck = HyperbolicBottleneck(config)
 
         if self.config.bottleneck.get("use_vmf", False):
             self.vmf = vMF(
@@ -70,6 +74,8 @@ class PoolingBottleneck(nn.Module):
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 ema=self.config.bottleneck.get("quantizer_ema", True),
                 use_gumbel=self.config.bottleneck.get("quantizer_gumbel", False),
+                gumbel_temp=self.config.bottleneck.get("quantizer_gumbel_temp", 1.0),
+                use_straight_through=self.config.bottleneck.get("quantizer_straight_through", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
                 hierarchical=self.config.bottleneck.get("quantizer_hierarchical", False),
@@ -80,6 +86,8 @@ class PoolingBottleneck(nn.Module):
                 transitions_log=self.config.bottleneck.get("quantizer_transitions_log", False),
                 use_cosine_similarities=self.config.bottleneck.get("quantizer_cosine", False),
                 separate_output_embedding=self.config.bottleneck.get("quantizer_separate_output_embedding", False),
+                use_code_classifier=self.config.bottleneck.get("quantizer_classifier", False),
+                additive=self.config.bottleneck.get("quantizer_additive", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
@@ -175,6 +183,9 @@ class PoolingBottleneck(nn.Module):
                 var_weight, self.config.bottleneck.embedding_dim // self.config.encdec.num_heads
             )
 
+        if self.config.bottleneck.get("hyperbolic", False):
+            encoding_pooled, memory = self.hyperbolic_bottleneck(encoding_pooled, memory, global_step)
+
         # Reparameterise for VAE
         if self.config.bottleneck.get("variational", False):
 
@@ -223,19 +234,5 @@ class PoolingBottleneck(nn.Module):
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += kl_loss * kl_weight
-
-        # # HACK: this whole module needs a refactor so that this option below becomes a combination of other (more normal) options
-        # if self.config.bottleneck.get("unpooled_semantic_path", False):
-        #     # Take the full (unpooled) sem encoding, and combine with the pooled+quantized syn encoding
-        #     splice_ix = (
-        #         self.config.bottleneck.embedding_dim
-        #         // self.config.bottleneck.get("quantizer_heads", 1)
-        #         * self.config.bottleneck.get("quantizer_num_residual", 0)
-        #     )
-
-        #     encoding_pooled = torch.cat(
-        #         [encoding[:, :, :splice_ix], encoding_pooled[:, :1, splice_ix:].expand(-1, encoding.shape[1], -1)],
-        #         dim=-1,
-        #     )
 
         return encoding_pooled, memory

@@ -236,9 +236,8 @@ class ModelAgent(BaseAgent):
         this_loss = torch.zeros(output.shape[0], dtype=torch.float).to(self.device)
 
         if self.config.training.get("xe_loss", True):
-            this_loss += self.loss(logits.permute(0, 2, 1), batch[tgt_field]).sum(dim=1) / (
-                batch[tgt_field + "_len"] - 1
-            ).to(this_loss)
+            elementwise_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
+            this_loss += elementwise_loss.sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         if "loss" in memory:
             this_loss += memory["loss"]
@@ -358,7 +357,8 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
-            # print(self.model.bottleneck.quantizer._embedding[1].weight.grad)
+            # print(self.model.bottleneck.quantizer._embedding[1].weight.grad.norm())
+            # print(self.model.bottleneck.quantizer._embedding[1].weight.norm())
             # print(self.model.bottleneck.quantizer._transitions[1].weight.grad.norm())
             # exit()
 

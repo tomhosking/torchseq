@@ -101,10 +101,11 @@ class JsonDataset(Dataset):
             self.fields,
             tok_window=self.config.prepro.tok_window,
             include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
+            mask_prob=self.config.prepro.data.get("token_mask_prob", 0),
         )
 
     @staticmethod
-    def to_tensor(obj, fields, tok_window=64, include_lang_codes=False):
+    def to_tensor(obj, fields, tok_window=64, include_lang_codes=False, mask_prob=0.0):
 
         src_lang = obj.get("src_lang", "en_XX")
         tgt_lang = obj.get("tgt_lang", "en_XX")
@@ -132,6 +133,19 @@ class JsonDataset(Dataset):
 
             sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
             sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
+
+            # HACK: hard coded field name!
+            if f["to"] == "s1" and mask_prob > 0:
+
+                probs = torch.rand(*sample[f["to"]].shape, device=sample[f["to"]].device)
+                mask = torch.logical_and(
+                    torch.logical_and(probs < mask_prob, sample[f["to"]] > 3), sample[f["to"]] < 250000
+                )
+                # print(mask)
+                # print(probs)
+                # print(sample[f['to']])
+                # exit()
+                sample[f["to"]] = torch.where(mask, Tokenizer().mask_id, sample[f["to"]])
 
         if include_lang_codes:
             sample["src_lang"] = torch.LongTensor([src_lang_token])

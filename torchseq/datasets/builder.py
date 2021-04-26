@@ -38,7 +38,16 @@ def dataloader_from_config(config):
         data_loader = ParaphraseDataLoader(config=config)
     elif (
         config.training.dataset
-        in ["squad", "newsqa", "msmarco", "naturalquestions", "drop", "nq_newsqa", "squad_nq_newsqa", "inquisitive"]
+        in [
+            "squad",
+            "newsqa",
+            "msmarco",
+            "naturalquestions",
+            "drop",
+            "nq_newsqa",
+            "squad_nq_newsqa",
+            "inquisitive",
+        ]
         or config.training.dataset[:5] == "squad"
     ):
         data_loader = QADataLoader(config=config)

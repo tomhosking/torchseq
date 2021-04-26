@@ -156,11 +156,7 @@ class Tokenizer(metaclass=Singleton):
         Tokenizer(model_slug)
 
     def decode(self, token_id_tensor):
-        return (
-            Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
-            # .replace(" ##", "")
-            # .replace("# ", "#")
-        )
+        return Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
 
     def get_embeddings(self, model_slug):
         return torch.load("{:}pretrained-vocabs/{:}.embeddings.pt".format(DATA_PATH, model_slug.split("/")[-1]))

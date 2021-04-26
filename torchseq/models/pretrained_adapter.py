@@ -1,13 +1,15 @@
 import math
-
 import torch
 import torch.nn as nn
+
 from transformers import BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.utils.tokenizer import Tokenizer
 import torchseq.models.transformer as custom_transformer
+from torchseq.models.lang_predict_loss import LangPredictLoss
+from torchseq.utils.functions import evaluating
 
 
 # Helper Functions, mostly for making masks
@@ -112,6 +114,9 @@ class PretrainedAdapterModel(nn.Module):
 
         self.mse_loss = nn.MSELoss(reduction="none")
 
+        if self.config.training.get("lang_loss_weight", 0) > 0:
+            self.lang_pred_loss = LangPredictLoss(config)
+
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
             memory = {}
@@ -135,6 +140,9 @@ class PretrainedAdapterModel(nn.Module):
             memory["_test"] = 0
         else:
             memory["_test"] += 1
+
+        if "loss" not in memory:
+            memory["loss"] = 0
 
         # if memory['_test'] == 2:
         #     print(self.src_field , '->', self.tgt_field)
@@ -205,9 +213,14 @@ class PretrainedAdapterModel(nn.Module):
                 this_mse_loss = self.mse_loss(encoding, goal_encoding).sum(dim=2) * (1.0 * ~goal_pad_mask)
                 this_mse_loss = this_mse_loss.sum(dim=1) / (batch[self.tgt_field + "_len"] - 1).to(encoding)
 
-                if "loss" not in memory:
-                    memory["loss"] = 0
                 memory["loss"] += this_mse_loss * self.config.training.get("mse_loss_weight", 0)
+
+            if self.config.training.get("lang_loss_weight", 0) > 0:
+                lang_loss_pos = self.lang_pred_loss(encoding.detach(), memory, batch["src_lang"])
+                with evaluating(self.lang_pred_loss):
+                    lang_loss_neg = self.lang_pred_loss(encoding, memory, batch["src_lang"])
+
+                memory["loss"] += lang_loss_pos + self.config.training.lang_loss_weight * lang_loss_neg
 
         # Build some masks
         tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(self.device)

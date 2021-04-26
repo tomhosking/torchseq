@@ -1,4 +1,4 @@
-from torchseq.utils.functions import cos_sim
+from torchseq.utils.functions import cos_sim, onehot
 import torch
 import torch.nn as nn
 
@@ -31,11 +31,20 @@ class VectorQuantizerMultiHead(nn.Module):
         transitions_log=False,
         use_cosine_similarities=False,
         use_gumbel=False,
+        gumbel_temp=1.0,
+        use_straight_through=True,
         separate_output_embedding=False,
+        use_code_classifier=False,
+        additive=False,
     ):
 
         # residual_head_range=(0, 0),
         super(VectorQuantizerMultiHead, self).__init__()
+
+        if additive and not use_code_classifier:
+            raise Exception(
+                "If additive mode us used in VQ, the output embedding must be separate from the code prediction!"
+            )
 
         self._num_embeddings = num_embeddings
         self._num_heads = num_heads
@@ -46,6 +55,9 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._soft_em = soft_em
         self._use_gumbel = use_gumbel
+        self._gumbel_temp = gumbel_temp
+        self._use_straight_through = use_straight_through
+        self._use_code_classifier = use_code_classifier
 
         self._warmup_steps = warmup_steps
         self._hierarchical = hierarchical
@@ -58,6 +70,8 @@ class VectorQuantizerMultiHead(nn.Module):
         self._transitions_log = transitions_log
 
         self._cos_sim = use_cosine_similarities
+
+        self._additive = additive
 
         if hierarchical:
 
@@ -81,11 +95,17 @@ class VectorQuantizerMultiHead(nn.Module):
             self.dims = [self._embedding_dim] * self._num_heads
 
             self._embedding = nn.ModuleList(
-                [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
+                [
+                    nn.Embedding(self._num_embeddings, self._embedding_dim if not additive else embedding_dim)
+                    for _ in range(num_heads)
+                ]
             )
 
             self._ema_w = nn.ParameterList(
-                [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
+                [
+                    nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim if not additive else embedding_dim))
+                    for _ in range(num_heads)
+                ]
             )
         for embedding in self._embedding:
             embedding.weight.data.normal_()
@@ -98,6 +118,9 @@ class VectorQuantizerMultiHead(nn.Module):
                 embedding.weight.data.normal_()
         else:
             self._output_embedding = None
+
+        if self._use_code_classifier:
+            self._code_classifiers = nn.ModuleList([nn.Linear(d, num_embeddings, bias=True) for d in self.dims])
 
         if self._use_transitions:
             self._transitions = nn.ModuleList(
@@ -146,15 +169,17 @@ class VectorQuantizerMultiHead(nn.Module):
             # Calculate distances
             if self._cos_sim:
                 distances = cos_sim(this_input, embedding.weight)
+            elif self._use_code_classifier:
+                distances = self._code_classifiers[head_ix](this_input)
             else:
                 distances = -1.0 * (
                     torch.sum(this_input ** 2, dim=1, keepdim=True)
-                    + torch.sum(embedding.weight.detach() ** 2, dim=1)
-                    - 2 * torch.matmul(this_input, embedding.weight.t().detach())
+                    + torch.sum(embedding.weight ** 2, dim=1)
+                    - 2 * torch.matmul(this_input, embedding.weight.t())
                 )
 
             # Convert distances into log probs
-            logits = distances if self._use_gumbel else distances.detach()
+            logits = distances.detach() if self._use_straight_through else distances
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
                 logits += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
@@ -175,10 +200,11 @@ class VectorQuantizerMultiHead(nn.Module):
 
                 all_distances.append(distances)
 
-            if self._use_gumbel:
-                hard_probs = torch.nn.functional.gumbel_softmax(logits, tau=1, hard=True, dim=-1)
-                soft_probs = torch.nn.functional.gumbel_softmax(logits, tau=1, hard=False, dim=-1)
-                probs = hard_probs - soft_probs.detach() + soft_probs
+            if self._use_gumbel and self.training:
+                probs = torch.nn.functional.gumbel_softmax(logits, tau=self._gumbel_temp, hard=True, dim=-1)
+            elif self._use_gumbel:
+                indices = torch.argmax(logits, dim=-1)
+                probs = onehot(indices, N=logits.shape[-1])
             else:
                 probs = torch.softmax(logits, dim=-1)
 
@@ -210,7 +236,9 @@ class VectorQuantizerMultiHead(nn.Module):
         if forced_codes is not None:
             assert (
                 forced_codes.shape[1] == self._num_heads
-            ), "If forced_codes is supplied, it must be the same length as the number of quantizer heads!"
+            ), "If forced_codes is supplied, it must be the same length as the number of quantizer heads! {:} vs {:}".format(
+                forced_codes.shape[1], self._num_heads
+            )
             vq_codes = forced_codes.unbind(dim=1)
         elif self._hierarchical and not self._hierarchical_greedy:
             # work backwards!
@@ -243,7 +271,7 @@ class VectorQuantizerMultiHead(nn.Module):
             self._output_embedding if self._output_embedding is not None else self._embedding
         ):
             # If soft training, use distribution
-            if self.training and (self._soft_em or self._transitions):
+            if self.training and (self._soft_em or self._transitions or not self._use_straight_through):
                 this_quantized = torch.matmul(
                     all_probs[head_ix],
                     embedding.weight.detach() if (self._ema and self._output_embedding is None) else embedding.weight,
@@ -255,13 +283,17 @@ class VectorQuantizerMultiHead(nn.Module):
 
             quantized_list.append(this_quantized)
 
-        quantized = torch.cat(quantized_list, dim=1).view(input_shape)
+        quantized = torch.cat(quantized_list, dim=1)
+
+        if self._additive:
+            quantized = torch.sum(quantized, dim=1)
+        quantized = quantized.view(input_shape)
 
         # Losses
         q_latent_loss = nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
         e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
-        loss = self._commitment_cost * e_latent_loss + q_latent_loss
+        loss = 0
 
         # Straight Through Estimator
         if self._residual:
@@ -275,11 +307,14 @@ class VectorQuantizerMultiHead(nn.Module):
                 inputs.view(-1, self._num_heads, self._embedding_dim) * resid_weight
                 + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
             ).view(input_shape)
-        elif not self._use_gumbel:
+            loss += self._commitment_cost * e_latent_loss + q_latent_loss
+        elif self._use_straight_through:
             if self._warmup_steps is not None and global_step is not None:
                 w = min(global_step / self._warmup_steps, 1.0)
                 quantized = inputs + (w * quantized - w * inputs).detach()
             else:
                 quantized = inputs + (quantized - inputs).detach()
+
+            loss += self._commitment_cost * e_latent_loss + q_latent_loss
 
         return loss, quantized, vq_codes

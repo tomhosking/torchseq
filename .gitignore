@@ -28,3 +28,6 @@ coverage.xml
 
 # Sphinx documentation
 docs/_build/
+
+# Temp:
+/torchseq/models/pvae*

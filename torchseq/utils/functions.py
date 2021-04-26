@@ -16,7 +16,7 @@ def onehot(indexes, N=None, ignore_index=None):
     output.scatter_(-1, indexes.unsqueeze(-1), 1)
     if ignore_index is not None and ignore_index >= 0:
         output.masked_fill_(indexes.eq(ignore_index).unsqueeze(-1), 0)
-    return output
+    return output * 1.0
 
 
 # FROM: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
@@ -68,3 +68,18 @@ def reparameterize_gaussian(mu, logvar, var_weight=1.0):
     eps = torch.randn_like(std)
 
     return mu + eps * std * var_weight
+
+
+from contextlib import contextmanager
+
+
+@contextmanager
+def evaluating(net):
+    """Temporarily switch to evaluation mode."""
+    istrain = net.training
+    try:
+        net.eval()
+        yield net
+    finally:
+        if istrain:
+            net.train()

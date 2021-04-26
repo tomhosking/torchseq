@@ -445,7 +445,8 @@ if args.eval or args.test:
 
         for ix, row in enumerate(tqdm(rows)):
             query_ix = q_to_ix[row['sem_input']]
-            tgt_codes = [0] * (NUM_HEADS - NUM_TEMPL_HEADS)
+            # tgt_codes = [0] * (NUM_HEADS - NUM_TEMPL_HEADS)
+            tgt_codes = []
 
             inputs = Variable(torch.tensor([X_src[query_ix]])).cuda()
 
