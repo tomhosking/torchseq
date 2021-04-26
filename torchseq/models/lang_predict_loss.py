@@ -10,7 +10,7 @@ class LangPredictLoss(nn.Module):
         super().__init__()
         self.config = config
 
-        tgt_langs = langs = ["en_XX", "fr_XX", "de_DE", "zh_CN", "es_XX", "ar_AR"]
+        tgt_langs = ["en_XX", "fr_XX", "de_DE", "zh_CN", "es_XX", "ar_AR"]
 
         self.lang_code_to_ix = {v: tgt_langs.index(k) for k, v in FAIRSEQ_LANGUAGE_CODES.items() if k in tgt_langs}
 
@@ -38,7 +38,7 @@ class LangPredictLoss(nn.Module):
 
         logits = self.classifier(pooled)
 
-        lang_ix_batch = torch.tensor([self.lang_code_to_ix[l.item()] for l in lang]).to(logits.device)
+        lang_ix_batch = torch.tensor([self.lang_code_to_ix[x.item()] for x in lang]).to(logits.device)
 
         lang_pred_loss = self.loss(logits, lang_ix_batch)
 
