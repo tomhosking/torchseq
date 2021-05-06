@@ -106,11 +106,11 @@ BART fine tuned on SQuAD - \[ [Download](http://tomho.sk/models/torchseq/qg_bart
 
 ### Paraphrasing
 
-A vanilla autoencoder trained on Paralex
+A vanilla autoencoder trained on Paralex - \[ [Download](http://tomho.sk/models/torchseq/paraphrasing_ae.zip) \]
 
 A VAE model trained on Paralex - \[ [Download](http://tomho.sk/models/torchseq/paraphrasing_vae.zip) \]
 
-A VQ-VAE model trained on Paralex
+A VQ-VAE model trained on Paralex - \[ [Download](http://tomho.sk/models/torchseq/paraphrasing_vqvae.zip) \]
 
 Separator for Paralex and QQP
 
