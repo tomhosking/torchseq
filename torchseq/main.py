@@ -49,12 +49,14 @@ def main():
     if args.load is not None:
         args.config = os.path.join(args.load, "config.json")
 
-        if os.path.exists(os.path.join(args.load, "orig_model.txt")):
+        if os.path.exists(os.path.join(args.load, "model", "checkpoint.pt")):
+            args.load_chkpt = os.path.join(args.load, "model", "checkpoint.pt")
+        elif os.path.exists(os.path.join(args.load, "orig_model.txt")):
             with open(os.path.join(args.load, "orig_model.txt")) as f:
                 chkpt_pth = f.readlines()[0]
             args.load_chkpt = chkpt_pth
         else:
-            args.load_chkpt = os.path.join(args.load, "model", "checkpoint.pt")
+            raise Exception("Tried to load from a path that has no checkpoint or pointer file: {:}".format(args.load))
 
     logger.info("** Running with config={:} **".format(args.config))
 

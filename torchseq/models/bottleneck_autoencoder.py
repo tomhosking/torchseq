@@ -16,6 +16,7 @@ from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
 from torchseq.utils.logging import Logger
 from torchseq.utils.functions import cos_sim
+from torchseq.models.vq_code_predictor import VQCodePredictor
 
 
 class BottleneckAutoencoderModel(nn.Module):
@@ -40,14 +41,34 @@ class BottleneckAutoencoderModel(nn.Module):
                 nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
             )
 
+        if self.config.bottleneck.get("code_predictor", None) is not None:
+            print("Code predictor created")
+            pred_config = self.config.bottleneck.code_predictor
+
+            self.code_predictor = VQCodePredictor(pred_config)
+
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
             memory = {}
 
         # First pass? Construct the encoding
         if "encoding" not in memory:
-            encoding, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
+            encoding, memory = self.seq_encoder(
+                batch[self.src_field],
+                batch[self.src_field + "_len"],
+                memory,
+                include_position=self.config.encoder.get("position_embeddings", True),
+            )
+
             encoding_pooled, memory = self.bottleneck(encoding, memory, batch["_global_step"])
+
+            raw_encoding_pooled = memory["encoding_pooled"]
+
+            if self.config.bottleneck.get(
+                "code_predictor", None
+            ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
+                pred_codes = self.code_predictor.infer(raw_encoding_pooled)
+                batch["forced_codes"] = pred_codes
 
             if self.config.bottleneck.get("split_encoder", False):
                 encoding2, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
@@ -75,7 +96,10 @@ class BottleneckAutoencoderModel(nn.Module):
             if "template" in batch:
                 template_memory = {}
                 template_encoding, template_memory = self.seq_encoder(
-                    batch["template"], batch["template_len"], template_memory
+                    batch["template"],
+                    batch["template_len"],
+                    template_memory,
+                    include_position=self.config.encoder.get("template_position_embeddings", True),
                 )
 
                 template_encoding_pooled, template_memory = self.bottleneck(
@@ -84,6 +108,7 @@ class BottleneckAutoencoderModel(nn.Module):
                     batch["_global_step"],
                     forced_codes=batch.get("forced_codes", None),
                 )
+
                 if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
@@ -105,40 +130,24 @@ class BottleneckAutoencoderModel(nn.Module):
 
                     template_encoding_pooled = template_encoding_pooled_joint
 
-                # splice_ix = (
-                #     self.config.embedding_dim
-                #     // self.config.encdec.get("quantizer_heads", 1)
-                #     * self.config.encdec.get("quantizer_num_residual", 0)
-                # )
-
-                # resid_heads = encoding_pooled[:, :, :splice_ix]
-                # quant_heads = template_encoding_pooled[:, :, splice_ix:]
-
-                # encoding_pooled = torch.cat([resid_heads, quant_heads], dim=-1)
-
                 if self.config.bottleneck.get("use_templ_encoding", False):
-                    # switch = torch.randint(2, (encoding_pooled.shape[0], ), device=encoding_pooled.device).unsqueeze(-1).unsqueeze(-1)
-                    # encoding_pooled[:, :, sep_splice_ix:] = torch.where(switch > 0, template_encoding_pooled[:, :, sep_splice_ix:], encoding_pooled[:, :, sep_splice_ix:])
                     if self.config.bottleneck.get("invert_templ", False):
-                        #
-                        # print("Flipped")
-                        # print(sep_splice_ix)
-                        # print(encoding_pooled.shape)
-                        # exit()
+                        raise Exception("invert_templ is no longer supported")
                         encoding_pooled[:, :, :sep_splice_ix] = template_encoding_pooled[:, :, :sep_splice_ix]
-
+                        raw_encoding_pooled[:, :, :sep_splice_ix] = template_memory["encoding_pooled"][
+                            :, :, :sep_splice_ix
+                        ]
                     else:
-                        # print("Not Flipped")
-                        # print(sep_splice_ix)
-                        # print(encoding_pooled.shape)
-                        # exit()
-                        # if self.config.bottleneck.get("unpooled_semantic_path", False):
-                        encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :1, sep_splice_ix:].expand(
+                        encoding_pooled = torch.cat(
+                            [encoding_pooled[:, :, :sep_splice_ix], template_encoding_pooled[:, :1, sep_splice_ix:]],
+                            dim=2,
+                        ).expand(-1, encoding_pooled.shape[1], -1)
+                        templ_raw_enc = template_memory["encoding_pooled"][:, :1, sep_splice_ix:].expand(
                             -1, encoding_pooled.shape[1], -1
                         )
-
-                        # else:
-                        #     encoding_pooled[:, :, sep_splice_ix:] = template_encoding_pooled[:, :, sep_splice_ix:]
+                        raw_encoding_pooled = torch.cat(
+                            [raw_encoding_pooled[:, :, :sep_splice_ix], templ_raw_enc], dim=2
+                        )
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:
@@ -195,11 +204,14 @@ class BottleneckAutoencoderModel(nn.Module):
             memory["encoding"] = encoding_pooled
             memory["encoding_mask"] = None
 
+            # Note: this returns the encodings *before* bottleneck!
             if sep_splice_ix > 0:
                 memory["sep_encoding_1"] = (
-                    encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
+                    raw_encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
                 )
-            memory["sep_encoding_2"] = encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
+            memory["sep_encoding_2"] = (
+                raw_encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
+            )
 
         # Fwd pass through decoder block
         logits, memory = self.seq_decoder(output, memory)

@@ -78,7 +78,7 @@ class SequenceEncoder(nn.Module):
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
 
-    def forward(self, input_seq, input_seq_len, memory):
+    def forward(self, input_seq, input_seq_len, memory, include_position=True):
         max_input_len = input_seq.shape[1]
 
         # Re-normalise the projections...
@@ -111,9 +111,10 @@ class SequenceEncoder(nn.Module):
         if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
             input_toks_embedded = self.embedding_projection(input_toks_embedded)
 
-        input_embedded = input_toks_embedded * math.sqrt(self.config.encoder.embedding_dim)
+        input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
 
-        input_embedded = self.positional_embeddings(input_embedded.permute(1, 0, 2))
+        if include_position:
+            input_embedded = self.positional_embeddings(input_embedded)
 
         #  Fwd pass through encoder
         if self.config.encdec.bert_encoder:

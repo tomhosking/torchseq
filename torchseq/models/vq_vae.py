@@ -290,7 +290,12 @@ class VectorQuantizerMultiHead(nn.Module):
         quantized = quantized.view(input_shape)
 
         # Losses
-        q_latent_loss = nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
+        if not self._ema:
+            q_latent_loss = (
+                nn.functional.mse_loss(quantized, inputs.detach(), reduction="none").mean(dim=-1).mean(dim=-1)
+            )
+        else:
+            q_latent_loss = 0
         e_latent_loss = nn.functional.mse_loss(quantized.detach(), inputs, reduction="none").mean(dim=-1).mean(dim=-1)
 
         loss = 0
@@ -300,6 +305,8 @@ class VectorQuantizerMultiHead(nn.Module):
             # Calculate residual weightings
             resid_weight = torch.sigmoid(self._alpha).unsqueeze(-1)
 
+            loss += self._commitment_cost * e_latent_loss + q_latent_loss
+
             alpha_loss = torch.sum(torch.square(resid_weight))
             loss += alpha_loss
 
@@ -307,14 +314,14 @@ class VectorQuantizerMultiHead(nn.Module):
                 inputs.view(-1, self._num_heads, self._embedding_dim) * resid_weight
                 + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
             ).view(input_shape)
-            loss += self._commitment_cost * e_latent_loss + q_latent_loss
         elif self._use_straight_through:
+
+            loss += self._commitment_cost * e_latent_loss + q_latent_loss
+
             if self._warmup_steps is not None and global_step is not None:
                 w = min(global_step / self._warmup_steps, 1.0)
                 quantized = inputs + (w * quantized - w * inputs).detach()
             else:
                 quantized = inputs + (quantized - inputs).detach()
-
-            loss += self._commitment_cost * e_latent_loss + q_latent_loss
 
         return loss, quantized, vq_codes

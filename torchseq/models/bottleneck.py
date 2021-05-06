@@ -99,6 +99,8 @@ class PoolingBottleneck(nn.Module):
             else encoding
         )
 
+        memory["encoding_pooled"] = encoding_pooled.detach()
+
         # Quantize
         if self.config.bottleneck.get("vector_quantized", False):
             # splice_begin, splice_end = self.residual_head_range

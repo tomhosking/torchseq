@@ -140,7 +140,7 @@ if not os.path.exists(MODEL_PATH+f'/sep_encoding_1_train.npy') or not os.path.ex
 
     data_loader = JsonDataLoader(config)
 
-    instance = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/", silent=False, verbose=False)
+    instance = ParaphraseAgent(config=config, run_id=None, output_path="./runs/parademo/", silent=False, verbose=False, training_mode=False)
 
     if os.path.exists(os.path.join(MODEL_PATH, "orig_model.txt")):
         with open(os.path.join(MODEL_PATH, "orig_model.txt")) as f:

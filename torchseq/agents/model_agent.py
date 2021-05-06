@@ -135,7 +135,16 @@ class ModelAgent(BaseAgent):
         """
         self.logger.info("Loading from checkpoint " + file_name)
         checkpoint = torch.load(file_name)
-        self.model.load_state_dict(checkpoint["model_state_dict"])
+        missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
+        if len(missing_keys) > 0:
+            self.logger.warn(
+                "Some keys were missing from the loaded checkpoint: \n{:}".format("\n".join(missing_keys))
+            )
+        if len(unexpected_keys) > 0:
+            self.logger.warn(
+                "Some unexpected keys were found in the loaded checkpoint: \n{:}".format("\n".join(unexpected_keys))
+            )
+
         if self.training_mode:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         # self.current_epoch = checkpoint['epoch']
