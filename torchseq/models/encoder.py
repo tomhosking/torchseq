@@ -6,9 +6,7 @@ from transformers import BartModel, BertModel, RobertaModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
-from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
-from torchseq.models.vq_vae import VectorQuantizerMultiHead
 
 import torchseq.models.transformer as custom_transformer
 
