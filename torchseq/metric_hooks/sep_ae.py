@@ -80,7 +80,7 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
-            "path": config.eval.metrics.sepae.eval_dataset,
+            "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
                 {"type": "copy", "from": "tgt", "to": "s2"},
                 {"type": "copy", "from": "syn_input", "to": "template"},
@@ -100,7 +100,7 @@ class SepAEMetricHook(MetricHook):
         with jsonlines.open(
             os.path.join(
                 config.env.data_path,
-                config.eval.metrics.sepae.eval_dataset,
+                config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
         ) as f:
@@ -203,8 +203,8 @@ class SepAEMetricHook(MetricHook):
 
             print("Generating encodings and vq codes to train code predictor")
 
-            dataset_all = config.eval.metrics.sepae.flattened_dataset
-            dataset_clusters = config.eval.metrics.sepae.cluster_dataset
+            dataset_all = config.eval.metrics.sep_ae.flattened_dataset
+            dataset_clusters = config.eval.metrics.sep_ae.cluster_dataset
 
             # if use_qqp:
             #     dataset_all = "qqp-allqs"
@@ -395,7 +395,7 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
-            "path": config.eval.metrics.sepae.eval_dataset,
+            "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
                 {"type": "copy", "from": "sem_input", "to": "s2"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
@@ -423,7 +423,7 @@ class SepAEMetricHook(MetricHook):
         with jsonlines.open(
             os.path.join(
                 config.env.data_path,
-                config.eval.metrics.sepae.eval_dataset,
+                config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
         ) as f:

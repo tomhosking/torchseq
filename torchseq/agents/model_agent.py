@@ -10,7 +10,7 @@ from tqdm import tqdm
 
 from torchseq.agents.base import BaseAgent
 
-from torchseq.models.lr_schedule import get_lr
+from torchseq.models.lr_schedule import get_lr, get_scheduler
 from torchseq.models.samplers.beam_search import BeamSearchSampler
 from torchseq.models.samplers.diverse_beam import DiverseBeamSearchSampler
 from torchseq.models.samplers.greedy import GreedySampler
@@ -90,20 +90,48 @@ class ModelAgent(BaseAgent):
         """
         Initialise the optimizer this agent will use
         """
+        # HACK: this VQ specific code shouldn't be here
+        if self.config.get("bottleneck", {}).get("quantizer_lr", None) is not None:
+            vq_lr = self.config.bottleneck.quantizer_lr
+            param_groups = [
+                {
+                    "params": [
+                        p
+                        for n, p in self.model.named_parameters()
+                        if p.requires_grad and "bottleneck.quantizer._embedding" not in n
+                    ]
+                },
+                {
+                    "params": [p for p in self.model.bottleneck.quantizer._embedding.parameters() if p.requires_grad],
+                    "lr": vq_lr,
+                },
+            ]
+            lr_groups = [self.config.training.lr, vq_lr]
+        else:
+            lr_groups = self.config.training.lr
+            param_groups = [p for p in self.model.parameters() if p.requires_grad]
+
         if self.config.training.opt == "adam":
             self.optimizer = optim.Adam(
-                self.model.parameters(),
+                param_groups,
                 lr=self.config.training.lr,
                 betas=(self.config.training.beta1, self.config.training.beta2),
                 eps=1e-9,
             )
         elif self.config.training.opt == "sgd":
-            self.optimizer = optim.SGD(self.model.parameters(), lr=self.config.training.lr)
+            self.optimizer = optim.SGD(param_groups, lr=self.config.training.lr)
         elif self.config.training.opt == "ranger":
-            self.optimizer = Ranger(self.model.parameters())
+            self.optimizer = Ranger(param_groups)
 
         else:
             raise Exception("Unrecognised optimiser: " + self.config.training.opt)
+
+        self.scheduler = get_scheduler(
+            self.optimizer,
+            lr_groups,
+            self.config.training.lr_schedule,
+            self.config.training.data.get("lr_warmup", True),
+        )
 
     def create_samplers(self):
         """
@@ -147,6 +175,7 @@ class ModelAgent(BaseAgent):
 
         if self.training_mode:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
+            self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
         # self.current_epoch = checkpoint['epoch']
         if "global_step" in checkpoint:
             self.global_step = checkpoint["global_step"]
@@ -187,6 +216,7 @@ class ModelAgent(BaseAgent):
                 "global_step": self.global_step,
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict(),
+                "scheduler_state_dict": self.scheduler.state_dict(),
                 "loss": self.loss,
                 "best_metric": self.best_metric,
             },
@@ -360,7 +390,8 @@ class ModelAgent(BaseAgent):
                     {
                         "loss": loss.detach().item()
                         * float(self.config.training.optim_batch_size)
-                        / float(curr_batch_size)
+                        / float(curr_batch_size),
+                        "lr": self.optimizer.param_groups[0]["lr"],
                     }
                 )
 
@@ -375,21 +406,22 @@ class ModelAgent(BaseAgent):
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
 
-            lr = get_lr(
-                self.config.training.lr,
-                self.global_step,
-                self.config.training.lr_schedule,
-                self.config.training.data.get("lr_warmup", True),
-            )
+            # lr = get_lr(
+            #     self.config.training.lr,
+            #     self.global_step,
+            #     self.config.training.lr_schedule,
+            #     self.config.training.data.get("lr_warmup", True),
+            # )
 
-            Logger().log_scalar("train/lr", lr, self.global_step)
-            for param_group in self.optimizer.param_groups:
-                param_group["lr"] = lr
+            Logger().log_scalar("train/lr", self.optimizer.param_groups[0]["lr"], self.global_step)
+            # for param_group in self.optimizer.param_groups:
+            #     param_group["lr"] = lr
 
             # Gradient accumulation
             if steps_accum >= self.config.training.optim_batch_size:
                 self.optimizer.step()
                 self.optimizer.zero_grad()
+                self.scheduler.step()
                 steps_accum = 0
                 self.global_step += 1
 
