@@ -7,11 +7,11 @@ class MetricHook:
         self.src_field = src_field
         self.tgt_field = tgt_field
 
-    def on_begin_epoch(self):
+    def on_begin_epoch(self, use_test=False):
         self.scores = {}
 
-    def on_batch(self, batch, logits, output, memory):
+    def on_batch(self, batch, logits, output, memory, use_test=False):
         raise NotImplementedError("You need to implement on_batch for your MetricHook!")
 
-    def on_end_epoch(self, agent):
+    def on_end_epoch(self, agent, use_test=False):
         return {k: sum(v) / len(v) for k, v in self.scores.items()}

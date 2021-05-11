@@ -14,14 +14,14 @@ class TextualMetricHook(MetricHook):
     def __init__(self, config, src_field=None, tgt_field=None):
         super().__init__(config, src_field, tgt_field)
 
-    def on_begin_epoch(self):
+    def on_begin_epoch(self, use_test=False):
         self.scores = {"bleu": [], "meteor": [], "em": [], "sari": [], "ibleu": []}
 
         self.gold_targets = []
         self.pred_targets = []
         self.inputs = []
 
-    def on_batch(self, batch, logits, output, memory):
+    def on_batch(self, batch, logits, output, memory, use_test=False):
 
         if self.config.eval.data.get("topk", 1) > 1:
             self.pred_targets.extend([x[0] for x in output])
@@ -35,7 +35,7 @@ class TextualMetricHook(MetricHook):
         # print(len(self.inputs))
         # exit()
 
-    def on_end_epoch(self, _):
+    def on_end_epoch(self, _, use_test=False):
 
         # print(len(self.gold_targets), len(self.pred_targets), len(self.inputs))
 

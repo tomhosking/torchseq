@@ -11,10 +11,10 @@ class QGMetricHook(MetricHook):
     def __init__(self, config, src_field=None, tgt_field=None):
         super().__init__(config, src_field, tgt_field)
 
-    def on_begin_epoch(self):
+    def on_begin_epoch(self, use_test=False):
         self.scores = {"qg_metric": []}
 
-    def on_batch(self, batch, logits, output, memory):
+    def on_batch(self, batch, logits, output, memory, use_test=False):
 
         # Calc QG metric
         # Calculate metric from "On the Importance of Diversity in Question Generation for QA"

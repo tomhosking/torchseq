@@ -484,7 +484,7 @@ class ModelAgent(BaseAgent):
             memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
-    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[]):
+    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False):
         """
         Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
         """
@@ -497,7 +497,7 @@ class ModelAgent(BaseAgent):
         memory_values_to_return = defaultdict(lambda: [])
 
         for hook in metric_hooks:
-            hook.on_begin_epoch()
+            hook.on_begin_epoch(use_test)
 
         with torch.no_grad():
             num_samples = 0
@@ -560,16 +560,16 @@ class ModelAgent(BaseAgent):
 
                 for hook in metric_hooks:
                     # This is a horrible way of getting the current batch worth of decoded output - tidy it up at some point!
-                    hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory)
+                    hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory, use_test)
 
         test_loss /= num_samples
-        self.logger.info("Dev set: Average loss: {:.4f}".format(test_loss))
+        self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
         Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
         all_metrics = {}
         for hook in metric_hooks:
-            hook_values = hook.on_end_epoch(self)
+            hook_values = hook.on_end_epoch(self, use_test)
             all_metrics = {**all_metrics, **hook_values}
 
         if memory_keys_to_return is not None:
@@ -609,7 +609,7 @@ class ModelAgent(BaseAgent):
         if slow_metrics:
             metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
 
-        if slow_metrics and "sep_ae" in self.config.eval.get("metrics", []):
+        if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
 
         self.vq_codes = defaultdict(lambda: [])
@@ -624,7 +624,7 @@ class ModelAgent(BaseAgent):
             valid_loader = data_loader.valid_loader
 
         test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = self.inference(
-            valid_loader, memory_keys_to_return, metric_hooks
+            valid_loader, memory_keys_to_return, metric_hooks, use_test
         )
 
         # for h_ix, codes in self.vq_codes.items():

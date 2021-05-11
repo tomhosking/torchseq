@@ -30,46 +30,46 @@ class SepAEMetricHook(MetricHook):
 
         self.logger = logging.getLogger("SepAEMetric")
 
-    def on_begin_epoch(self):
-        self.scores = {
-            "retrieval": None,
-            "cluster_gen_with_templ_bleu": None,
-            # "cluster_gen_no_templ_bleu": None,
-            # "cluster_gen_no_templ_bleu": None,
-        }
+    def on_begin_epoch(self, use_test=False):
+        self.scores = {}
 
-    def on_batch(self, batch, logits, output, memory):
+    def on_batch(self, batch, logits, output, memory, use_test=False):
         pass
 
-    def on_end_epoch(self, agent):
+    def on_end_epoch(self, agent, use_test=False):
         # Temporarily change the config so the bottleneck is noiseless
         var_weight = self.config.bottleneck.data.get("prior_var_weight", 1.0)
         self.config.bottleneck.data["prior_var_weight"] = 0.0
 
-        self.logger.info("Running generation with oracle template")
-        self.scores["cluster_gen_with_templ_bleu"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent)
-        self.logger.info("...done")
-
-        # self.logger.info("Running generation with noised encodings")
-        # (
-        #     self.scores["cluster_gen_noised_diversity_bleu"],
-        #     self.scores["cluster_gen_noised_diversity_selfbleu"],
-        #     self.scores["cluster_gen_noised_diversity_ibleu"],
-        # ) = SepAEMetricHook.eval_gen_noised_diversity(self.config, agent)
-        # self.logger.info("...done")
-
-        # self.logger.info("Running generation to test reconstruction")
-        # self.scores["sepae_reconstruction"] = SepAEMetricHook.eval_reconstruction(self.config, agent)
-        # self.logger.info("...done")
-
-        if self.config.bottleneck.get("code_predictor", None) is not None:
+        if (
+            self.config.eval.metrics.sep_ae.get("run_codepred", False)
+            and self.config.bottleneck.get("code_predictor", None) is not None
+        ):
             self.logger.info("Running generation with code prediction")
             (
                 self.scores["sepae_codepred_bleu"],
                 self.scores["sepae_codepred_selfbleu"],
                 self.scores["sepae_codepred_ibleu"],
-            ), _ = SepAEMetricHook.eval_gen_codepred_v2(self.config, agent)
+            ), _ = SepAEMetricHook.eval_gen_codepred_v2(self.config, agent, test=use_test)
             self.logger.info("...done")
+
+        if self.config.eval.metrics.sep_ae.get("run_codepred", True):
+            self.logger.info("Running generation with oracle template")
+            self.scores["sepae_oracle"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent, test=use_test)
+            self.logger.info("...done")
+
+        if self.config.eval.metrics.sep_ae.get("run_noised", False):
+            self.logger.info("Running generation with noised encodings")
+            (
+                self.scores["cluster_gen_noised_diversity_bleu"],
+                self.scores["cluster_gen_noised_diversity_selfbleu"],
+                self.scores["cluster_gen_noised_diversity_ibleu"],
+            ) = SepAEMetricHook.eval_gen_noised_diversity(self.config, agent)
+            self.logger.info("...done")
+
+        # self.logger.info("Running generation to test reconstruction")
+        # self.scores["sepae_reconstruction"] = SepAEMetricHook.eval_reconstruction(self.config, agent)
+        # self.logger.info("...done")
 
         # Reset the config
         self.config.bottleneck.data["prior_var_weight"] = var_weight
@@ -80,7 +80,7 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
-            "path": ("qqp-splitforgeneval" if use_qqp else "wikianswers-para-splitforgeneval"),
+            "path": config.eval.metrics.sepae.eval_dataset,
             "field_map": [
                 {"type": "copy", "from": "tgt", "to": "s2"},
                 {"type": "copy", "from": "syn_input", "to": "template"},
@@ -100,11 +100,8 @@ class SepAEMetricHook(MetricHook):
         with jsonlines.open(
             os.path.join(
                 config.env.data_path,
-                (
-                    f"qqp-splitforgeneval/{split}.jsonl"
-                    if use_qqp
-                    else f"wikianswers-para-splitforgeneval/{split}.jsonl"
-                ),
+                config.eval.metrics.sepae.eval_dataset,
+                f"{split}.jsonl",
             )
         ) as f:
             rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
@@ -195,6 +192,7 @@ class SepAEMetricHook(MetricHook):
 
     @abstractmethod
     def eval_gen_codepred_v2(config, agent, test=False, use_qqp=False, train_code_predictor=True):
+        print("Code pred - using test?", test)
         if train_code_predictor:
             # Generate the training data
             # TODO: move these to the config
@@ -205,16 +203,17 @@ class SepAEMetricHook(MetricHook):
 
             print("Generating encodings and vq codes to train code predictor")
 
-            if use_qqp:
-                dataset_all = "qqp-allqs"
-                dataset_clusters = "qqp-clusters"
-                # dataset_geneval = "qqp-splitforgeneval"
-                # dataset_mlppredict = "qqp-exemplarmlppredict"
-            else:
-                dataset_all = "wikianswers-para-allqs"
-                dataset_clusters = "wikianswers-pp"
-                # dataset_geneval = "wikianswers-para-splitforgeneval"
-                # dataset_mlppredict = "wikianswers-para-exemplarmlppredict"
+            dataset_all = config.eval.metrics.sepae.flattened_dataset
+            dataset_clusters = config.eval.metrics.sepae.cluster_dataset
+
+            # if use_qqp:
+            #     dataset_all = "qqp-allqs"
+            #     dataset_clusters = "qqp-clusters"
+            #     # dataset_geneval = "qqp-splitforgeneval"
+            # else:
+            #     dataset_all = "wikianswers-para-allqs"
+            #     dataset_clusters = "wikianswers-pp"
+            #     # dataset_geneval = "wikianswers-para-splitforgeneval"
 
             cfg_dict = copy.deepcopy(config.data)
 
@@ -330,7 +329,7 @@ class SepAEMetricHook(MetricHook):
 
                     dev_loss = 0
 
-                    for x_ix, cluster in enumerate(dev_cluster_ixs[:10000]):
+                    for x_ix, cluster in enumerate(dev_cluster_ixs):
                         inputs = Variable(torch.tensor([X_dev[x_ix]])).cuda()
 
                         if config.bottleneck.get("quantizer_transitions", False):
@@ -368,13 +367,17 @@ class SepAEMetricHook(MetricHook):
                             logits.append(outputs[:, head_ix, :].unsqueeze(1))
                         logits = torch.cat(logits, dim=1)
 
-                        dev_loss += torch.sum(
-                            -1
-                            * torch.nn.functional.log_softmax(logits, dim=-1)
-                            * dev_tgt
-                            / dev_tgt.sum(dim=-1, keepdims=True),
-                            dim=-1,
-                        ).mean()
+                        dev_loss += (
+                            torch.sum(
+                                -1
+                                * torch.nn.functional.log_softmax(logits, dim=-1)
+                                * dev_tgt
+                                / dev_tgt.sum(dim=-1, keepdims=True),
+                                dim=-1,
+                            )
+                            .mean()
+                            .detach()
+                        )
 
                     dev_loss /= x_ix
 
@@ -392,7 +395,7 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
-            "path": "wikianswers-para-splitforgeneval",
+            "path": config.eval.metrics.sepae.eval_dataset,
             "field_map": [
                 {"type": "copy", "from": "sem_input", "to": "s2"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
@@ -420,11 +423,8 @@ class SepAEMetricHook(MetricHook):
         with jsonlines.open(
             os.path.join(
                 config.env.data_path,
-                (
-                    f"qqp-splitforgeneval/{split}.jsonl"
-                    if use_qqp
-                    else f"wikianswers-para-splitforgeneval/{split}.jsonl"
-                ),
+                config.eval.metrics.sepae.eval_dataset,
+                f"{split}.jsonl",
             )
         ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]

@@ -35,7 +35,7 @@ def generate():
     # ans = request.args['ans']
 
     # query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
-    query = {"sem_input": s1, "tgt": s1, "syn_input": s1, "question": "?", "answer": s1}
+    query = {"sem_input": s1, "tgt": "", "syn_input": s1, "question": "?", "answer": s1}
     if "template" in request.args:
         template = request.args["template"]
         query["template"] = template
@@ -64,8 +64,10 @@ def init():
 
     # )
 
-    MODEL_PATH = "./runs/separatorv2/20210308_113131_wa_hierarchical_4codes"
-    # MODEL_PATH = "./models/examples/separator-wa"
+    # MODEL_PATH = "./runs/separator/20210503_125508_wa_replication"
+    # MODEL_PATH = "./runs/separatorv2/20210506_140526_wikianswers_unsupervised"
+
+    MODEL_PATH = "./models/examples/separator-wa-v1.1"
 
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)
@@ -91,11 +93,17 @@ def init():
         # cfg_dict["bottleneck"]["prior_var_weight"] = (
         #     [1.0] * var_offset + [2.5] + [2.5] * (cfg_dict["encdec"]["num_heads"] - var_offset - 1)
         # )
+
+        # cfg_dict["json_dataset"]["field_map"] = [
+        #     {"from": "syn_input", "to": "template"},
+        #     {"from": "tgt", "to": "s2"},
+        #     {"from": "sem_input", "to": "s1"},
+        # ]
         if "bottleneck" in cfg_dict:
             cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
-            var_offset = 3
+            var_offset = 0
             num_heads = 4
-            cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [1] + [0] * (num_heads - var_offset - 1)
+            cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [0] + [0] * (num_heads - var_offset - 1)
         config = Config(cfg_dict)
 
     # Tokenizer(config.prepro.tokenizer)
@@ -104,7 +112,7 @@ def init():
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pt"
 
     app.agent = ParaphraseAgent(
-        config=config, run_id=None, output_path="./runs/parademo/", silent=True, verbose=False, training_mode=True
+        config=config, run_id=None, output_path="./runs/parademo/", silent=True, verbose=False, training_mode=False
     )
 
     app.agent.load_checkpoint(checkpoint_path)

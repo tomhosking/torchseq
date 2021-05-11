@@ -113,6 +113,7 @@ class SequenceEncoder(nn.Module):
 
         input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
 
+        # print(include_position, Tokenizer().decode(input_seq[0]))
         if include_position:
             input_embedded = self.positional_embeddings(input_embedded)
 

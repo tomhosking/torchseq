@@ -24,6 +24,8 @@ from torchseq.datasets.builder import dataloader_from_config
 
 import transformers
 
+AGENT_TYPES = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
+
 """
 Entry point for torchseq CLI
 """
@@ -99,9 +101,7 @@ def main():
         preprocessor.logger.info("...done!")
         return
 
-    agents = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
-
-    agent = agents[config.task](
+    agent = AGENT_TYPES[config.task](
         config,
         run_id,
         args.output_path,

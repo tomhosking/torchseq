@@ -7,9 +7,9 @@ from torchseq.utils.functions import onehot
 class MLPClassifier(torch.nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, num_heads):
         super(MLPClassifier, self).__init__()
-        self.linear = torch.nn.Linear(input_dim, input_dim * num_heads)
-        self.linear2 = torch.nn.Linear(input_dim * num_heads, input_dim * num_heads)
-        self.linear3 = torch.nn.Linear(input_dim * num_heads, output_dim * num_heads)
+        self.linear = torch.nn.Linear(input_dim, hidden_dim)
+        self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
+        self.linear3 = torch.nn.Linear(hidden_dim, output_dim * num_heads)
 
         self.drop1 = torch.nn.Dropout(p=0.2)
         self.drop2 = torch.nn.Dropout(p=0.2)
