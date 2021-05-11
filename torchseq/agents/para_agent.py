@@ -55,7 +55,8 @@ class ParaphraseAgent(ModelAgent):
             self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
 
         # define optimizer
-        self.create_optimizer()
+        if training_mode:
+            self.create_optimizer()
 
         self.set_device()
 

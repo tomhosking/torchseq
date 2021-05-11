@@ -51,7 +51,8 @@ class AQAgent(ModelAgent):
         self.suppression_loss = SuppressionLoss(self.config)
 
         # define optimizer
-        self.create_optimizer()
+        if training_mode:
+            self.create_optimizer()
 
         self.set_device()
 

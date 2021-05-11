@@ -25,7 +25,8 @@ class LangModelAgent(ModelAgent):
         self.model = TransformerLanguageModel(self.config, src_field=self.src_field)
 
         # define optimizer
-        self.create_optimizer()
+        if training_mode:
+            self.create_optimizer()
 
         self.set_device()
 
