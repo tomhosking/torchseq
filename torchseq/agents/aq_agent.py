@@ -15,7 +15,6 @@ from torchseq.agents.model_agent import ModelAgent
 from torchseq.datasets.qa_triple import QATriple
 
 
-from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
 from torchseq.datasets.qa_dataset import QADataset
 from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.aq_transformer import TransformerAqModel

@@ -9,7 +9,6 @@ import torch
 
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.para_agent import ParaphraseAgent
-from torchseq.agents.prepro_agent import PreprocessorAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
@@ -86,14 +85,6 @@ def main():
     logger.info("** Run ID is {:} **".format(run_id))
 
     data_loader = dataloader_from_config(config)
-
-    if args.preprocess:
-        raise Exception("Preprocessing is not currently maintained :(")
-        preprocessor = PreprocessorAgent(config)
-        preprocessor.logger.info("Preprocessing...")
-        preprocessor.run()
-        preprocessor.logger.info("...done!")
-        return
 
     agent = AGENT_TYPES[config.task](
         config,

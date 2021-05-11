@@ -1,5 +1,4 @@
 from torchseq.datasets.paraphrase_loader import ParaphraseDataLoader
-from torchseq.datasets.preprocessed_loader import PreprocessedDataLoader
 from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.datasets.lm_loader import LangmodellingDataLoader
@@ -7,9 +6,7 @@ from torchseq.datasets.lm_loader import LangmodellingDataLoader
 
 def dataloader_from_config(config):
     # define data_loader
-    if config.training.use_preprocessed_data:
-        data_loader = PreprocessedDataLoader(config=config)
-    elif config.training.dataset is None:
+    if config.training.dataset is None:
         data_loader = None
     elif (
         config.training.dataset
