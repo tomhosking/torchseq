@@ -107,7 +107,7 @@ class ModelAgent(BaseAgent):
             ]
             param_groups.append({"params": remaining_params})
         else:
-            lr_by_group = self.config.training.lr
+            lr_by_group = self.config.training.optimizer.lr
             param_groups = [p for p in self.model.parameters() if p.requires_grad]
 
         if self.config.training.optimizer.type == "adam":

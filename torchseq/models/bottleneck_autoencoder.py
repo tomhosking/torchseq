@@ -32,7 +32,6 @@ class BottleneckAutoencoderModel(nn.Module):
             )
 
         if self.config.bottleneck.get("code_predictor", None) is not None:
-            print("Code predictor created")
             pred_config = self.config.bottleneck.code_predictor
 
             self.code_predictor = VQCodePredictor(pred_config)
