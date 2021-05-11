@@ -3,7 +3,6 @@ import sys
 
 # sys.path.insert(0, "./src/")
 
-# from absl import app as absl_app
 from flask import Flask, Response, current_app, redirect, request
 
 from torchseq.agents.para_agent import ParaphraseAgent

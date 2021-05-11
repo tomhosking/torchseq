@@ -3,7 +3,6 @@ import os
 from datetime import datetime
 
 import torch
-from absl import app
 
 
 from . import utils as test_utils
