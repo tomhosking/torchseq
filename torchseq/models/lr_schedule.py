@@ -15,11 +15,10 @@ def get_lr(base_lr, step, scheduled=False, warmup=True):
         return base_lr
 
 
-def get_scheduler(optimizer, base_lr, scheduled=False, warmup=True, last_epoch=-1):
+def get_scheduler(optimizer, base_lr, scheduled=False, warmup=True, num_warmup_steps=10000, last_epoch=-1):
     def lr_lambda(current_step: int):
         if scheduled:
             step = max(current_step, 1)
-            num_warmup_steps = 10000
             if warmup:
                 return min(pow(step, -0.5), step * pow(num_warmup_steps, -1.5))
             else:

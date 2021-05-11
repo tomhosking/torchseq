@@ -90,47 +90,47 @@ class ModelAgent(BaseAgent):
         """
         Initialise the optimizer this agent will use
         """
-        # HACK: this VQ specific code shouldn't be here
-        if self.config.get("bottleneck", {}).get("quantizer_lr", None) is not None:
-            vq_lr = self.config.bottleneck.quantizer_lr
-            param_groups = [
-                {
-                    "params": [
-                        p
-                        for n, p in self.model.named_parameters()
-                        if p.requires_grad and "bottleneck.quantizer._embedding" not in n
-                    ]
-                },
-                {
-                    "params": [p for p in self.model.bottleneck.quantizer._embedding.parameters() if p.requires_grad],
-                    "lr": vq_lr,
-                },
+        param_group_config = self.config.training.optimizer.get("param_groups", {})
+        if len(param_group_config) > 0:
+            param_groups = []
+            lr_by_group = []
+            for pattern, cfg in param_group_config.items():
+                params = [p for n, p in self.model.named_parameters() if p.requires_grad and pattern in n]
+                param_groups.append({"params": params, "lr": cfg["lr"]})
+                lr_by_group.append(cfg["lr"])
+
+            # Add the remaining parameters as a default group
+            remaining_params = [
+                p
+                for n, p in self.model.named_parameters()
+                if p.requires_grad and sum([1 if p in n else 0 for p in param_group_config.keys()]) == 0
             ]
-            lr_groups = [self.config.training.lr, vq_lr]
+            param_groups.append({"params": remaining_params})
         else:
-            lr_groups = self.config.training.lr
+            lr_by_group = self.config.training.lr
             param_groups = [p for p in self.model.parameters() if p.requires_grad]
 
-        if self.config.training.opt == "adam":
+        if self.config.training.optimizer.type == "adam":
             self.optimizer = optim.Adam(
                 param_groups,
-                lr=self.config.training.lr,
-                betas=(self.config.training.beta1, self.config.training.beta2),
+                lr=self.config.training.optimizer.lr,
+                betas=(self.config.training.optimizer.beta1, self.config.training.optimizer.beta2),
                 eps=1e-9,
             )
-        elif self.config.training.opt == "sgd":
-            self.optimizer = optim.SGD(param_groups, lr=self.config.training.lr)
-        elif self.config.training.opt == "ranger":
+        elif self.config.training.optimizer.type == "sgd":
+            self.optimizer = optim.SGD(param_groups, lr=self.config.training.optimizer.lr)
+        elif self.config.training.optimizer.type == "ranger":
             self.optimizer = Ranger(param_groups)
 
         else:
-            raise Exception("Unrecognised optimiser: " + self.config.training.opt)
+            raise Exception("Unrecognised optimiser: " + self.config.training.optimizer.type)
 
         self.scheduler = get_scheduler(
             self.optimizer,
-            lr_groups,
-            self.config.training.lr_schedule,
-            self.config.training.data.get("lr_warmup", True),
+            base_lr=lr_by_group,
+            scheduled=self.config.training.optimizer.lr_schedule,
+            warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
+            num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
         )
 
     def create_samplers(self):
@@ -391,7 +391,7 @@ class ModelAgent(BaseAgent):
                         "loss": loss.detach().item()
                         * float(self.config.training.optim_batch_size)
                         / float(curr_batch_size),
-                        "lr": self.optimizer.param_groups[0]["lr"],
+                        "lr": self.optimizer.param_groups[-1]["lr"],
                     }
                 )
 
@@ -413,7 +413,7 @@ class ModelAgent(BaseAgent):
             #     self.config.training.data.get("lr_warmup", True),
             # )
 
-            Logger().log_scalar("train/lr", self.optimizer.param_groups[0]["lr"], self.global_step)
+            Logger().log_scalar("train/lr", self.optimizer.param_groups[-1]["lr"], self.global_step)
             # for param_group in self.optimizer.param_groups:
             #     param_group["lr"] = lr
 

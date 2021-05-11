@@ -43,9 +43,9 @@ def test_bert_embeds():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config)
 
@@ -90,9 +90,9 @@ def test_paraphrasing_vae():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config)
 
@@ -137,9 +137,9 @@ def test_qg_transformer():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config)
 
