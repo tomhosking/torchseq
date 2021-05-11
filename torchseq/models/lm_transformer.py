@@ -2,12 +2,9 @@ import math
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel
 
-from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
-from torchseq.utils.tokenizer import Tokenizer
 
 
 class TransformerLanguageModel(nn.Module):

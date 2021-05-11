@@ -2,23 +2,7 @@ import torch
 import torch.nn as nn
 
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
-
-
-def onehot(indexes, N=None, ignore_index=None):
-    """
-    Creates a one-representation of indexes with N possible entries
-    if N is not specified, it will suit the maximum index appearing.
-    indexes is a long-tensor of indexes
-    ignore_index will be zero in onehot representation
-    """
-    if N is None:
-        N = indexes.max() + 1
-    sz = list(indexes.size())
-    output = indexes.new().byte().resize_(*sz, N).zero_()
-    output.scatter_(-1, indexes.unsqueeze(-1), 1)
-    if ignore_index is not None and ignore_index >= 0:
-        output.masked_fill_(indexes.eq(ignore_index).unsqueeze(-1), 0)
-    return output
+from torchseq.utils.functions import onehot
 
 
 class BeamSearchSampler(nn.Module):
