@@ -1,8 +1,6 @@
 from torchseq.utils.functions import onehot
 import torch
 
-from torchseq.utils.functions import onehot
-
 
 def get_perplexity(logits, indices, vocab_size=None, ignore_index=None):
     seq_probs = torch.softmax(logits, dim=-1)
