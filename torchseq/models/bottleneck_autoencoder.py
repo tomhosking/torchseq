@@ -3,14 +3,6 @@ import math
 import torch
 import torch.nn as nn
 
-# from transformers import BartModel, BertModel
-
-# from torchseq.models.pooling import MultiHeadedPooling
-# from torchseq.models.positional_embeddings import PositionalEncoding
-# from torchseq.models.multihead_output import MultiHeadOutput
-# from torchseq.utils.tokenizer import Tokenizer
-# from torchseq.models.vq_vae import VectorQuantizer, VectorQuantizerEMA, VectorQuantizerMultiHead
-
 from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
@@ -53,9 +45,6 @@ class BottleneckAutoencoderModel(nn.Module):
 
         # First pass? Construct the encoding
         if "encoding" not in memory:
-            # print('main encoding: ', self.config.encoder.get("position_embeddings", True))
-            # print('s1', batch["s1_text"])
-            # print('s2', batch["s2_text"])
             encoding, memory = self.seq_encoder(
                 batch[self.src_field],
                 batch[self.src_field + "_len"],
@@ -98,8 +87,6 @@ class BottleneckAutoencoderModel(nn.Module):
 
             if "template" in batch:
                 template_memory = {}
-                # print('templ encoding: ', self.config.encoder.get("template_position_embeddings", True))
-                # print(batch["template_text"])
                 template_encoding, template_memory = self.seq_encoder(
                     batch["template"],
                     batch["template_len"],

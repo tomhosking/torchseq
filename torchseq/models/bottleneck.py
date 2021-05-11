@@ -11,7 +11,6 @@ from torchseq.utils.tokenizer import Tokenizer
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.kl_divergence import get_kl
 from torchseq.models.vmf import vMF
-from torchseq.models.hyperbolic import HyperbolicBottleneck
 from torchseq.utils.functions import reparameterize_gaussian
 
 import torch.autograd.profiler as profiler
@@ -39,9 +38,6 @@ class PoolingBottleneck(nn.Module):
                 model_dim_out=config.bottleneck.embedding_dim,
                 use_final_linear=False,
             )
-
-        if self.config.bottleneck.get("hyperbolic", False):
-            self.hyperbolic_bottleneck = HyperbolicBottleneck(config)
 
         if self.config.bottleneck.get("use_vmf", False):
             self.vmf = vMF(
