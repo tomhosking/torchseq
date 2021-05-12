@@ -192,7 +192,7 @@ class SepAEMetricHook(MetricHook):
 
     @abstractmethod
     def eval_gen_codepred_v2(config, agent, test=False, use_qqp=False, train_code_predictor=True):
-        print("Code pred - using test?", test)
+        logger = logging.getLogger("SepAEMetric")
         if train_code_predictor:
             # Generate the training data
             # TODO: move these to the config
@@ -201,7 +201,7 @@ class SepAEMetricHook(MetricHook):
             num_steps = config.bottleneck.code_predictor.num_steps
             MAX_SAMPLES = config.bottleneck.code_predictor.max_samples
 
-            print("Generating encodings and vq codes to train code predictor")
+            logger.info("Generating encodings and vq codes to train code predictor")
 
             dataset_all = config.eval.metrics.sep_ae.flattened_dataset
             dataset_clusters = config.eval.metrics.sep_ae.cluster_dataset
@@ -286,7 +286,7 @@ class SepAEMetricHook(MetricHook):
                 ix += clen
             # Train the code predictor
 
-            print("Training code predictor")
+            logger.info("Training code predictor")
 
             rand_ixs = np.random.randint(0, high=len(train_cluster_ixs), size=(num_steps, bsz))
 
@@ -382,10 +382,10 @@ class SepAEMetricHook(MetricHook):
                     dev_loss /= x_ix
 
                     if dev_loss < best_dev_loss:
-                        print("Saving...")
+                        logger.info("Saving...")
                         agent.save_checkpoint()
                         best_dev_loss = dev_loss
-                    print("Iteration: {}. Loss: {}. Train loss {}.".format(iter, dev_loss.item(), train_loss))
+                    logger.info("Iteration: {}. Loss: {}. Train loss {}.".format(iter, dev_loss.item(), train_loss))
 
             # Now reload the checkpoint - this emulates early stopping, for the code predictor
             save_path = os.path.join(agent.output_path, agent.config.tag, agent.run_id, "model", "checkpoint.pt")

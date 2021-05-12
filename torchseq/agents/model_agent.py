@@ -188,7 +188,7 @@ class ModelAgent(BaseAgent):
             else None
         )
 
-        if self.config.training.opt == "sgd":
+        if self.config.training.optimizer.type == "sgd":
             # Insert meta params if not there already
             for param_group in self.optimizer.param_groups:
                 if "momentum" not in param_group:
@@ -215,8 +215,8 @@ class ModelAgent(BaseAgent):
             {
                 "global_step": self.global_step,
                 "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict(),
-                "scheduler_state_dict": self.scheduler.state_dict(),
+                "optimizer_state_dict": self.optimizer.state_dict() if self.training_mode else None,
+                "scheduler_state_dict": self.scheduler.state_dict() if self.training_mode else None,
                 "loss": self.loss,
                 "best_metric": self.best_metric,
             },
