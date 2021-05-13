@@ -33,8 +33,11 @@ class BottleneckAutoencoderModel(nn.Module):
 
         if self.config.bottleneck.get("code_predictor", None) is not None:
             pred_config = self.config.bottleneck.code_predictor
-
-            self.code_predictor = VQCodePredictor(pred_config)
+            if self.config.bottleneck.get("quantizer_transitions", False):
+                vq_transitions = self.bottleneck.quantizer._transitions
+            else:
+                vq_transitions = None
+            self.code_predictor = VQCodePredictor(pred_config, transitions=vq_transitions)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:

@@ -2,6 +2,9 @@ import logging
 
 import torch
 
+# This project was originally based off this template:
+# https://github.com/moemen95/Pytorch-Project-Template
+
 
 class BaseAgent:
     """

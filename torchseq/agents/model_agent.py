@@ -176,6 +176,15 @@ class ModelAgent(BaseAgent):
         if self.training_mode:
             self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
             self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+
+            if self.config.training.optimizer.type == "sgd":
+                # Insert meta params if not there already
+                for param_group in self.optimizer.param_groups:
+                    if "momentum" not in param_group:
+                        param_group["momentum"] = 0
+                    if "dampening" not in param_group:
+                        param_group["dampening"] = 0
+
         # self.current_epoch = checkpoint['epoch']
         if "global_step" in checkpoint:
             self.global_step = checkpoint["global_step"]
@@ -187,14 +196,6 @@ class ModelAgent(BaseAgent):
             if ("reset_metrics" not in self.config.training.data or not self.config.training.reset_metrics)
             else None
         )
-
-        if self.config.training.optimizer.type == "sgd":
-            # Insert meta params if not there already
-            for param_group in self.optimizer.param_groups:
-                if "momentum" not in param_group:
-                    param_group["momentum"] = 0
-                if "dampening" not in param_group:
-                    param_group["dampening"] = 0
 
         if write_pointer and self.run_id is not None:
             pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")

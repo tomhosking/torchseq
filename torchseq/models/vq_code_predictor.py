@@ -32,9 +32,6 @@ class VQCodePredictor(torch.nn.Module):
         self.transitions = transitions
         self.config = config
 
-        if self.transitions:
-            self.transition_matrix = None
-
         # self.criterion = torch.nn.CrossEntropyLoss().cuda() # computes softmax and then the cross entropy
 
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=config.lr)
@@ -83,10 +80,10 @@ class VQCodePredictor(torch.nn.Module):
 
         # Use teacher forcing to train the subsequent heads
         for head_ix in range(1, self.config.num_heads):
-            if self.transitions:
+            if self.transitions is not None:
                 logits.append(
                     outputs[:, head_ix, :].unsqueeze(1)
-                    + self.transition_matrix[head_ix - 1](code_mask[:, head_ix - 1, :]).detach().unsqueeze(1)
+                    + self.transitions[head_ix - 1](code_mask[:, head_ix - 1, :]).detach().unsqueeze(1)
                 )
             else:
                 logits.append(outputs[:, head_ix, :].unsqueeze(1))

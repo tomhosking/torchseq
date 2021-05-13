@@ -50,7 +50,12 @@ class SepAEMetricHook(MetricHook):
                 self.scores["sepae_codepred_bleu"],
                 self.scores["sepae_codepred_selfbleu"],
                 self.scores["sepae_codepred_ibleu"],
-            ), _ = SepAEMetricHook.eval_gen_codepred_v2(self.config, agent, test=use_test)
+            ), _ = SepAEMetricHook.eval_gen_codepred_v2(
+                self.config,
+                agent,
+                test=use_test,
+                train_code_predictor=self.config.eval.metrics.sep_ae.get("train_codepred", True),
+            )
             self.logger.info("...done")
 
         if self.config.eval.metrics.sep_ae.get("run_codepred", True):
@@ -360,11 +365,20 @@ class SepAEMetricHook(MetricHook):
                         logits = [outputs[:, 0, :].unsqueeze(1)]
 
                         for head_ix in range(1, config.bottleneck.code_predictor.num_heads):
-                            # if code_pred_cfg.transitions:
-                            #     prev_oh = onehot(torch.max(logits[-1], dim=-1).indices, N=code_pred_cfg.output_dim) * 1.0
-                            #     logits.append(outputs[:, head_ix, :].unsqueeze(1) + transitions[head_ix-1](prev_oh))
-                            # else:
-                            logits.append(outputs[:, head_ix, :].unsqueeze(1))
+                            if config.bottleneck.get("quantizer_transitions", False):
+                                prev_oh = (
+                                    onehot(
+                                        torch.max(logits[-1], dim=-1).indices,
+                                        N=config.bottleneck.code_predictor.output_dim,
+                                    )
+                                    * 1.0
+                                )
+                                logits.append(
+                                    outputs[:, head_ix, :].unsqueeze(1)
+                                    + agent.model.code_predictor.transitions[head_ix - 1](prev_oh)
+                                )
+                            else:
+                                logits.append(outputs[:, head_ix, :].unsqueeze(1))
                         logits = torch.cat(logits, dim=1)
 
                         dev_loss += (
