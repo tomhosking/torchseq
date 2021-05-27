@@ -313,6 +313,9 @@ class ModelAgent(BaseAgent):
             else:
                 _ = self.validate(data_loader, save=True)
 
+        epochs_without_improvement = 0
+        best_loss = 1e10
+
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
 
@@ -333,7 +336,15 @@ class ModelAgent(BaseAgent):
                         _ = self.validate(data_loader, save=True)
                     print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
                 else:
-                    _ = self.validate(data_loader, save=True)
+                    test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+                    if test_loss < best_loss:
+                        best_loss = test_loss
+                        epochs_without_improvement = 0
+                    else:
+                        epochs_without_improvement += 1
+                if epochs_without_improvement > 3:
+                    self.logger.info("No improvement in dev loss for 3 epochs - stopping early")
+                    break
             else:
                 # We won't have metrics - but we should update the progress tracker
                 self.update_dashboard()

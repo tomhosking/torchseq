@@ -36,14 +36,21 @@ class VectorQuantizerMultiHead(nn.Module):
         separate_output_embedding=False,
         use_code_classifier=False,
         additive=False,
+        only_final=False,
+        subtract_previous=False,
     ):
 
         # residual_head_range=(0, 0),
         super(VectorQuantizerMultiHead, self).__init__()
 
-        if additive and not use_code_classifier:
+        if additive and not (use_code_classifier or separate_output_embedding):
             raise Exception(
                 "If additive mode us used in VQ, the output embedding must be separate from the code prediction!"
+            )
+
+        if only_final and not (use_code_classifier or separate_output_embedding):
+            raise Exception(
+                "If only final embedding is to be returned in VQ, the output embedding must be separate from the code prediction!"
             )
 
         self._num_embeddings = num_embeddings
@@ -72,6 +79,8 @@ class VectorQuantizerMultiHead(nn.Module):
         self._cos_sim = use_cosine_similarities
 
         self._additive = additive
+        self._only_final = only_final
+        self._subtract_previous = subtract_previous
 
         if hierarchical:
 
@@ -96,14 +105,20 @@ class VectorQuantizerMultiHead(nn.Module):
 
             self._embedding = nn.ModuleList(
                 [
-                    nn.Embedding(self._num_embeddings, self._embedding_dim if not additive else embedding_dim)
+                    nn.Embedding(
+                        self._num_embeddings, self._embedding_dim if not (additive or only_final) else embedding_dim
+                    )
                     for _ in range(num_heads)
                 ]
             )
 
             self._ema_w = nn.ParameterList(
                 [
-                    nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim if not additive else embedding_dim))
+                    nn.Parameter(
+                        torch.Tensor(
+                            num_embeddings, self._embedding_dim if not (additive or only_final) else embedding_dim
+                        )
+                    )
                     for _ in range(num_heads)
                 ]
             )
@@ -165,6 +180,9 @@ class VectorQuantizerMultiHead(nn.Module):
             # this_input = flat_input[:, head_ix, :]
             head_begin, head_end = sum(self.dims[:head_ix]), sum(self.dims[: head_ix + 1])
             this_input = inputs[:, 0, head_begin:head_end]
+
+            if head_ix > 0 and self._subtract_previous:
+                this_input = this_input - torch.matmul(all_probs[head_ix - 1].squeeze(1), embedding.weight)
 
             # Calculate distances
             if self._cos_sim:
@@ -279,11 +297,14 @@ class VectorQuantizerMultiHead(nn.Module):
 
             # otherwise use one hot
             else:
-                this_quantized = embedding(vq_codes[head_ix])
+                this_quantized = embedding(vq_codes[head_ix].type(torch.LongTensor).to(inputs.device)).unsqueeze(1)
 
             quantized_list.append(this_quantized)
 
-        quantized = torch.cat(quantized_list, dim=1)
+        if self._only_final:
+            quantized = quantized_list[-1]
+        else:
+            quantized = torch.cat(quantized_list, dim=1)
 
         if self._additive:
             quantized = torch.sum(quantized, dim=1)

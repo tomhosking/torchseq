@@ -79,6 +79,8 @@ class PoolingBottleneck(nn.Module):
                 separate_output_embedding=self.config.bottleneck.get("quantizer_separate_output_embedding", False),
                 use_code_classifier=self.config.bottleneck.get("quantizer_classifier", False),
                 additive=self.config.bottleneck.get("quantizer_additive", False),
+                subtract_previous=self.config.bottleneck.get("quantizer_subtract_previous", False),
+                only_final=self.config.bottleneck.get("quantizer_only_final", False),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):

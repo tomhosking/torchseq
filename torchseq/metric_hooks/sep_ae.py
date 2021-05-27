@@ -198,6 +198,8 @@ class SepAEMetricHook(MetricHook):
     @abstractmethod
     def eval_gen_codepred_v2(config, agent, test=False, use_qqp=False, train_code_predictor=True):
         logger = logging.getLogger("SepAEMetric")
+        sample_outputs = config.data["eval"].get("sample_outputs", True)
+
         if train_code_predictor:
             # Generate the training data
             # TODO: move these to the config
@@ -222,7 +224,6 @@ class SepAEMetricHook(MetricHook):
 
             cfg_dict = copy.deepcopy(config.data)
 
-            sample_outputs = config.data["eval"].get("sample_outputs", True)
             config.eval.data["sample_outputs"] = False
 
             cfg_dict["training"]["batch_size"] = 24
