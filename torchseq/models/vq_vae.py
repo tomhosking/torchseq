@@ -283,7 +283,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
                 vq_codes.insert(0, torch.argmax(this_probs, dim=-1))
         elif not isinstance(self._code_offset, int) or self._code_offset > 0:
-            print('code offset', self._code_offset)
+            print("code offset", self._code_offset)
             for head_ix in range(self._num_heads):
                 this_offset = (
                     self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
