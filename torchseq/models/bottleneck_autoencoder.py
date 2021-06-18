@@ -131,11 +131,16 @@ class BottleneckAutoencoderModel(nn.Module):
                         ]
                     else:
                         encoding_pooled = torch.cat(
-                            [encoding_pooled[:, :, :sep_splice_ix], template_encoding_pooled[:, :1, sep_splice_ix:]],
+                            [
+                                encoding_pooled[:, :, :sep_splice_ix],
+                                template_encoding_pooled[:, :1, sep_splice_ix:].expand(
+                                    -1, encoding_pooled.shape[1], -1
+                                ),
+                            ],
                             dim=2,
-                        ).expand(-1, encoding_pooled.shape[1], -1)
+                        )
                         templ_raw_enc = template_memory["encoding_pooled"][:, :1, sep_splice_ix:].expand(
-                            -1, encoding_pooled.shape[1], -1
+                            -1, raw_encoding_pooled.shape[1], -1
                         )
                         raw_encoding_pooled = torch.cat(
                             [raw_encoding_pooled[:, :, :sep_splice_ix], templ_raw_enc], dim=2

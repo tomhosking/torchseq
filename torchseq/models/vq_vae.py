@@ -2,7 +2,7 @@ from torchseq.utils.functions import cos_sim, onehot
 import torch
 import torch.nn as nn
 
-from math import e, floor
+from math import e, floor, pow
 
 # https://github.com/zalandoresearch/pytorch-vq-vae/blob/master/vq-vae.ipynb
 
@@ -32,6 +32,7 @@ class VectorQuantizerMultiHead(nn.Module):
         use_cosine_similarities=False,
         use_gumbel=False,
         gumbel_temp=1.0,
+        temp_schedule=False,
         use_straight_through=True,
         separate_output_embedding=False,
         use_code_classifier=False,
@@ -63,6 +64,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._soft_em = soft_em
         self._use_gumbel = use_gumbel
         self._gumbel_temp = gumbel_temp
+        self._temp_schedule = temp_schedule
         self._use_straight_through = use_straight_through
         self._use_code_classifier = use_code_classifier
 
@@ -135,7 +137,7 @@ class VectorQuantizerMultiHead(nn.Module):
             self._output_embedding = None
 
         if self._use_code_classifier:
-            self._code_classifiers = nn.ModuleList([nn.Linear(d, num_embeddings, bias=True) for d in self.dims])
+            self._code_classifiers = nn.ModuleList([nn.Linear(d, num_embeddings, bias=False) for d in self.dims])
 
         if self._use_transitions:
             self._transitions = nn.ModuleList(
@@ -167,6 +169,9 @@ class VectorQuantizerMultiHead(nn.Module):
         if code_entropy_weight > 0:
             cooccur_shape = [num_embeddings] * num_heads
             self.register_buffer("_code_cooccurrence", torch.zeros(*cooccur_shape))
+
+    def encoding_to_logits(self, input, head_ix, prev_codes):
+        pass
 
     def forward(self, inputs, global_step=None, forced_codes=None):
         input_shape = inputs.shape
@@ -219,7 +224,12 @@ class VectorQuantizerMultiHead(nn.Module):
                 all_distances.append(distances)
 
             if self._use_gumbel and self.training:
-                probs = torch.nn.functional.gumbel_softmax(logits, tau=self._gumbel_temp, hard=True, dim=-1)
+                gumbel_temp = (
+                    self._gumbel_temp / pow(1.0 + global_step * 1.0, 0.25)
+                    if self._temp_schedule
+                    else self._gumbel_temp
+                )
+                probs = torch.nn.functional.gumbel_softmax(logits, tau=gumbel_temp, hard=True, dim=-1)
             elif self._use_gumbel:
                 indices = torch.argmax(logits, dim=-1)
                 probs = onehot(indices, N=logits.shape[-1])
@@ -273,13 +283,13 @@ class VectorQuantizerMultiHead(nn.Module):
 
                 vq_codes.insert(0, torch.argmax(this_probs, dim=-1))
         elif not isinstance(self._code_offset, int) or self._code_offset > 0:
-
+            print('code offset', self._code_offset)
             for head_ix in range(self._num_heads):
                 this_offset = (
                     self._code_offset[head_ix] if not isinstance(self._code_offset, int) else self._code_offset
                 )
 
-                min_k = torch.topk(probs, this_offset + 1, dim=1, largest=False).indices
+                min_k = torch.topk(all_probs[head_ix], this_offset + 1, dim=1, largest=False).indices
                 vq_codes.append(min_k[:, this_offset])
         else:
             vq_codes = [torch.argmax(probs, dim=-1) for probs in all_probs]

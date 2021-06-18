@@ -66,6 +66,7 @@ class PoolingBottleneck(nn.Module):
                 ema=self.config.bottleneck.get("quantizer_ema", True),
                 use_gumbel=self.config.bottleneck.get("quantizer_gumbel", False),
                 gumbel_temp=self.config.bottleneck.get("quantizer_gumbel_temp", 1.0),
+                temp_schedule=self.config.bottleneck.get("quantizer_gumbel_temp_schedule", False),
                 use_straight_through=self.config.bottleneck.get("quantizer_straight_through", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
