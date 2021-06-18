@@ -29,11 +29,11 @@ class MultiHeadedPooling(nn.Module):
         head_count = self.head_count
 
         def shape(x, dim=dim_per_head):
-            """  projection """
+            """projection"""
             return x.view(batch_size, -1, head_count, dim).transpose(1, 2)
 
         def unshape(x, dim=dim_per_head):
-            """  compute context """
+            """compute context"""
             return x.transpose(1, 2).contiguous().view(batch_size, -1, head_count * dim)
 
         scores = self.linear_keys(key) if query is None else self.bilinear_keys(key, query)
