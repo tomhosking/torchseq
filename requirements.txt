@@ -13,7 +13,7 @@ pytest>=6.2
 pytest-cov>=2.12
 codecov>=2.1
 flake8>=3.9
-black>=21
+black>=21.6b0
 
 sphinx>=3.3
 sphinx_rtd_theme
