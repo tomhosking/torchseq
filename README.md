@@ -120,17 +120,12 @@ Separator for Paralex and QQP
 If you find TorchSeq useful, please cite one of my papers!
 
 ```
-@inproceedings{hosking-riedel-2019-evaluating,
-    title = "Evaluating Rewards for Question Generation Models",
-    author = "Hosking, Tom  and
-      Riedel, Sebastian",
-    booktitle = "Proceedings of the 2019 Conference of the North {A}merican Chapter of the Association for Computational Linguistics: Human Language Technologies, Volume 1 (Long and Short Papers)",
-    month = jun,
-    year = "2019",
-    address = "Minneapolis, Minnesota",
-    publisher = "Association for Computational Linguistics",
-    url = "https://www.aclweb.org/anthology/N19-1237",
-    doi = "10.18653/v1/N19-1237",
-    pages = "2278--2283",
+@misc{hosking2021factorising,
+      title={Factorising Meaning and Form for Intent-Preserving Paraphrasing}, 
+      author={Tom Hosking and Mirella Lapata},
+      year={2021},
+      eprint={2105.15053},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL}
 }
 ```
