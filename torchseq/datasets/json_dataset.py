@@ -12,7 +12,7 @@ import numpy as np
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 import torchseq.utils.tokenizer as tokenizer
 
-# class LangmodellingDataset(IterableDataset):
+
 class JsonDataset(Dataset):
     def __init__(
         self,
