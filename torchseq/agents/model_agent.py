@@ -162,7 +162,7 @@ class ModelAgent(BaseAgent):
         :return:
         """
         self.logger.info("Loading from checkpoint " + file_name)
-        checkpoint = torch.load(file_name)
+        checkpoint = torch.load(file_name, map_location=(None if torch.cuda.is_available() else "cpu"))
         missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         if len(missing_keys) > 0:
             self.logger.warn(
