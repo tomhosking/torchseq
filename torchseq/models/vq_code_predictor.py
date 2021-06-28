@@ -42,8 +42,9 @@ class LstmClassifier(torch.nn.Module):
     def forward(self, x):
         outputs = self.drop1(torch.nn.functional.relu(self.linear(x)))
         rnn_out = []
+
         for hix in range(self.num_heads):
-            hx, cx = self.rnn(outputs[:, hix, :], (hx, cx))
+            hx, cx = self.rnn(outputs[:, hix, :])
             rnn_out.append(hx)
         outputs = torch.stack(rnn_out, dim=1)
         outputs = self.linear3(outputs)
@@ -54,7 +55,10 @@ class VQCodePredictor(torch.nn.Module):
     def __init__(self, config, transitions=None):
         super(VQCodePredictor, self).__init__()
 
-        self.classifier = MLPClassifier(config.input_dim, config.output_dim, config.hidden_dim, config.num_heads)
+        if config.use_lstm:
+            self.classifier = LstmClassifier(config.input_dim, config.output_dim, config.hidden_dim, config.num_heads)
+        else:
+            self.classifier = MLPClassifier(config.input_dim, config.output_dim, config.hidden_dim, config.num_heads)
 
         self.transitions = transitions
         self.config = config
