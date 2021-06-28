@@ -1,4 +1,5 @@
 import torch
+import torch.nn as nn
 import copy
 
 from torchseq.utils.functions import onehot
@@ -19,6 +20,32 @@ class MLPClassifier(torch.nn.Module):
     def forward(self, x):
         outputs = self.drop1(torch.nn.functional.relu(self.linear(x)))
         outputs = self.drop2(torch.nn.functional.relu(self.linear2(outputs)))
+        outputs = self.linear3(outputs)
+        return outputs.reshape(-1, self.num_heads, self.output_dim)
+
+
+class LstmClassifier(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, num_heads):
+        super(LstmClassifier, self).__init__()
+        self.linear = torch.nn.Linear(input_dim, hidden_dim)
+        self.rnn = nn.LSTMCell(
+            hidden_dim,
+            hidden_dim,
+        )
+        self.linear3 = torch.nn.Linear(hidden_dim, output_dim * num_heads)
+
+        self.drop1 = torch.nn.Dropout(p=0.2)
+        self.drop2 = torch.nn.Dropout(p=0.2)
+        self.num_heads = num_heads
+        self.output_dim = output_dim
+
+    def forward(self, x):
+        outputs = self.drop1(torch.nn.functional.relu(self.linear(x)))
+        rnn_out = []
+        for hix in range(self.num_heads):
+            hx, cx = self.rnn(outputs[:, hix, :], (hx, cx))
+            rnn_out.append(hx)
+        outputs = torch.stack(rnn_out, dim=1)
         outputs = self.linear3(outputs)
         return outputs.reshape(-1, self.num_heads, self.output_dim)
 
@@ -68,7 +95,7 @@ class VQCodePredictor(torch.nn.Module):
         top_1_codes = torch.IntTensor(all_pred_codes)[:, 0, :].to(encoding.device)
         return top_1_codes
 
-    def train_step(self, encoding, code_mask):
+    def train_step(self, encoding, code_mask, take_step=True):
         # Encoding should be shape: bsz x dim
         # code_mask should be a n-hot vector, shape: bsz x codebook
         self.classifier.train()
@@ -93,8 +120,9 @@ class VQCodePredictor(torch.nn.Module):
             -1 * torch.nn.functional.log_softmax(logits, dim=-1) * code_mask / code_mask.sum(dim=-1, keepdims=True),
             dim=-1,
         ).mean()  #
-        loss.backward()
-        self.optimizer.step()
+        if take_step:
+            loss.backward()
+            self.optimizer.step()
 
         return loss.detach().item()
 

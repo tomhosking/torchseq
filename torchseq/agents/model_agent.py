@@ -57,7 +57,7 @@ class ModelAgent(BaseAgent):
         self.run_id = run_id
         self.silent = silent
         self.verbose = verbose
-        self.output_path = output_path
+
         self.training_mode = training_mode
         self.profile = profile
 
@@ -69,11 +69,17 @@ class ModelAgent(BaseAgent):
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
-            os.makedirs(os.path.join(self.output_path, self.config.tag, self.run_id))
-            with open(os.path.join(self.output_path, self.config.tag, self.run_id, "config.json"), "w") as f:
+            self.run_output_path = os.path.join(output_path, self.config.tag, self.run_id)
+            if os.path.exists(self.run_output_path):
+                self.logger.warn(
+                    "Output path ({:}) already exists! Files may be overwritten".format(self.run_output_path)
+                )
+            else:
+                os.makedirs(self.run_output_path)
+            with open(os.path.join(self.run_output_path, "config.json"), "w") as f:
                 json.dump(config.data, f, indent=4)
 
-            Logger(log_path=self.output_path + "/" + self.config.tag + "/" + self.run_id + "/logs")
+            Logger(log_path=self.run_output_path + "/logs")
 
         if self.config.training.get("loss_dropping", 0) > 0:
             self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
@@ -198,7 +204,7 @@ class ModelAgent(BaseAgent):
         )
 
         if write_pointer and self.run_id is not None:
-            pointer_filepath = os.path.join(self.output_path, self.config.tag, self.run_id, "orig_model.txt")
+            pointer_filepath = os.path.join(self.run_output_path, "orig_model.txt")
 
             with open(pointer_filepath, "w") as f:
                 f.write(file_name)
@@ -210,7 +216,7 @@ class ModelAgent(BaseAgent):
         :param is_best: boolean flag to indicate whether current checkpoint's accuracy is the best so far
         :return:
         """
-        save_path = os.path.join(self.output_path, self.config.tag, self.run_id, "model")
+        save_path = os.path.join(self.run_output_path, "model")
         os.makedirs(save_path, exist_ok=True)
         torch.save(
             {
@@ -693,9 +699,9 @@ class ModelAgent(BaseAgent):
             self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
 
             if self.run_id is not None:
-                with open(os.path.join(self.output_path, self.config.tag, self.run_id, "output.txt"), "w") as f:
+                with open(os.path.join(self.run_output_path, "output.txt"), "w") as f:
                     f.write("\n".join([json.dumps(pred) for pred in pred_output]))
-                with open(os.path.join(self.output_path, self.config.tag, self.run_id, "metrics.json"), "w") as f:
+                with open(os.path.join(self.run_output_path, "metrics.json"), "w") as f:
                     json.dump(self.all_metrics_at_best, f)
 
         if (

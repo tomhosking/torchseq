@@ -189,7 +189,15 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_codepred_v2(config, agent, test=False, use_qqp=False, train_code_predictor=True):
+    def eval_gen_codepred_v2(
+        config,
+        agent,
+        test=False,
+        use_qqp=False,
+        train_code_predictor=True,
+        cache_data=False,
+        single_training_target=False,
+    ):
         logger = logging.getLogger("SepAEMetric")
         sample_outputs = config.data["eval"].get("sample_outputs", True)
 
@@ -215,44 +223,61 @@ class SepAEMetricHook(MetricHook):
             #     dataset_clusters = "wikianswers-pp"
             #     # dataset_geneval = "wikianswers-para-splitforgeneval"
 
-            cfg_dict = copy.deepcopy(config.data)
+            if os.path.exists(agent.run_output_path + "/codepred_cache_X.npy"):
+                print("Loading from cache")
+                X = np.load(agent.run_output_path + "/codepred_cache_X.npy")
+                y = np.load(agent.run_output_path + "/codepred_cache_y.npy")
+                X_dev = np.load(agent.run_output_path + "/codepred_cache_X_dev.npy")
+                y_dev = np.load(agent.run_output_path + "/codepred_cache_y_dev.npy")
+            else:
+                print("Cache not found, generating...")
+                cfg_dict = copy.deepcopy(config.data)
 
-            config.eval.data["sample_outputs"] = False
+                config.eval.data["sample_outputs"] = False
 
-            cfg_dict["training"]["batch_size"] = 24
-            cfg_dict["eval"]["eval_batch_size"] = 24
-            cfg_dict["training"]["dataset"] = "json"
-            cfg_dict["eval"]["truncate_dataset"] = MAX_SAMPLES
-            cfg_dict["training"]["shuffle_data"] = False
-            cfg_dict["json_dataset"] = {
-                "path": dataset_all,
-                "field_map": [{"type": "copy", "from": "q", "to": "s2"}, {"type": "copy", "from": "q", "to": "s1"}],
-            }
-            cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+                cfg_dict["training"]["batch_size"] = 24
+                cfg_dict["eval"]["eval_batch_size"] = 24
+                cfg_dict["training"]["dataset"] = "json"
+                cfg_dict["eval"]["truncate_dataset"] = MAX_SAMPLES
+                cfg_dict["training"]["shuffle_data"] = False
+                cfg_dict["json_dataset"] = {
+                    "path": dataset_all,
+                    "field_map": [
+                        {"type": "copy", "from": "q", "to": "s2"},
+                        {"type": "copy", "from": "q", "to": "s1"},
+                    ],
+                }
+                cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
 
-            data_loader = JsonDataLoader(Config(cfg_dict))
+                data_loader = JsonDataLoader(Config(cfg_dict))
 
-            _, _, _, memory_train = agent.inference(
-                data_loader.train_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
-            )
+                _, _, _, memory_train = agent.inference(
+                    data_loader.train_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                )
 
-            X = np.concatenate(
-                [memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], axis=1
-            )
-            y = memory_train["vq_codes"][:, :, 0].tolist()
+                X = np.concatenate(
+                    [memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], axis=1
+                )
+                y = memory_train["vq_codes"][:, :, 0].tolist()
 
-            del memory_train
+                del memory_train
 
-            _, _, _, memory_dev = agent.inference(
-                data_loader.valid_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
-            )
+                _, _, _, memory_dev = agent.inference(
+                    data_loader.valid_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                )
 
-            X_dev = np.concatenate(
-                [memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], axis=1
-            )
-            y_dev = memory_dev["vq_codes"][:, :, 0].tolist()
+                X_dev = np.concatenate(
+                    [memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], axis=1
+                )
+                y_dev = memory_dev["vq_codes"][:, :, 0].tolist()
 
-            del memory_dev
+                del memory_dev
+
+                if cache_data:
+                    np.save(agent.run_output_path + "/codepred_cache_X.npy", X)
+                    np.save(agent.run_output_path + "/codepred_cache_y.npy", y)
+                    np.save(agent.run_output_path + "/codepred_cache_X_dev.npy", X_dev)
+                    np.save(agent.run_output_path + "/codepred_cache_y_dev.npy", y_dev)
 
             with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "train.jsonl")) as f:
                 train_qs = [row for row in f]
@@ -302,7 +327,7 @@ class SepAEMetricHook(MetricHook):
 
                 inputs = Variable(torch.tensor([X[ix] for ix in batch_ixs])).cuda()
 
-                if config.bottleneck.get("quantizer_transitions", False):
+                if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                     tgt_ixs = [np.random.choice(train_cluster_ixs[cix]) for cix in batch_ixs]
                     tgt = torch.cat(
                         [
@@ -354,38 +379,39 @@ class SepAEMetricHook(MetricHook):
                             dev_tgt = torch.where(tgt > 0, 1, 0)
                             # dev_tgt = torch.where(torch.cat([torch.sum(torch.cat([onehot(torch.tensor(y[ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) for ix in cluster[:20]], dim=0), dim=0, keepdims=True)], dim=0) > 0, 1, 0).cuda()
 
-                        outputs = agent.model.code_predictor(inputs)
+                        dev_loss += agent.model.code_predictor.train_step(inputs, dev_tgt, take_step=False)
+                        # outputs = agent.model.code_predictor(inputs)
 
-                        logits = [outputs[:, 0, :].unsqueeze(1)]
+                        # logits = [outputs[:, 0, :].unsqueeze(1)]
 
-                        for head_ix in range(1, config.bottleneck.code_predictor.num_heads):
-                            if config.bottleneck.get("quantizer_transitions", False):
-                                prev_oh = (
-                                    onehot(
-                                        torch.max(logits[-1], dim=-1).indices,
-                                        N=config.bottleneck.code_predictor.output_dim,
-                                    )
-                                    * 1.0
-                                )
-                                logits.append(
-                                    outputs[:, head_ix, :].unsqueeze(1)
-                                    + agent.model.code_predictor.transitions[head_ix - 1](prev_oh)
-                                )
-                            else:
-                                logits.append(outputs[:, head_ix, :].unsqueeze(1))
-                        logits = torch.cat(logits, dim=1)
+                        # for head_ix in range(1, config.bottleneck.code_predictor.num_heads):
+                        #     if config.bottleneck.get("quantizer_transitions", False):
+                        #         prev_oh = (
+                        #             onehot(
+                        #                 torch.max(logits[-1], dim=-1).indices,
+                        #                 N=config.bottleneck.code_predictor.output_dim,
+                        #             )
+                        #             * 1.0
+                        #         )
+                        #         logits.append(
+                        #             outputs[:, head_ix, :].unsqueeze(1)
+                        #             + agent.model.code_predictor.transitions[head_ix - 1](prev_oh)
+                        #         )
+                        #     else:
+                        #         logits.append(outputs[:, head_ix, :].unsqueeze(1))
+                        # logits = torch.cat(logits, dim=1)
 
-                        dev_loss += (
-                            torch.sum(
-                                -1
-                                * torch.nn.functional.log_softmax(logits, dim=-1)
-                                * dev_tgt
-                                / dev_tgt.sum(dim=-1, keepdims=True),
-                                dim=-1,
-                            )
-                            .mean()
-                            .detach()
-                        )
+                        # dev_loss += (
+                        #     torch.sum(
+                        #         -1
+                        #         * torch.nn.functional.log_softmax(logits, dim=-1)
+                        #         * dev_tgt
+                        #         / dev_tgt.sum(dim=-1, keepdims=True),
+                        #         dim=-1,
+                        #     )
+                        #     .mean()
+                        #     .detach()
+                        # )
 
                     dev_loss /= x_ix
 
@@ -396,7 +422,7 @@ class SepAEMetricHook(MetricHook):
                     logger.info("Iteration: {}. Loss: {}. Train loss {}.".format(iter, dev_loss.item(), train_loss))
 
             # Now reload the checkpoint - this emulates early stopping, for the code predictor
-            save_path = os.path.join(agent.output_path, agent.config.tag, agent.run_id, "model", "checkpoint.pt")
+            save_path = os.path.join(agent.run_output_path, "model", "checkpoint.pt")
             agent.load_checkpoint(save_path)
 
         # Now run eval

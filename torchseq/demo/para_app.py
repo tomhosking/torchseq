@@ -36,7 +36,9 @@ def generate():
     # query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
     query = {"sem_input": s1, "tgt": "", "syn_input": s1, "question": "?", "answer": s1}
     if "template" in request.args:
+
         template = request.args["template"]
+        print("Template: ", template)
         query["template"] = template
         query["syn_input"] = template
 
@@ -64,7 +66,7 @@ def init():
     # )
 
     # MODEL_PATH = "./runs/separator/20210503_125508_wa_replication"
-    # MODEL_PATH = "./runs/separatorv2/20210506_140526_wikianswers_unsupervised"
+    # MODEL_PATH = "./runs/separatorv2/20210624_132416_wa_16codes_H4_gumbel_unmatched"
 
     MODEL_PATH = "./models/examples/separator-wa-v1.1"
 
@@ -98,11 +100,11 @@ def init():
         #     {"from": "tgt", "to": "s2"},
         #     {"from": "sem_input", "to": "s1"},
         # ]
-        if "bottleneck" in cfg_dict:
-            cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
-            var_offset = 0
-            num_heads = 4
-            cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [0] + [0] * (num_heads - var_offset - 1)
+        # if "bottleneck" in cfg_dict:
+        #     cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+        #     var_offset = 0
+        #     num_heads = 4
+        #     cfg_dict["bottleneck"]["code_offset"] = [0] * var_offset + [0] + [0] * (num_heads - var_offset - 1)
         config = Config(cfg_dict)
 
     # Tokenizer(config.prepro.tokenizer)
