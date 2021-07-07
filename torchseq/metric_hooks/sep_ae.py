@@ -58,7 +58,7 @@ class SepAEMetricHook(MetricHook):
             )
             self.logger.info("...done")
 
-        if self.config.eval.metrics.sep_ae.get("run_codepred", True):
+        if self.config.eval.metrics.sep_ae.get("run_oracle", True):
             self.logger.info("Running generation with oracle template")
             self.scores["sepae_oracle"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent, test=use_test)
             self.logger.info("...done")
@@ -189,6 +189,59 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
+    def eval_gen_random(config, agent, test=False):
+        # Now run eval
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
+        split = "test" if test else "dev"
+        with jsonlines.open(
+            os.path.join(
+                config.env.data_path,
+                config.eval.metrics.sep_ae.eval_dataset,
+                f"{split}.jsonl",
+            )
+        ) as f:
+            rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
+
+        num_heads = config.bottleneck.code_predictor.num_heads
+        codebook_size = config.bottleneck.codebook_size
+
+        rows = [{**row, "forced_codes": np.random.randint(0, codebook_size - 1, num_heads).tolist()} for row in rows]
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised), test_samples=rows)
+
+        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader)
+
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        # config.bottleneck.data["prior_var_weight"] = 0.0
+
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+        alpha = 0.8
+        ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+        return (tgt_bleu, self_bleu, ibleu), output
+
+    @abstractmethod
     def eval_gen_codepred_v2(
         config,
         agent,
@@ -278,6 +331,8 @@ class SepAEMetricHook(MetricHook):
                     np.save(agent.run_output_path + "/codepred_cache_y.npy", y)
                     np.save(agent.run_output_path + "/codepred_cache_X_dev.npy", X_dev)
                     np.save(agent.run_output_path + "/codepred_cache_y_dev.npy", y_dev)
+
+                print("Cache built")
 
             with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "train.jsonl")) as f:
                 train_qs = [row for row in f]

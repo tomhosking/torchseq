@@ -37,7 +37,9 @@ class BottleneckAutoencoderModel(nn.Module):
                 vq_transitions = self.bottleneck.quantizer._transitions
             else:
                 vq_transitions = None
-            self.code_predictor = VQCodePredictor(pred_config, transitions=vq_transitions)
+            self.code_predictor = VQCodePredictor(
+                pred_config, transitions=vq_transitions, embeddings=self.bottleneck.quantizer._embedding
+            )
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
@@ -59,7 +61,7 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
-                pred_codes = self.code_predictor.infer(raw_encoding_pooled)
+                pred_codes = self.code_predictor.infer(raw_encoding_pooled.squeeze(1))
                 batch["forced_codes"] = pred_codes
 
             if self.config.bottleneck.get("split_encoder", False):

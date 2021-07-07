@@ -108,7 +108,7 @@ def main():
 
     if args.reload_after_train:
         logger.info("Training done - reloading saved model")
-        save_path = os.path.join(agent.output_path, agent.config.tag, agent.run_id, "model", "checkpoint.pt")
+        save_path = os.path.join(agent.run_output_path, "model", "checkpoint.pt")
         agent.load_checkpoint(save_path, write_pointer=False)
         logger.info("...loaded!")
 
