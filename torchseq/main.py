@@ -12,6 +12,7 @@ from torchseq.agents.para_agent import ParaphraseAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
+from torchseq.utils.mckenzie import set_status_mckenzie
 
 from torchseq.datasets.builder import dataloader_from_config
 
@@ -113,6 +114,7 @@ def main():
         logger.info("...loaded!")
 
     if args.validate_train:
+        set_status_mckenzie('validating')
         logger.info("Starting validation (on training set)...")
         _ = agent.validate(
             data_loader, save=False, force_save_output=True, use_train=True, save_model=False, slow_metrics=True
@@ -120,11 +122,13 @@ def main():
         logger.info("...validation done!")
 
     if args.validate:
+        set_status_mckenzie('validating')
         logger.info("Starting validation...")
         _ = agent.validate(data_loader, save=False, force_save_output=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
 
     if args.test:
+        set_status_mckenzie('validating')
         logger.info("Starting testing...")
         _ = agent.validate(
             data_loader, save=False, force_save_output=True, use_test=True, save_model=False, slow_metrics=True

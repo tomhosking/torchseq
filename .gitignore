@@ -16,7 +16,7 @@
 
 *.sh
 
-/aqenv
+/*env/
 /torchseq/external
 .vscode
 /notebooks

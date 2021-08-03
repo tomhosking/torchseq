@@ -25,14 +25,14 @@ setuptools.setup(
         'console_scripts': ['torchseq=torchseq.main:main'],
     },
     install_requires = [
-        'tensorboard==2.2.2',
-        'torch==1.7.0',
-        'tqdm>=4.54',
+        'tensorboard==2.5.0',
+        'torch==1.9.0',
+        'tqdm>=4.61',
         'scipy>=1.5',
         'nltk==3.5.0',
-        'transformers==4.3.2',
-        'tokenizers==0.10.1',
-        'jsonlines>=1.2',
-        'sacrebleu>=1.4'
+        'transformers==4.7.0',
+        'tokenizers==0.10.3',
+        'jsonlines>=2',
+        'sacrebleu>=1.5'
     ],
 )
