@@ -18,6 +18,7 @@ def update_mckenzie(progress, metric):
         except Exception as e:
             logger.warn("Error updating McKenzie: " + repr(e))
 
+
 def set_status_mckenzie(status):
     logger = logging.getLogger("McKenzie")
     if "MCKENZIE_ENDPOINT" in os.environ:

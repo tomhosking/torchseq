@@ -160,7 +160,6 @@ class VQCodePredictor(torch.nn.Module):
                     outputs[:, head_ix, :].unsqueeze(1)
                     + self.transitions[head_ix - 1](code_mask[:, head_ix - 1, :]).detach().unsqueeze(1)
                 )
-
             else:
                 logits.append(outputs[:, head_ix, :].unsqueeze(1))
         logits = torch.cat(logits, dim=1)

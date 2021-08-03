@@ -76,12 +76,13 @@ class PoolingBottleneck(nn.Module):
                 transitions_bias=self.config.bottleneck.get("quantizer_transitions_bias", False),
                 transitions_embed=self.config.bottleneck.get("quantizer_transitions_embed", False),
                 transitions_log=self.config.bottleneck.get("quantizer_transitions_log", False),
+                relative_error=self.config.bottleneck.get("quantizer_relative_error", False),
                 use_cosine_similarities=self.config.bottleneck.get("quantizer_cosine", False),
                 separate_output_embedding=self.config.bottleneck.get("quantizer_separate_output_embedding", False),
                 use_code_classifier=self.config.bottleneck.get("quantizer_classifier", False),
                 additive=self.config.bottleneck.get("quantizer_additive", False),
-                subtract_previous=self.config.bottleneck.get("quantizer_subtract_previous", False),
                 only_final=self.config.bottleneck.get("quantizer_only_final", False),
+                norm_loss_weight=self.config.bottleneck.get("quantizer_norm_loss_weight", None),
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
