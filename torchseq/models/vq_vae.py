@@ -110,6 +110,17 @@ class VectorQuantizerMultiHead(nn.Module):
             self.dims = [self._embedding_dim] * self._num_heads
 
             self._embedding = nn.ModuleList(
+                [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
+            )
+
+            self._ema_w = nn.ParameterList(
+                [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
+            )
+        for embedding in self._embedding:
+            embedding.weight.data.normal_()
+
+        if separate_output_embedding:
+            self._output_embedding = nn.ModuleList(
                 [
                     nn.Embedding(
                         self._num_embeddings, self._embedding_dim if not (additive or only_final) else embedding_dim
@@ -117,28 +128,10 @@ class VectorQuantizerMultiHead(nn.Module):
                     for _ in range(num_heads)
                 ]
             )
-
-            self._ema_w = nn.ParameterList(
-                [
-                    nn.Parameter(
-                        torch.Tensor(
-                            num_embeddings, self._embedding_dim if not (additive or only_final) else embedding_dim
-                        )
-                    )
-                    for _ in range(num_heads)
-                ]
-            )
-        for embedding in self._embedding:
-            embedding.weight.data.normal_()
-
-        if separate_output_embedding:
-            self._input_embedding = nn.ModuleList(
-                [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
-            )
-            for embedding in self._input_embedding:
+            for embedding in self._output_embedding:
                 embedding.weight.data.normal_()
         else:
-            self._input_embedding = None
+            self._output_embedding = None
 
         if self._use_code_classifier:
             self._code_classifiers = nn.ModuleList([nn.Linear(d, num_embeddings, bias=False) for d in self.dims])
@@ -191,28 +184,27 @@ class VectorQuantizerMultiHead(nn.Module):
             this_input = inputs[:, 0, head_begin:head_end]
 
             # Calculate distances
-            in_embeds = self._input_embedding if self._input_embedding is not None else self._embedding
             if self._cos_sim:
-                distances = cos_sim(this_input, in_embeds[head_ix].weight)
+                distances = cos_sim(this_input, self._embedding[head_ix].weight)
             elif self._use_code_classifier:
                 distances = self._code_classifiers[head_ix](this_input)
             else:
                 if self._relative_error and len(all_probs) > 0:
-                    prev_embed = torch.matmul(all_probs[head_ix - 1], in_embeds[head_ix - 1].weight.detach()).squeeze(
-                        1
-                    )
+                    prev_embed = torch.matmul(
+                        all_probs[head_ix - 1], self._embedding[head_ix - 1].weight.detach()
+                    ).squeeze(1)
 
                     resid_error = this_input - prev_embed
                     distances = -1.0 * (
                         torch.sum(resid_error ** 2, dim=1, keepdim=True)
-                        + torch.sum(in_embeds[head_ix].weight ** 2, dim=1)
-                        - 2 * torch.matmul(resid_error, in_embeds[head_ix].weight.t())
+                        + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
+                        - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
                     )
                 else:
                     distances = -1.0 * (
                         torch.sum(this_input ** 2, dim=1, keepdim=True)
-                        + torch.sum(in_embeds[head_ix].weight ** 2, dim=1)
-                        - 2 * torch.matmul(this_input, in_embeds[head_ix].weight.t())
+                        + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
+                        - 2 * torch.matmul(this_input, self._embedding[head_ix].weight.t())
                     )
 
             # Convert distances into log probs
@@ -309,7 +301,8 @@ class VectorQuantizerMultiHead(nn.Module):
             vq_codes = [torch.argmax(probs, dim=-1) for probs in all_probs]
 
         # Now that we have the codes, calculate their embeddings
-        for head_ix, embedding in enumerate(self._embedding):
+        out_embeds = self._output_embedding if self._output_embedding is not None else self._embedding
+        for head_ix, embedding in enumerate(out_embeds):
             # If soft training, use distribution
             if self.training and (self._soft_em or self._transitions or not self._use_straight_through):
                 this_quantized = torch.matmul(
@@ -367,11 +360,12 @@ class VectorQuantizerMultiHead(nn.Module):
             else:
                 quantized = inputs + (quantized - inputs).detach()
 
+        out_embeds = self._output_embedding if self._output_embedding is not None else self._embedding
         if self._norm_loss_weight is not None and self._norm_loss_weight > 0:
             norm_loss = 0.0
             for hix in range(self._num_heads - 1):
-                prev_norm = torch.linalg.matrix_norm(self._embedding[hix].weight) * self._norm_loss_weight
-                this_norm = torch.linalg.matrix_norm(self._embedding[hix + 1].weight)
+                prev_norm = torch.linalg.matrix_norm(out_embeds[hix].weight) * self._norm_loss_weight
+                this_norm = torch.linalg.matrix_norm(out_embeds[hix + 1].weight)
 
                 # Hinge loss
                 if this_norm > prev_norm:

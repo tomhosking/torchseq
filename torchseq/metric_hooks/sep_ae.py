@@ -120,7 +120,7 @@ class SepAEMetricHook(MetricHook):
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
 
-        alpha = 0.8
+        alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu)
@@ -183,7 +183,7 @@ class SepAEMetricHook(MetricHook):
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
 
-        alpha = 0.8
+        alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu)
@@ -236,7 +236,7 @@ class SepAEMetricHook(MetricHook):
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
 
-        alpha = 0.8
+        alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu), output
@@ -529,7 +529,7 @@ class SepAEMetricHook(MetricHook):
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
 
-        alpha = 0.8
+        alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu), output
@@ -576,7 +576,7 @@ class SepAEMetricHook(MetricHook):
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-        alpha = 0.8
+        alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         tgt_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
         self_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*other_outs))).score
         ibleu_div = alpha * tgt_bleu_div - (1 - alpha) * self_bleu_div
