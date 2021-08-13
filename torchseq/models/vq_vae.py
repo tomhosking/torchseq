@@ -41,24 +41,31 @@ class VectorQuantizerMultiHead(nn.Module):
         only_final=False,
         subtract_previous=False,
         norm_loss_weight=None,
+        projected_output=False,
+        full_dim_input=False,
     ):
 
         # residual_head_range=(0, 0),
         super(VectorQuantizerMultiHead, self).__init__()
 
-        if additive and not (use_code_classifier or separate_output_embedding):
+        if additive and not (use_code_classifier or separate_output_embedding or projected_output or full_dim_input):
             raise Exception(
                 "If additive mode us used in VQ, the output embedding must be separate from the code prediction!"
             )
 
-        if only_final and not (use_code_classifier or separate_output_embedding):
+        if only_final and not (use_code_classifier or separate_output_embedding or projected_output or full_dim_input):
             raise Exception(
                 "If only final embedding is to be returned in VQ, the output embedding must be separate from the code prediction!"
             )
 
+        if full_dim_input and not (additive or only_final):
+            raise Exception(
+                "If using full dim as input in VQ, the output embedding must also be full dim (ie additive or only_final)!"
+            )
+
         self._num_embeddings = num_embeddings
         self._num_heads = num_heads
-        self._embedding_dim = embedding_dim // self._num_heads
+        self._embedding_dim = embedding_dim if full_dim_input else embedding_dim // self._num_heads
 
         self._ema = ema
         self._code_offset = code_offset
@@ -87,6 +94,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._additive = additive
         self._only_final = only_final
         self._norm_loss_weight = norm_loss_weight
+        self._full_dim_input = full_dim_input
 
         if hierarchical:
 
@@ -132,6 +140,13 @@ class VectorQuantizerMultiHead(nn.Module):
                 embedding.weight.data.normal_()
         else:
             self._output_embedding = None
+
+        if projected_output:
+            self._output_projection = nn.Linear(
+                self._embedding_dim, self._embedding_dim if not (additive or only_final) else embedding_dim
+            )
+        else:
+            self._output_projection = None
 
         if self._use_code_classifier:
             self._code_classifiers = nn.ModuleList([nn.Linear(d, num_embeddings, bias=False) for d in self.dims])
@@ -181,7 +196,7 @@ class VectorQuantizerMultiHead(nn.Module):
         for head_ix, embedding in enumerate(self._embedding):
             # this_input = flat_input[:, head_ix, :]
             head_begin, head_end = sum(self.dims[:head_ix]), sum(self.dims[: head_ix + 1])
-            this_input = inputs[:, 0, head_begin:head_end]
+            this_input = inputs[:, 0, :] if self._full_dim_input else inputs[:, 0, head_begin:head_end]
 
             # Calculate distances
             if self._cos_sim:
@@ -307,13 +322,15 @@ class VectorQuantizerMultiHead(nn.Module):
             if self.training and (self._soft_em or self._transitions or not self._use_straight_through):
                 this_quantized = torch.matmul(
                     all_probs[head_ix],
-                    embedding.weight.detach() if self._ema else embedding.weight,
+                    embedding.weight.detach() if (self._ema and self._output_embedding is None) else embedding.weight,
                 )
 
             # otherwise use one hot
             else:
                 this_quantized = embedding(vq_codes[head_ix].type(torch.LongTensor).to(inputs.device)).unsqueeze(1)
 
+            if self._output_projection is not None:
+                this_quantized = self._output_projection(this_quantized)
             quantized_list.append(this_quantized)
 
         if self._only_final:
@@ -363,9 +380,11 @@ class VectorQuantizerMultiHead(nn.Module):
         out_embeds = self._output_embedding if self._output_embedding is not None else self._embedding
         if self._norm_loss_weight is not None and self._norm_loss_weight > 0:
             norm_loss = 0.0
+
             for hix in range(self._num_heads - 1):
-                prev_norm = torch.linalg.matrix_norm(out_embeds[hix].weight) * self._norm_loss_weight
-                this_norm = torch.linalg.matrix_norm(out_embeds[hix + 1].weight)
+                print(out_embeds[hix + 1].weight.shape)
+                prev_norm = torch.min(torch.linalg.matrix_norm(out_embeds[hix].weight)) * self._norm_loss_weight
+                this_norm = torch.linalg.norm(out_embeds[hix + 1].weight, dim=-1).mean()
 
                 # Hinge loss
                 if this_norm > prev_norm:

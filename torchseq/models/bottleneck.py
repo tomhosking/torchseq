@@ -54,6 +54,7 @@ class PoolingBottleneck(nn.Module):
             total_quantizer_heads = self.config.bottleneck.get("quantizer_heads", 1)
             num_quantizer_heads = total_quantizer_heads - self.residual_head_range[1] - self.residual_head_range[0]
 
+            quantizer_kwargs = self.config.bottleneck.get("quantizer", {})
             self.quantizer = VectorQuantizerMultiHead(
                 self.config.bottleneck.codebook_size,
                 (self.config.bottleneck.embedding_dim * num_quantizer_heads) // total_quantizer_heads,
@@ -83,6 +84,7 @@ class PoolingBottleneck(nn.Module):
                 additive=self.config.bottleneck.get("quantizer_additive", False),
                 only_final=self.config.bottleneck.get("quantizer_only_final", False),
                 norm_loss_weight=self.config.bottleneck.get("quantizer_norm_loss_weight", None),
+                **quantizer_kwargs,
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None):
