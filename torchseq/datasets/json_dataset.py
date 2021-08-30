@@ -135,8 +135,12 @@ class JsonDataset(Dataset):
             else:
                 lang_tok = []
 
-            sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
-            sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
+            if include_lang_codes:
+                sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
+                sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
+            else:
+                sample[f["to"]] = torch.LongTensor(parsed.field_as_ids(f["to"]))
+                sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]])])
 
             # HACK: hard coded field name!
             if f["to"] == "s1" and mask_prob > 0:

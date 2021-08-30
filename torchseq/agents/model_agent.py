@@ -415,8 +415,8 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
-            # print(self.model.bottleneck.quantizer._embedding[1].weight.grad.norm())
-            # print(self.model.bottleneck.quantizer._embedding[1].weight.norm())
+            # print("q1 grad", self.model.bottleneck.quantizer._embedding[1].weight.grad.norm(dim=-1)[:4])
+            # print("q1 norm", self.model.bottleneck.quantizer._embedding[1].weight.norm(dim=-1)[:4])
             # print(self.model.bottleneck.quantizer._transitions[1].weight.grad.norm())
             # exit()
 

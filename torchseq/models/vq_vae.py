@@ -30,6 +30,7 @@ class VectorQuantizerMultiHead(nn.Module):
         transitions_embed=False,
         transitions_log=False,
         relative_error=False,
+        relative_error_cumulative=False,
         use_cosine_similarities=False,
         use_gumbel=False,
         gumbel_temp=1.0,
@@ -43,6 +44,8 @@ class VectorQuantizerMultiHead(nn.Module):
         norm_loss_weight=None,
         projected_output=False,
         full_dim_input=False,
+        init_decay_weight=1.0,
+        init_embeds_xavier=False,
     ):
 
         # residual_head_range=(0, 0),
@@ -88,6 +91,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._transitions_log = transitions_log
 
         self._relative_error = relative_error
+        self._relative_error_cumulative = relative_error_cumulative
 
         self._cos_sim = use_cosine_similarities
 
@@ -124,8 +128,10 @@ class VectorQuantizerMultiHead(nn.Module):
             self._ema_w = nn.ParameterList(
                 [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
             )
-        for embedding in self._embedding:
-            embedding.weight.data.normal_()
+        for hix, embedding in enumerate(self._embedding):
+            torch.nn.init.xavier_uniform_(
+                embedding.weight.data, gain=6.0 * init_decay_weight ** hix
+            ) if init_embeds_xavier else embedding.weight.data.normal_(std=0.5 * init_decay_weight ** hix)
 
         if separate_output_embedding:
             self._output_embedding = nn.ModuleList(
@@ -198,6 +204,9 @@ class VectorQuantizerMultiHead(nn.Module):
             head_begin, head_end = sum(self.dims[:head_ix]), sum(self.dims[: head_ix + 1])
             this_input = inputs[:, 0, :] if self._full_dim_input else inputs[:, 0, head_begin:head_end]
 
+            # print(f"h{head_ix} input", torch.linalg.norm(this_input, dim=-1)[:4])
+            # print(f"h{head_ix} embed", torch.linalg.norm(embedding.weight, dim=-1)[:4])
+
             # Calculate distances
             if self._cos_sim:
                 distances = cos_sim(this_input, self._embedding[head_ix].weight)
@@ -205,11 +214,18 @@ class VectorQuantizerMultiHead(nn.Module):
                 distances = self._code_classifiers[head_ix](this_input)
             else:
                 if self._relative_error and len(all_probs) > 0:
-                    prev_embed = torch.matmul(
-                        all_probs[head_ix - 1], self._embedding[head_ix - 1].weight.detach()
-                    ).squeeze(1)
+                    if self._relative_error_cumulative:
+                        resid_error = this_input
+                        for hix in range(head_ix):
+                            resid_error = resid_error - torch.matmul(
+                                all_probs[hix], self._embedding[hix].weight  # .detach()
+                            ).squeeze(1)
+                    else:
+                        prev_embed = torch.matmul(
+                            all_probs[head_ix - 1], self._embedding[head_ix - 1].weight  # .detach()
+                        ).squeeze(1)
 
-                    resid_error = this_input - prev_embed
+                        resid_error = this_input - prev_embed
                     distances = -1.0 * (
                         torch.sum(resid_error ** 2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
@@ -272,7 +288,10 @@ class VectorQuantizerMultiHead(nn.Module):
                     )
                     setattr(self, "_ema_cluster_size" + str(head_ix), _ema_cluster_size)
 
-                    dw = torch.matmul(probs.t(), this_input)
+                    if self._relative_error and len(all_probs) > 1:
+                        dw = torch.matmul(probs.t(), resid_error)
+                    else:
+                        dw = torch.matmul(probs.t(), this_input)
                     self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
 
                     self._embedding[head_ix].weight.data = nn.Parameter(
@@ -368,7 +387,6 @@ class VectorQuantizerMultiHead(nn.Module):
                 + quantized.detach().view(-1, self._num_heads, self._embedding_dim) * (1 - resid_weight)
             ).view(input_shape)
         elif self._use_straight_through:
-
             loss += self._commitment_cost * e_latent_loss + q_latent_loss
 
             if self._warmup_steps is not None and global_step is not None:
@@ -382,13 +400,17 @@ class VectorQuantizerMultiHead(nn.Module):
             norm_loss = 0.0
 
             for hix in range(self._num_heads - 1):
-                print(out_embeds[hix + 1].weight.shape)
-                prev_norm = torch.min(torch.linalg.matrix_norm(out_embeds[hix].weight)) * self._norm_loss_weight
-                this_norm = torch.linalg.norm(out_embeds[hix + 1].weight, dim=-1).mean()
+                prev_norm = torch.min(torch.linalg.norm(out_embeds[hix].weight, dim=-1)) * self._norm_loss_weight
+                this_norm = torch.linalg.norm(out_embeds[hix + 1].weight, dim=-1)
 
                 # Hinge loss
-                if this_norm > prev_norm:
-                    norm_loss += this_norm - prev_norm
+                norm_loss += torch.where(
+                    this_norm - prev_norm > 0.0, this_norm - prev_norm, torch.zeros_like(this_norm)
+                ).mean()
             loss += norm_loss
+
+        # print('vq: ', vq_codes)
+        # print(quantized.shape)
+        # print(quantized[0,0,:10])
 
         return loss, quantized, vq_codes

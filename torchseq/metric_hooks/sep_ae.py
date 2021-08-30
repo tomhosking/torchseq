@@ -41,6 +41,9 @@ class SepAEMetricHook(MetricHook):
         var_weight = self.config.bottleneck.data.get("prior_var_weight", 1.0)
         self.config.bottleneck.data["prior_var_weight"] = 0.0
 
+        sample_outputs = self.config.data["eval"].get("sample_outputs", True)
+        self.config.eval.data["sample_outputs"] = True
+
         if (
             self.config.eval.metrics.sep_ae.get("run_codepred", False)
             and self.config.bottleneck.get("code_predictor", None) is not None
@@ -55,6 +58,7 @@ class SepAEMetricHook(MetricHook):
                 agent,
                 test=use_test,
                 train_code_predictor=self.config.eval.metrics.sep_ae.get("train_codepred", True),
+                cache_data=self.config.eval.metrics.sep_ae.get("cache_data", True),
             )
             self.logger.info("...done")
 
@@ -78,6 +82,7 @@ class SepAEMetricHook(MetricHook):
 
         # Reset the config
         self.config.bottleneck.data["prior_var_weight"] = var_weight
+        self.config.eval.data["sample_outputs"] = sample_outputs
         return self.scores
 
     @abstractmethod
@@ -98,7 +103,36 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
+        _, _, (output, _, _), memory = agent.inference(
+            data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+        )
+
+        # # Now run again with forced codes
+        # Confirmed - this doesn't need to be run separately
+        # samples = (data_loader._test if test else data_loader._valid).samples
+        # samples = [{**x, "forced_codes": codes} for x, codes in zip(samples, memory["vq_codes"])]
+        # # print('From run 1')
+        # # print(output[0])
+        # # print(samples[0])
+        # # print(len(samples), len(memory['vq_codes']))
+        # config_gen_with_templ["json_dataset"] = {
+        #     "path": None,
+        #     "field_map": [
+        #         {"type": "copy", "from": "tgt", "to": "s2"},
+        #         {"type": "copy", "from": "syn_input", "to": "template"},
+        #         {"type": "copy", "from": "sem_input", "to": "s1"},
+        #         {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
+        #     ],
+        # }
+
+        # forced_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+        # _, _, (output, _, _), memory_forced = agent.inference(
+        #     forced_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+        # )
+
+        # print('From run 2')
+        # print(output[0])
+        # print(memory_forced['vq_codes'][0])
 
         split = "test" if test else "dev"
 

@@ -106,6 +106,9 @@ class BottleneckAutoencoderModel(nn.Module):
                 if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
+                if "vq_codes" in memory:
+                    memory["vq_codes"] = template_memory["vq_codes"]
+
                 if self.config.bottleneck.get("split_encoder", False):
                     template_encoding2, memory = self.seq_encoder(
                         batch["template"], batch["template_len"], template_memory
@@ -208,8 +211,14 @@ class BottleneckAutoencoderModel(nn.Module):
                 memory["sep_encoding_1"] = (
                     raw_encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
                 )
+                memory["sep_encoding_1_after_bottleneck"] = (
+                    encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
+                )
             memory["sep_encoding_2"] = (
                 raw_encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
+            )
+            memory["sep_encoding_2_after_bottleneck"] = (
+                encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
             )
 
         # Fwd pass through decoder block

@@ -18,7 +18,7 @@ class JsonDataLoader:
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
-        train = JsonDataset(
+        self._train = JsonDataset(
             config=config,
             path=os.path.join(config.env.data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
@@ -30,7 +30,7 @@ class JsonDataLoader:
             length_limit=self.config.eval.get("truncate_dataset", None),
             repeat_samples=self.config.eval.get("repeat_samples", None),
         )
-        valid = JsonDataset(
+        self._valid = JsonDataset(
             config=config,
             path=os.path.join(config.env.data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
@@ -41,7 +41,7 @@ class JsonDataLoader:
             length_limit=self.config.eval.get("truncate_dataset", None),
             repeat_samples=self.config.eval.get("repeat_samples", None),
         )
-        test = JsonDataset(
+        self._test = JsonDataset(
             config=config,
             path=os.path.join(config.env.data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
@@ -53,8 +53,8 @@ class JsonDataLoader:
             repeat_samples=self.config.eval.get("repeat_samples", None),
         )
 
-        self.len_train_data = len(train)
-        self.len_valid_data = len(valid)
+        self.len_train_data = len(self._train)
+        self.len_valid_data = len(self._valid)
         # self.len_test_data = len(test)
 
         # TODO: check whether running in silent mode
@@ -70,9 +70,9 @@ class JsonDataLoader:
         # self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
         # self.test_iterations = (self.len_test_data + self.config.training.batch_size - 1) // self.config.training.batch_size
 
-        if train.exists:
+        if self._train.exists:
             self.train_loader = DataLoader(
-                train,
+                self._train,
                 batch_size=config.training.batch_size,
                 shuffle=self.config.training.data.get("shuffle_data", True),
                 num_workers=2,
@@ -80,18 +80,18 @@ class JsonDataLoader:
                 worker_init_fn=init_worker,
             )
 
-        if valid.exists:
+        if self._valid.exists:
             self.valid_loader = DataLoader(
-                valid,
+                self._valid,
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
                 collate_fn=JsonDataset.pad_and_order_sequences,
                 worker_init_fn=init_worker,
             )
-        if test.exists:
+        if self._test.exists:
             self.test_loader = DataLoader(
-                test,
+                self._test,
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,

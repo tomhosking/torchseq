@@ -104,6 +104,11 @@ def main():
 
     if args.train:
         logger.info("Starting training...")
+
+        # TEMP: save out the VQ embeds *before* they've been trained, for debug
+        if config.get("bottleneck", {}).get("quantizer_gumbel", False):
+            torch.save(agent.model.bottleneck.quantizer._embedding, agent.run_output_path + "/vqembedsinit.pt")
+
         agent.train(data_loader)
         logger.info("...training done!")
 

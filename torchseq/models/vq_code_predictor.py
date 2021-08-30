@@ -58,12 +58,47 @@ class LstmClassifier(torch.nn.Module):
         return outputs
 
 
+class RecurrentMlpClassifier(torch.nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, num_heads, seq_dim=None):
+        super(RecurrentMlpClassifier, self).__init__()
+        recur_in_dim = input_dim + (seq_dim if seq_dim is not None else hidden_dim)
+        # dims = [input_dim] + [recur_in_dim] * (num_heads - 1)
+
+        self.linear = torch.nn.ModuleList([torch.nn.Linear(recur_in_dim, hidden_dim) for i in range(num_heads)])
+        self.linear2 = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, hidden_dim) for i in range(num_heads)])
+        self.linear3 = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, output_dim) for i in range(num_heads)])
+
+        self.drop1 = torch.nn.ModuleList([torch.nn.Dropout(p=0.2) for i in range(num_heads)])
+        self.drop2 = torch.nn.ModuleList([torch.nn.Dropout(p=0.2) for i in range(num_heads)])
+        self.num_heads = num_heads
+        self.output_dim = output_dim
+
+    def forward(self, x, seq=None):
+        all_outputs = []
+        for hix in range(self.num_heads if seq is None else seq.shape[1]):
+            full_input = torch.cat([x, seq[:, hix, :]], dim=-1)
+            outputs = self.drop1[hix](torch.nn.functional.relu(self.linear[hix](full_input)))
+            outputs = self.drop2[hix](torch.nn.functional.relu(self.linear2[hix](outputs)))
+            outputs = self.linear3[hix](outputs)
+            all_outputs.append(outputs)
+        all_outputs = torch.stack(all_outputs, dim=1)
+        return all_outputs
+
+
 class VQCodePredictor(torch.nn.Module):
     def __init__(self, config, transitions=None, embeddings=None):
         super(VQCodePredictor, self).__init__()
 
         if config.get("use_lstm", False):
             self.classifier = LstmClassifier(
+                config.input_dim,
+                config.output_dim,
+                config.hidden_dim,
+                config.num_heads,
+                seq_dim=config.get("lstm_seq_dim", None),
+            )
+        elif config.get("use_recurrent_mlp", False):
+            self.classifier = RecurrentMlpClassifier(
                 config.input_dim,
                 config.output_dim,
                 config.hidden_dim,
@@ -107,7 +142,15 @@ class VQCodePredictor(torch.nn.Module):
                             embed(torch.tensor(x).to(encoding.device)).unsqueeze(0).unsqueeze(1).detach()
                             for x, embed in zip(combo, self.embeddings)
                         ]
-                        seq = torch.cat([seq_init, *seq_embedded], dim=1)
+                        if self.config.additive:
+                            seq_elements = [seq_init, *seq_embedded]
+                            seq_cumul = []
+                            for j in range(len(seq_elements)):
+                                seq_cumul.append(torch.sum(seq_elements[: (j + 1)], dim=1, keepdim=True))
+                            seq = torch.cat(seq_cumul, dim=1)
+
+                        else:
+                            seq = torch.cat([seq_init, *seq_embedded], dim=1)
                         curr_logits = self.classifier(encoding[bix].unsqueeze(0), seq)[0, h_ix, :]
                     else:
                         curr_logits = logits[h_ix, :]

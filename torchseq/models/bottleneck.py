@@ -123,6 +123,11 @@ class PoolingBottleneck(nn.Module):
             memory["loss"] += vq_loss
             memory["vq_codes"] = torch.cat([x.unsqueeze(1).detach() for x in quantizer_indices], dim=1)
 
+            if forced_codes is not None:
+                assert (
+                    forced_codes.detach().tolist() == memory["vq_codes"].detach().tolist()
+                ), "Forced codes != vq_codes assigned by quantizer!"
+
         if self.config.bottleneck.get("pooling_range", None) is not None:
             begin_hix, end_hix = self.config.bottleneck.get("pooling_range", (0, 0))
             begin_ix = (
