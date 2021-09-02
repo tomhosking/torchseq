@@ -1,6 +1,5 @@
 import json
 import os
-from torchseq.metric_hooks.rouge import RougeMetricHook
 
 import numpy as np
 import torch
