@@ -40,12 +40,12 @@ class VectorQuantizerMultiHead(nn.Module):
         use_code_classifier=False,
         additive=False,
         only_final=False,
-        subtract_previous=False,
         norm_loss_weight=None,
         projected_output=False,
         full_dim_input=False,
         init_decay_weight=1.0,
         init_embeds_xavier=False,
+        head_dropout=None,
     ):
 
         # residual_head_range=(0, 0),
@@ -99,6 +99,8 @@ class VectorQuantizerMultiHead(nn.Module):
         self._only_final = only_final
         self._norm_loss_weight = norm_loss_weight
         self._full_dim_input = full_dim_input
+
+        self._head_dropout = head_dropout
 
         if hierarchical:
 
@@ -358,6 +360,11 @@ class VectorQuantizerMultiHead(nn.Module):
             quantized = torch.cat(quantized_list, dim=1)
 
         if self._additive:
+            if self._head_dropout is not None and self._head_dropout > 0:
+                dist = torch.distributions.Bernoulli(1 - self._head_dropout)
+                mask = dist.sample(sample_shape=(*quantized.shape[:-1], 1))
+                mask = torch.cumprod(mask, dim=1).to(quantized.device)
+                quantized = quantized * mask
             quantized = torch.sum(quantized, dim=1)
         quantized = quantized.view(input_shape)
 

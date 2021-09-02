@@ -59,6 +59,8 @@ class SepAEMetricHook(MetricHook):
                 test=use_test,
                 train_code_predictor=self.config.eval.metrics.sep_ae.get("train_codepred", True),
                 cache_data=self.config.eval.metrics.sep_ae.get("cache_data", True),
+                single_training_target=self.config.eval.metrics.sep_ae.get("single_target", False),
+                enforce_unique_codes=self.config.eval.metrics.sep_ae.get("enforce_unique_codes", False),
             )
             self.logger.info("...done")
 
@@ -284,6 +286,7 @@ class SepAEMetricHook(MetricHook):
         train_code_predictor=True,
         cache_data=False,
         single_training_target=False,
+        enforce_unique_codes=False,
     ):
         logger = logging.getLogger("SepAEMetric")
         sample_outputs = config.data["eval"].get("sample_outputs", True)
@@ -380,6 +383,9 @@ class SepAEMetricHook(MetricHook):
                     cluster_ixs = list(range(ix, ix + clen))
                     # if args.dataset != 'qqp':
                     cluster_ixs.remove(ix + i)
+                    if enforce_unique_codes:
+                        cluster_ixs = [cix for cix in cluster_ixs if (y[cix] != y[ix]).any()]
+
                     train_cluster_ixs.append(cluster_ixs)
                 ix += clen
 
@@ -400,6 +406,7 @@ class SepAEMetricHook(MetricHook):
             # Train the code predictor
 
             logger.info("Training code predictor")
+            logger.info("Single training: {:}".format("on" if single_training_target else "off"))
 
             rand_ixs = np.random.randint(0, high=len(train_cluster_ixs), size=(num_steps, bsz))
 
@@ -414,10 +421,14 @@ class SepAEMetricHook(MetricHook):
             for iter in tqdm(range(num_steps), desc="Training code predictor", disable=agent.silent):
                 batch_ixs = rand_ixs[iter, :]
 
-                inputs = Variable(torch.tensor([X[ix] for ix in batch_ixs])).cuda()
+                inputs = Variable(torch.tensor([X[ix] for ix in batch_ixs if len(train_cluster_ixs[ix]) > 0])).cuda()
 
                 if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
-                    tgt_ixs = [np.random.choice(train_cluster_ixs[cix]) for cix in batch_ixs]
+                    tgt_ixs = [
+                        np.random.choice(train_cluster_ixs[cix])
+                        for cix in batch_ixs
+                        if len(train_cluster_ixs[cix]) > 0
+                    ]
                     tgt = torch.cat(
                         [
                             onehot(torch.tensor(y[tgt_ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0)
@@ -427,7 +438,11 @@ class SepAEMetricHook(MetricHook):
                         dim=0,
                     ).cuda()
                 else:
-                    tgt_ixs = [[y[ix] for ix in train_cluster_ixs[cix]][:100] for cix in batch_ixs]
+                    tgt_ixs = [
+                        [y[ix] for ix in train_cluster_ixs[cix]][:100]
+                        for cix in batch_ixs
+                        if len(train_cluster_ixs[cix]) > 0
+                    ]
                     max_len = max([len(tgt) for tgt in tgt_ixs])
                     # pad
                     tgt_ixs = torch.LongTensor([tgt + [tgt[0]] * (max_len - len(tgt)) for tgt in tgt_ixs]).cuda()
@@ -443,9 +458,11 @@ class SepAEMetricHook(MetricHook):
                     dev_loss = 0
 
                     for x_ix, cluster in enumerate(dev_cluster_ixs):
+                        if len(cluster) == 0:
+                            continue
                         inputs = Variable(torch.tensor([X_dev[x_ix]])).cuda()
 
-                        if config.bottleneck.get("quantizer_transitions", False):
+                        if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                             tgt_ixs = [np.random.choice(dev_cluster_ixs[cix]) for cix in [x_ix]]
                             dev_tgt = torch.cat(
                                 [

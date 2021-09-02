@@ -1,5 +1,6 @@
 import json
 import os
+from torchseq.metric_hooks.rouge import RougeMetricHook
 
 import numpy as np
 import torch
@@ -37,6 +38,7 @@ from torchseq.metric_hooks.qg_metric import QGMetricHook
 from torchseq.metric_hooks.textual import TextualMetricHook
 from torchseq.metric_hooks.default import DefaultMetricHook
 from torchseq.metric_hooks.sep_ae import SepAEMetricHook
+from torchseq.metric_hooks.rouge import RougeMetricHook
 
 import torch.autograd.profiler as profiler
 
@@ -661,6 +663,9 @@ class ModelAgent(BaseAgent):
 
         if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
+
+        if "rouge" in self.config.eval.get("metrics", {}).keys():
+            metric_hooks += [RougeMetricHook(self.config, self.src_field, self.tgt_field)]
 
         self.vq_codes = defaultdict(lambda: [])
 

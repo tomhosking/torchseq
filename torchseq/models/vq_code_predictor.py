@@ -121,7 +121,20 @@ class VQCodePredictor(torch.nn.Module):
     def infer(self, encoding):
         # TODO: Batchify this...
         self.classifier.eval()
-        outputs = self.classifier(encoding)
+
+        seq_dim = (
+            self.config.hidden_dim
+            if self.config.get("lstm_seq_dim", None) is None
+            else self.config.get("lstm_seq_dim", None)
+        )
+        seq_init = (
+            torch.zeros(encoding.shape[0], 1, seq_dim).to(encoding.device)
+            if self.config.get("autoregressive_lstm", False)
+            else None
+        )
+        # print(encoding.shape, seq_init.shape)
+        outputs = self.classifier(encoding, seq=seq_init)
+
         all_pred_codes = []
         for bix, logits in enumerate(outputs):
             joint_probs = [([], 0)]
@@ -132,25 +145,20 @@ class VQCodePredictor(torch.nn.Module):
                         prev_oh = onehot(torch.tensor(combo[-1]).to(logits.device), N=self.config.output_dim) * 1.0
                         curr_logits = logits[h_ix, :] + self.transitions[h_ix - 1](prev_oh).detach()
                     elif self.config.get("autoregressive_lstm", False):
-                        seq_dim = (
-                            self.config.hidden_dim
-                            if self.config.get("lstm_seq_dim", None) is None
-                            else self.config.get("lstm_seq_dim", None)
-                        )
+
                         seq_init = torch.zeros(1, 1, seq_dim).to(encoding.device)
                         seq_embedded = [
                             embed(torch.tensor(x).to(encoding.device)).unsqueeze(0).unsqueeze(1).detach()
                             for x, embed in zip(combo, self.embeddings)
                         ]
-                        if self.config.additive:
-                            seq_elements = [seq_init, *seq_embedded]
-                            seq_cumul = []
-                            for j in range(len(seq_elements)):
-                                seq_cumul.append(torch.sum(seq_elements[: (j + 1)], dim=1, keepdim=True))
-                            seq = torch.cat(seq_cumul, dim=1)
+                        seq = torch.cat([seq_init, *seq_embedded], dim=1)
+                        if self.config.get("additive", False):
+                            seq = torch.cumsum(seq, dim=1)
+                            # for j in range(h_ix+1):
+                            #     seq_cumul.append(torch.sum(seq[:, : (j + 1)], dim=1, keepdim=True))
+                            #     use torch.cumsum!!
+                            # seq = torch.cat(seq_cumul, dim=1)
 
-                        else:
-                            seq = torch.cat([seq_init, *seq_embedded], dim=1)
                         curr_logits = self.classifier(encoding[bix].unsqueeze(0), seq)[0, h_ix, :]
                     else:
                         curr_logits = logits[h_ix, :]
@@ -184,12 +192,17 @@ class VQCodePredictor(torch.nn.Module):
                 else self.config.get("lstm_seq_dim", None)
             )
             seq_init = torch.zeros(encoding.shape[0], 1, seq_dim).to(encoding.device)
-            embedded_seq = [
+            seq_embedded = [
                 torch.matmul(code_mask[:, hix, :].float(), self.embeddings[hix].weight.detach()).unsqueeze(1)
                 for hix in range(self.config.num_heads - 1)
             ]
 
-            seq = torch.cat([seq_init, *embedded_seq], dim=1)
+            seq = torch.cat([seq_init, *seq_embedded], dim=1)
+            if self.config.get("additive", False):
+                seq = torch.cumsum(seq, dim=1)
+                # for j in range(self.config.num_heads):
+                #     seq_cumul.append(torch.sum(seq[:, : (j + 1)], dim=1, keepdim=True))
+                # seq = torch.cat(seq_cumul, dim=1)
         else:
             seq = None
         outputs = self.classifier(encoding, seq=seq)

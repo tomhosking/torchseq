@@ -27,8 +27,8 @@ class JsonDataLoader:
             dev=False,
             test=False,
             repeat=(self.config.training.data.get("epoch_steps", 0) > 0),
-            length_limit=self.config.eval.get("truncate_dataset", None),
-            repeat_samples=self.config.eval.get("repeat_samples", None),
+            length_limit=self.config.training.get("truncate_dataset", None),
+            repeat_samples=self.config.training.get("repeat_samples", None),
         )
         self._valid = JsonDataset(
             config=config,

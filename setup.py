@@ -33,6 +33,7 @@ setuptools.setup(
         'transformers==4.9.2',
         'tokenizers==0.10.3',
         'jsonlines>=2',
-        'sacrebleu>=1.5'
+        'sacrebleu>=1.5',
+        'py-rouge'
     ],
 )
