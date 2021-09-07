@@ -87,7 +87,7 @@ class PoolingBottleneck(nn.Module):
                 **quantizer_kwargs,
             )
 
-    def forward(self, encoding, memory, global_step, forced_codes=None):
+    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
 
         # Pool
         encoding_pooled = (
@@ -113,7 +113,7 @@ class PoolingBottleneck(nn.Module):
             #     raise Exception("Arbitrary quantizer residual ranges are not currently supported")
 
             vq_loss, quantized_encoding, quantizer_indices = self.quantizer(
-                encoding_pooled[:, :, splice_ix:], global_step, forced_codes
+                encoding_pooled[:, :, splice_ix:], global_step, forced_codes, head_mask
             )
 
             encoding_pooled = torch.cat([encoding_pooled[:, :, :splice_ix], quantized_encoding], dim=-1)

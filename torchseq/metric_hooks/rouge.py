@@ -17,7 +17,7 @@ class RougeMetricHook(MetricHook):
         super().__init__(config, src_field, tgt_field)
 
     def on_begin_epoch(self, use_test=False):
-        self.scores = {"r1": [], "r2": [], "rl": []}
+        self.scores = {"rouge": {}}
 
         self.gold_targets = []
         self.pred_targets = []
@@ -37,6 +37,7 @@ class RougeMetricHook(MetricHook):
         evaluator = rouge.Rouge(
             metrics=[
                 "rouge-l",
+                "rouge-n",
             ],
             max_n=4,
             limit_length=True,

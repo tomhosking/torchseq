@@ -100,7 +100,10 @@ class VectorQuantizerMultiHead(nn.Module):
         self._norm_loss_weight = norm_loss_weight
         self._full_dim_input = full_dim_input
 
-        self._head_dropout = head_dropout
+        if head_dropout is not None and head_dropout > 0:
+            self._head_dropout = torch.distributions.Bernoulli(1 - head_dropout)
+        else:
+            self._head_dropout = None
 
         if hierarchical:
 
@@ -193,7 +196,7 @@ class VectorQuantizerMultiHead(nn.Module):
     def encoding_to_logits(self, input, head_ix, prev_codes):
         pass
 
-    def forward(self, inputs, global_step=None, forced_codes=None):
+    def forward(self, inputs, global_step=None, forced_codes=None, head_mask=None):
         input_shape = inputs.shape
 
         quantized_list = []
@@ -334,7 +337,7 @@ class VectorQuantizerMultiHead(nn.Module):
                 min_k = torch.topk(all_probs[head_ix], this_offset + 1, dim=1, largest=False).indices
                 vq_codes.append(min_k[:, this_offset])
         else:
-            vq_codes = [torch.argmax(probs, dim=-1) for probs in all_probs]
+            vq_codes = [torch.argmax(probs, dim=-1).squeeze() for probs in all_probs]
 
         # Now that we have the codes, calculate their embeddings
         out_embeds = self._output_embedding if self._output_embedding is not None else self._embedding
@@ -359,10 +362,20 @@ class VectorQuantizerMultiHead(nn.Module):
         else:
             quantized = torch.cat(quantized_list, dim=1)
 
+            if head_mask is not None:
+                assert (
+                    head_mask.shape[1] == self._num_heads
+                ), "If head_mask is set, it must be the same length as the number of quantizer heads! {:} vs {:}".format(
+                    head_mask.shape[1], self._num_heads
+                )
+                # print(vq_codes[0].shape)
+                # print(quantized_list[0].shape)
+                # print(head_mask.shape, quantized.shape)
+                quantized = quantized * head_mask.unsqueeze(-1)
+
         if self._additive:
-            if self._head_dropout is not None and self._head_dropout > 0:
-                dist = torch.distributions.Bernoulli(1 - self._head_dropout)
-                mask = dist.sample(sample_shape=(*quantized.shape[:-1], 1))
+            if self._head_dropout is not None and self.training:
+                mask = self._head_dropout.sample(sample_shape=(*quantized.shape[:-1], 1))
                 mask = torch.cumprod(mask, dim=1).to(quantized.device)
                 quantized = quantized * mask
             quantized = torch.sum(quantized, dim=1)

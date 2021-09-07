@@ -54,7 +54,9 @@ class BottleneckAutoencoderModel(nn.Module):
                 include_position=self.config.encoder.get("position_embeddings", True),
             )
 
-            encoding_pooled, memory = self.bottleneck(encoding, memory, batch["_global_step"])
+            encoding_pooled, memory = self.bottleneck(
+                encoding, memory, batch["_global_step"], head_mask=batch.get("head_mask", None)
+            )
 
             raw_encoding_pooled = memory["encoding_pooled"]
 
@@ -67,7 +69,11 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get("split_encoder", False):
                 encoding2, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
                 encoding_pooled2, memory = self.bottleneck(
-                    encoding2, memory, batch["_global_step"], forced_codes=batch.get("forced_codes", None)
+                    encoding2,
+                    memory,
+                    batch["_global_step"],
+                    forced_codes=batch.get("forced_codes", None),
+                    head_mask=batch.get("head_mask", None),
                 )
 
                 # TODO: Instead of 2x full size encoders + down projection, change to 2x half size encoders
@@ -101,6 +107,7 @@ class BottleneckAutoencoderModel(nn.Module):
                     template_memory,
                     batch["_global_step"],
                     forced_codes=batch.get("forced_codes", None),
+                    head_mask=batch.get("head_mask", None),
                 )
 
                 if "loss" in memory:

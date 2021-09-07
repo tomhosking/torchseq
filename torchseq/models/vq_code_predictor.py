@@ -132,6 +132,8 @@ class VQCodePredictor(torch.nn.Module):
             if self.config.get("autoregressive_lstm", False)
             else None
         )
+
+        beam_width = self.config.get("beam_width", 3)
         # print(encoding.shape, seq_init.shape)
         outputs = self.classifier(encoding, seq=seq_init)
 
@@ -162,8 +164,8 @@ class VQCodePredictor(torch.nn.Module):
                         curr_logits = self.classifier(encoding[bix].unsqueeze(0), seq)[0, h_ix, :]
                     else:
                         curr_logits = logits[h_ix, :]
-                    probs, predicted = torch.topk(torch.softmax(curr_logits, -1), 3, -1)
-                    for k in range(2):
+                    probs, predicted = torch.topk(torch.softmax(curr_logits, -1), beam_width, -1)
+                    for k in range(beam_width):
                         new_hyp = [copy.copy(combo), copy.copy(prob)]
                         new_hyp[0].append(predicted[k].item())
                         new_hyp[1] += torch.log(probs[k]).item()
@@ -171,7 +173,7 @@ class VQCodePredictor(torch.nn.Module):
                         new_hypotheses.append(new_hyp)
 
                 joint_probs = new_hypotheses
-                joint_probs = sorted(joint_probs, key=lambda x: x[1], reverse=True)[:3]
+                joint_probs = sorted(joint_probs, key=lambda x: x[1], reverse=True)[:beam_width]
             pred_codes = [x[0] for x in sorted(joint_probs, key=lambda x: x[1], reverse=True)[:2]]
             all_pred_codes.append(pred_codes)
 

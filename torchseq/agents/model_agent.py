@@ -547,6 +547,8 @@ class ModelAgent(BaseAgent):
 
         memory_values_to_return = defaultdict(lambda: [])
 
+        self.model.eval()
+
         for hook in metric_hooks:
             hook.on_begin_epoch(use_test)
 

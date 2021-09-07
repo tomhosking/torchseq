@@ -69,6 +69,12 @@ class SepAEMetricHook(MetricHook):
             self.scores["sepae_oracle"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent, test=use_test)
             self.logger.info("...done")
 
+            self.logger.info("Running generation with oracle, with head mask")
+            self.scores["sepae_oracle_masked"] = SepAEMetricHook.eval_gen_with_oracle_masked(
+                self.config, agent, test=use_test
+            )
+            self.logger.info("...done")
+
         if self.config.eval.metrics.sep_ae.get("run_noised", False):
             self.logger.info("Running generation with noised encodings")
             (
@@ -109,33 +115,6 @@ class SepAEMetricHook(MetricHook):
             data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
         )
 
-        # # Now run again with forced codes
-        # Confirmed - this doesn't need to be run separately
-        # samples = (data_loader._test if test else data_loader._valid).samples
-        # samples = [{**x, "forced_codes": codes} for x, codes in zip(samples, memory["vq_codes"])]
-        # # print('From run 1')
-        # # print(output[0])
-        # # print(samples[0])
-        # # print(len(samples), len(memory['vq_codes']))
-        # config_gen_with_templ["json_dataset"] = {
-        #     "path": None,
-        #     "field_map": [
-        #         {"type": "copy", "from": "tgt", "to": "s2"},
-        #         {"type": "copy", "from": "syn_input", "to": "template"},
-        #         {"type": "copy", "from": "sem_input", "to": "s1"},
-        #         {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
-        #     ],
-        # }
-
-        # forced_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
-        # _, _, (output, _, _), memory_forced = agent.inference(
-        #     forced_loader.valid_loader, memory_keys_to_return=["vq_codes"]
-        # )
-
-        # print('From run 2')
-        # print(output[0])
-        # print(memory_forced['vq_codes'][0])
-
         split = "test" if test else "dev"
 
         with jsonlines.open(
@@ -160,6 +139,64 @@ class SepAEMetricHook(MetricHook):
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu)
+
+    @abstractmethod
+    def eval_gen_with_oracle_masked(config, agent, test=False, use_qqp=False):
+        config_gen_with_templ = copy.deepcopy(config.data)
+        config_gen_with_templ["dataset"] = "json"
+        config_gen_with_templ["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "syn_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "head_mask", "to": "head_mask"},
+            ],
+        }
+        config_gen_with_templ["eval"]["topk"] = 1
+
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
+        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+
+        num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+
+        scores = {}
+
+        for mask_length in range(1, num_heads):
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask} for x in samples]
+            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+
+            split = "test" if test else "dev"
+
+            with jsonlines.open(
+                os.path.join(
+                    config.env.data_path,
+                    config.eval.metrics.sep_ae.eval_dataset,
+                    f"{split}.jsonl",
+                )
+            ) as f:
+                rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+            refs = [q["paras"] for q in rows]
+            inputs = [[q["sem_input"]] for q in rows]
+
+            # refs = [x["paras"] for x in qs_by_para_split]
+            max_num_refs = max([len(x) for x in refs])
+            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+            scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+
+        return scores
 
     @abstractmethod
     def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=2, test=False):
@@ -287,6 +324,7 @@ class SepAEMetricHook(MetricHook):
         cache_data=False,
         single_training_target=False,
         enforce_unique_codes=False,
+        mask_length=0,
     ):
         logger = logging.getLogger("SepAEMetric")
         sample_outputs = config.data["eval"].get("sample_outputs", True)
@@ -297,7 +335,7 @@ class SepAEMetricHook(MetricHook):
             # lr = 1e-4
             bsz = config.bottleneck.code_predictor.bsz
             num_steps = config.bottleneck.code_predictor.num_steps
-            MAX_SAMPLES = config.bottleneck.code_predictor.max_samples
+            MAX_SAMPLES = config.bottleneck.code_predictor.get("max_samples", 1e7)
 
             logger.info("Generating encodings and vq codes to train code predictor")
 
@@ -328,6 +366,7 @@ class SepAEMetricHook(MetricHook):
                 cfg_dict["training"]["batch_size"] = 24
                 cfg_dict["eval"]["eval_batch_size"] = 24
                 cfg_dict["training"]["dataset"] = "json"
+                cfg_dict["training"]["truncate_dataset"] = MAX_SAMPLES
                 cfg_dict["eval"]["truncate_dataset"] = MAX_SAMPLES
                 cfg_dict["training"]["shuffle_data"] = False
                 cfg_dict["json_dataset"] = {
@@ -552,7 +591,16 @@ class SepAEMetricHook(MetricHook):
 
         agent.config.eval.data["sample_outputs"] = True
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
+        if mask_length > 0:
+            num_heads = config.bottleneck.code_predictor.num_heads
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask} for x in samples]
+            masked_loader = JsonDataLoader(config=Config(config_gen_noised), dev_samples=samples)
+
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+        else:
+            _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
         config.eval.data["sample_outputs"] = sample_outputs
 
