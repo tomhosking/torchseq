@@ -387,7 +387,7 @@ class SepAEMetricHook(MetricHook):
                 X = np.concatenate(
                     [memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], axis=1
                 )
-                y = memory_train["vq_codes"][:, :, 0].tolist()
+                y = memory_train["vq_codes"].tolist()
 
                 del memory_train
 
@@ -398,7 +398,7 @@ class SepAEMetricHook(MetricHook):
                 X_dev = np.concatenate(
                     [memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], axis=1
                 )
-                y_dev = memory_dev["vq_codes"][:, :, 0].tolist()
+                y_dev = memory_dev["vq_codes"].tolist()
 
                 del memory_dev
 
