@@ -58,7 +58,7 @@ class SepAEMetricHook(MetricHook):
                 agent,
                 test=use_test,
                 train_code_predictor=self.config.eval.metrics.sep_ae.get("train_codepred", True),
-                cache_data=self.config.eval.metrics.sep_ae.get("cache_data", True),
+                cache_data=self.config.eval.metrics.sep_ae.get("cache_data", False),
                 single_training_target=self.config.eval.metrics.sep_ae.get("single_target", False),
                 enforce_unique_codes=self.config.eval.metrics.sep_ae.get("enforce_unique_codes", False),
             )
@@ -159,7 +159,11 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        if config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        else:
+            # HACK
+            num_heads = config.bottleneck.modules[1].quantizer.num_heads
 
         scores = {}
 

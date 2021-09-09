@@ -337,7 +337,7 @@ class VectorQuantizerMultiHead(nn.Module):
                 min_k = torch.topk(all_probs[head_ix], this_offset + 1, dim=1, largest=False).indices
                 vq_codes.append(min_k[:, this_offset])
         else:
-            vq_codes = [torch.argmax(probs, dim=-1).squeeze() for probs in all_probs]
+            vq_codes = [torch.argmax(probs, dim=-1).squeeze(1) for probs in all_probs]
 
         # Now that we have the codes, calculate their embeddings
         out_embeds = self._output_embedding if self._output_embedding is not None else self._embedding

@@ -118,7 +118,7 @@ class VQCodePredictor(torch.nn.Module):
 
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=config.lr)
 
-    def infer(self, encoding):
+    def infer(self, encoding, batch={}):
         # TODO: Batchify this...
         self.classifier.eval()
 

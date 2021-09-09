@@ -4,6 +4,7 @@ import torch.nn as nn
 from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
+from torchseq.models.modular_bottleneck import ModularBottleneck
 from torchseq.utils.logging import Logger
 from torchseq.utils.functions import cos_sim
 from torchseq.models.vq_code_predictor import VQCodePredictor
@@ -14,10 +15,19 @@ class BottleneckAutoencoderModel(nn.Module):
         super().__init__()
         self.config = config
 
+        # TEMP: deprecation warning
+        if self.config.bottleneck.get("num_similar_heads", None) is not None:
+            print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
+
         self.src_field = src_field
 
         self.seq_encoder = SequenceEncoder(config)
-        self.bottleneck = PoolingBottleneck(config)
+
+        if config.bottleneck.get("modular", False):
+            self.bottleneck = ModularBottleneck(config)
+        else:
+            self.bottleneck = PoolingBottleneck(config)
+
         self.seq_decoder = SequenceDecoder(config, embeddings=self.seq_encoder.embeddings)
 
         if self.config.bottleneck.get("split_encoder", False):
@@ -37,9 +47,13 @@ class BottleneckAutoencoderModel(nn.Module):
                 vq_transitions = self.bottleneck.quantizer._transitions
             else:
                 vq_transitions = None
-            self.code_predictor = VQCodePredictor(
-                pred_config, transitions=vq_transitions, embeddings=self.bottleneck.quantizer._embedding
-            )
+
+            if self.config.bottleneck.get("modular", False):
+                # HACK!
+                vq_embeddings = self.bottleneck.module_list[1].quantizer._embedding
+            else:
+                vq_embeddings = self.bottleneck.quantizer._embedding
+            self.code_predictor = VQCodePredictor(pred_config, transitions=vq_transitions, embeddings=vq_embeddings)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
@@ -63,7 +77,7 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
-                pred_codes = self.code_predictor.infer(raw_encoding_pooled.squeeze(1))
+                pred_codes = self.code_predictor.infer(raw_encoding_pooled.squeeze(1), batch)
                 batch["forced_codes"] = pred_codes
 
             if self.config.bottleneck.get("split_encoder", False):
@@ -84,13 +98,16 @@ class BottleneckAutoencoderModel(nn.Module):
                 else:
                     encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
 
-            splice_head_offset = (
-                self.config.bottleneck.get("splice_head_offset", 0)
-                if self.config.bottleneck.get("num_similar_heads", None) is None
-                else self.config.bottleneck.get("num_similar_heads", 0)
-            )
+            if self.config.bottleneck.get("num_similar_heads", None) is not None:
+                # print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
+                splice_head_offset = self.config.bottleneck.num_similar_heads
+            else:
+                splice_head_offset = self.config.bottleneck.get("splice_head_offset", 0)
+
             sep_splice_ix = (
-                self.config.decoder.embedding_dim // self.config.encdec.get("num_heads", 1) * splice_head_offset
+                self.config.bottleneck.embedding_dim
+                // self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
+                * splice_head_offset
             )
 
             if "template" in batch:
