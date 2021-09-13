@@ -34,6 +34,9 @@ class ModularBottleneck(nn.Module):
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
 
+        # if head_mask is not None:
+        #     print('hm in bottleneck')
+
         encodings_post = []
         encodings_pooled = []
 
@@ -48,7 +51,7 @@ class ModularBottleneck(nn.Module):
             any_pooled = any_pooled | module.config.get("pooling", False)
 
             sub_encoding_post, sub_encoding_pooled, memory = module(
-                sub_encoding_pre, memory, global_step, forced_codes=None, head_mask=None
+                sub_encoding_pre, memory, global_step, forced_codes=forced_codes, head_mask=head_mask
             )
             encodings_post.append(sub_encoding_post)
             encodings_pooled.append(sub_encoding_pooled)
@@ -148,6 +151,8 @@ class BottleneckPart(nn.Module):
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
+        # if head_mask is not None:
+        #     print('hm in bottleneck part')
 
         # print('BN part, input=', encoding.shape)
 

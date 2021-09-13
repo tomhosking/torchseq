@@ -46,6 +46,7 @@ class VectorQuantizerMultiHead(nn.Module):
         init_decay_weight=1.0,
         init_embeds_xavier=False,
         head_dropout=None,
+        head_dropout_keep_first=True,
     ):
 
         # residual_head_range=(0, 0),
@@ -104,6 +105,7 @@ class VectorQuantizerMultiHead(nn.Module):
             self._head_dropout = torch.distributions.Bernoulli(1 - head_dropout)
         else:
             self._head_dropout = None
+        self._head_dropout_keep_first = head_dropout_keep_first
 
         if hierarchical:
 
@@ -363,6 +365,8 @@ class VectorQuantizerMultiHead(nn.Module):
             quantized = torch.cat(quantized_list, dim=1)
 
             if head_mask is not None:
+                # print('mask found')
+                # print(head_mask)
                 assert (
                     head_mask.shape[1] == self._num_heads
                 ), "If head_mask is set, it must be the same length as the number of quantizer heads! {:} vs {:}".format(
@@ -376,6 +380,8 @@ class VectorQuantizerMultiHead(nn.Module):
         if self._additive:
             if self._head_dropout is not None and self.training:
                 mask = self._head_dropout.sample(sample_shape=(*quantized.shape[:-1], 1))
+                if self._head_dropout_keep_first:
+                    mask[:, 0, :] = 1.0
                 mask = torch.cumprod(mask, dim=1).to(quantized.device)
                 quantized = quantized * mask
             quantized = torch.sum(quantized, dim=1)
