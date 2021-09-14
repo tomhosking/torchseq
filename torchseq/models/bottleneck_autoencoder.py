@@ -77,7 +77,7 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
-                pred_codes = self.code_predictor.infer(raw_encoding_pooled.squeeze(1), batch)
+                pred_codes = self.code_predictor.infer(raw_encoding_pooled.max(dim=1).values.detach(), batch)
                 batch["forced_codes"] = pred_codes
 
             if self.config.bottleneck.get("split_encoder", False):
