@@ -4,6 +4,8 @@ import copy
 
 from torchseq.utils.functions import onehot
 
+import logging
+
 
 class MLPClassifier(torch.nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, num_heads):
@@ -89,6 +91,8 @@ class VQCodePredictor(torch.nn.Module):
     def __init__(self, config, transitions=None, embeddings=None):
         super(VQCodePredictor, self).__init__()
 
+        self.logger = logging.getLogger("VQCodePredictor")
+
         if config.get("use_lstm", False):
             self.classifier = LstmClassifier(
                 config.input_dim,
@@ -118,7 +122,7 @@ class VQCodePredictor(torch.nn.Module):
 
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=config.lr)
 
-    def infer(self, encoding, batch={}):
+    def infer(self, encoding, batch={}, top_k=1, outputs_to_block=None):
         # TODO: Batchify this...
         self.classifier.eval()
 
@@ -134,6 +138,10 @@ class VQCodePredictor(torch.nn.Module):
         )
 
         beam_width = self.config.get("beam_width", 3)
+
+        if top_k > beam_width:
+            self.logger.warn("top-k is larger than beam_width - fewer candidates than expected will be returned!")
+
         # print(encoding.shape, seq_init.shape)
         outputs = self.classifier(encoding, seq=seq_init)
 
@@ -164,7 +172,11 @@ class VQCodePredictor(torch.nn.Module):
                         curr_logits = self.classifier(encoding[bix].unsqueeze(0), seq)[0, h_ix, :]
                     else:
                         curr_logits = logits[h_ix, :]
-                    probs, predicted = torch.topk(torch.softmax(curr_logits, -1), beam_width, -1)
+                    probs = torch.softmax(curr_logits, -1)
+                    if self.config.get("blocking_weight", 0) > 0 and outputs_to_block is not None:
+                        block_ix = outputs_to_block[bix, h_ix]
+                        probs[block_ix] *= 1 - self.config.get("blocking_weight", 0)
+                    probs, predicted = torch.topk(probs, beam_width, -1)
                     for k in range(beam_width):
                         new_hyp = [copy.copy(combo), copy.copy(prob)]
                         new_hyp[0].append(predicted[k].item())
@@ -174,12 +186,15 @@ class VQCodePredictor(torch.nn.Module):
 
                 joint_probs = new_hypotheses
                 joint_probs = sorted(joint_probs, key=lambda x: x[1], reverse=True)[:beam_width]
-            pred_codes = [x[0] for x in sorted(joint_probs, key=lambda x: x[1], reverse=True)[:2]]
+            pred_codes = [x[0] for x in sorted(joint_probs, key=lambda x: x[1], reverse=True)[:beam_width]]
             all_pred_codes.append(pred_codes)
 
-        # HACK: return top-1 for now
-        top_1_codes = torch.IntTensor(all_pred_codes)[:, 0, :].to(encoding.device)
-        return top_1_codes
+        if top_k == 1:
+            top_1_codes = torch.IntTensor(all_pred_codes)[:, 0, :].to(encoding.device)
+            return top_1_codes
+        else:
+            top_k_codes = torch.IntTensor(all_pred_codes)[:, :top_k, :].to(encoding.device)
+            return top_k_codes
 
     def train_step(self, encoding, code_mask, take_step=True):
         # Encoding should be shape: bsz x dim

@@ -53,7 +53,7 @@ class SepAEMetricHook(MetricHook):
                 self.scores["sepae_codepred_bleu"],
                 self.scores["sepae_codepred_selfbleu"],
                 self.scores["sepae_codepred_ibleu"],
-            ), _ = SepAEMetricHook.eval_gen_codepred_v2(
+            ), codepred_output = SepAEMetricHook.eval_gen_codepred_v2(
                 self.config,
                 agent,
                 test=use_test,
@@ -62,6 +62,11 @@ class SepAEMetricHook(MetricHook):
                 single_training_target=self.config.eval.metrics.sep_ae.get("single_target", False),
                 enforce_unique_codes=self.config.eval.metrics.sep_ae.get("enforce_unique_codes", False),
             )
+            with open(
+                os.path.join(agent.run_output_path, "codepred_output_{:}.txt".format("test" if use_test else "dev")),
+                "w",
+            ) as f:
+                f.write("\n".join(codepred_output))
             self.logger.info("...done")
 
         if self.config.eval.metrics.sep_ae.get("run_oracle", True):
@@ -168,6 +173,68 @@ class SepAEMetricHook(MetricHook):
         scores = {}
 
         for mask_length in range(1, num_heads):
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask} for x in samples]
+            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+
+            split = "test" if test else "dev"
+
+            with jsonlines.open(
+                os.path.join(
+                    config.env.data_path,
+                    config.eval.metrics.sep_ae.eval_dataset,
+                    f"{split}.jsonl",
+                )
+            ) as f:
+                rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+            refs = [q["paras"] for q in rows]
+            inputs = [[q["sem_input"]] for q in rows]
+
+            # refs = [x["paras"] for x in qs_by_para_split]
+            max_num_refs = max([len(x) for x in refs])
+            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+            scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+
+        return scores
+
+    @abstractmethod
+    def eval_gen_pred_unsupervised_masked(config, agent, test=False, use_qqp=False):
+        config_gen_with_templ = copy.deepcopy(config.data)
+        config_gen_with_templ["dataset"] = "json"
+        config_gen_with_templ["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "head_mask", "to": "head_mask"},
+            ],
+        }
+        config_gen_with_templ["eval"]["topk"] = 1
+
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
+        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+
+        if config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        else:
+            # HACK
+            num_heads = config.bottleneck.modules[1].quantizer.num_heads
+
+        scores = {}
+
+        for mask_length in range(0, num_heads):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
@@ -427,7 +494,7 @@ class SepAEMetricHook(MetricHook):
                     # if args.dataset != 'qqp':
                     cluster_ixs.remove(ix + i)
                     if enforce_unique_codes:
-                        cluster_ixs = [cix for cix in cluster_ixs if (y[cix] != y[ix]).any()]
+                        cluster_ixs = [cix for cix in cluster_ixs if (y[cix] != y[ix])]
 
                     train_cluster_ixs.append(cluster_ixs)
                 ix += clen

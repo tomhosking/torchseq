@@ -103,6 +103,8 @@ def main():
         logger.info("...loaded!")
 
     if args.train:
+        if data_loader.train_loader is None:
+            raise Exception("Selected dataset does not include a training split - cannot train!")
         logger.info("Starting training...")
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug

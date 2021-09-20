@@ -77,7 +77,9 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
-                pred_codes = self.code_predictor.infer(raw_encoding_pooled.max(dim=1).values.detach(), batch)
+                pred_codes = self.code_predictor.infer(
+                    raw_encoding_pooled.max(dim=1).values.detach(), batch, outputs_to_block=memory.get("vq_codes")
+                )
                 batch["forced_codes"] = pred_codes
 
             if self.config.bottleneck.get("split_encoder", False):
@@ -119,18 +121,21 @@ class BottleneckAutoencoderModel(nn.Module):
                     include_position=self.config.encoder.get("template_position_embeddings", True),
                 )
 
-                template_encoding_pooled, template_memory = self.bottleneck(
-                    template_encoding,
-                    template_memory,
-                    batch["_global_step"],
-                    forced_codes=batch.get("forced_codes", None),
-                    head_mask=batch.get("head_mask", None),
-                )
+                if "forced_templ_encoding" in batch:
+                    template_encoding_pooled = batch["forced_templ_encoding"]
+                else:
+                    template_encoding_pooled, template_memory = self.bottleneck(
+                        template_encoding,
+                        template_memory,
+                        batch["_global_step"],
+                        forced_codes=batch.get("forced_codes", None),
+                        head_mask=batch.get("head_mask", None),
+                    )
 
                 if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
-                if "vq_codes" in memory:
+                if "vq_codes" in template_memory:
                     memory["vq_codes"] = template_memory["vq_codes"]
 
                 if self.config.bottleneck.get("split_encoder", False):
