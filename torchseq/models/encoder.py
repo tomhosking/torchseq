@@ -157,8 +157,8 @@ class SequenceEncoder(nn.Module):
             input_toks_resid = self.embeddings(input_seq).to(input_seq.device)
             input_toks_resid = self.token_projection(input_toks_resid)
             input_toks_resid = self.positional_embeddings(input_toks_resid.permute(1, 0, 2))
-            print(encoding.shape)
-            print(input_toks_resid.shape)
+            # print(encoding.shape)
+            # print(input_toks_resid.shape)
             encoding = torch.cat([encoding, input_toks_resid.permute(1, 0, 2)], dim=-1)
 
         return encoding, memory

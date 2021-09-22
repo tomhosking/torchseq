@@ -27,6 +27,7 @@ from torchseq.utils.metrics import bleu_corpus, meteor_corpus
 from torchseq.utils.sari import SARIsent
 import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.cache import Cache
 
 
 from torchseq.models.ranger import Ranger
@@ -49,11 +50,23 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True, profile=False):
+    def __init__(
+        self,
+        config,
+        run_id,
+        output_path,
+        silent=False,
+        training_mode=True,
+        verbose=True,
+        profile=False,
+        cache_root=None,
+    ):
         """
         Main constructor for an Agent
         """
         super().__init__(config)
+
+        self.cache = None
 
         self.run_id = run_id
         self.silent = silent
@@ -81,6 +94,8 @@ class ModelAgent(BaseAgent):
                 json.dump(config.data, f, indent=4)
 
             Logger(log_path=self.run_output_path + "/logs")
+
+            self.cache = Cache(cache_root if cache_root is not None else self.run_output_path)
 
         if self.config.training.get("loss_dropping", 0) > 0:
             self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)

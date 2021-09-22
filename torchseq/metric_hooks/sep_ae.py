@@ -20,6 +20,8 @@ from torchseq.utils.functions import onehot
 
 import logging
 
+logger = logging.getLogger("SepAEMetric")
+
 
 class SepAEMetricHook(MetricHook):
 
@@ -27,8 +29,6 @@ class SepAEMetricHook(MetricHook):
 
     def __init__(self, config, src_field=None, tgt_field=None):
         super().__init__(config, src_field, tgt_field)
-
-        self.logger = logging.getLogger("SepAEMetric")
 
     def on_begin_epoch(self, use_test=False):
         self.scores = {}
@@ -48,7 +48,7 @@ class SepAEMetricHook(MetricHook):
             self.config.eval.metrics.sep_ae.get("run_codepred", False)
             and self.config.bottleneck.get("code_predictor", None) is not None
         ):
-            self.logger.info("Running generation with code prediction")
+            logger.info("Running generation with code prediction")
             (
                 self.scores["sepae_codepred_bleu"],
                 self.scores["sepae_codepred_selfbleu"],
@@ -67,31 +67,31 @@ class SepAEMetricHook(MetricHook):
                 "w",
             ) as f:
                 f.write("\n".join(codepred_output))
-            self.logger.info("...done")
+            logger.info("...done")
 
         if self.config.eval.metrics.sep_ae.get("run_oracle", True):
-            self.logger.info("Running generation with oracle template")
+            logger.info("Running generation with oracle template")
             self.scores["sepae_oracle"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent, test=use_test)
-            self.logger.info("...done")
+            logger.info("...done")
 
-            self.logger.info("Running generation with oracle, with head mask")
+            logger.info("Running generation with oracle, with head mask")
             self.scores["sepae_oracle_masked"] = SepAEMetricHook.eval_gen_with_oracle_masked(
                 self.config, agent, test=use_test
             )
-            self.logger.info("...done")
+            logger.info("...done")
 
         if self.config.eval.metrics.sep_ae.get("run_noised", False):
-            self.logger.info("Running generation with noised encodings")
+            logger.info("Running generation with noised encodings")
             (
                 self.scores["cluster_gen_noised_diversity_bleu"],
                 self.scores["cluster_gen_noised_diversity_selfbleu"],
                 self.scores["cluster_gen_noised_diversity_ibleu"],
             ) = SepAEMetricHook.eval_gen_noised_diversity(self.config, agent)
-            self.logger.info("...done")
+            logger.info("...done")
 
-        # self.logger.info("Running generation to test reconstruction")
+        # logger.info("Running generation to test reconstruction")
         # self.scores["sepae_reconstruction"] = SepAEMetricHook.eval_reconstruction(self.config, agent)
-        # self.logger.info("...done")
+        # logger.info("...done")
 
         # Reset the config
         self.config.bottleneck.data["prior_var_weight"] = var_weight
@@ -285,13 +285,13 @@ class SepAEMetricHook(MetricHook):
 
         if config_gen_noised["bottleneck"]["vector_quantized"]:
             var_offset = config_gen_noised["bottleneck"]["quantizer_num_residual"]
-            print(config_gen_noised["bottleneck"]["quantizer_heads"], var_offset, code_offset)
+            logger.info(config_gen_noised["bottleneck"]["quantizer_heads"], var_offset, code_offset)
             agent.model.bottleneck.quantizer._code_offset = (
                 [0] * var_offset
                 + [code_offset]
                 + [code_offset] * (config_gen_noised["bottleneck"]["quantizer_heads"] - var_offset - 1)
             )
-            print(agent.model.bottleneck.quantizer._code_offset)
+            logger.info(agent.model.bottleneck.quantizer._code_offset)
         else:
             var_offset = config_gen_noised["bottleneck"]["num_similar_heads"]
             if config_gen_noised["bottleneck"].get("invert_templ", False):
@@ -386,6 +386,66 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu), output
 
     @abstractmethod
+    def populate_cache(config, agent):
+        MAX_SAMPLES = config.bottleneck.code_predictor.get("max_samples", 1e10)
+        dataset_all = config.eval.metrics.sep_ae.flattened_dataset
+
+        if agent.cache.load("codepred_cache_X") is not None:
+            logger.info("Loading from cache")
+            X = agent.cache.load("codepred_cache_X")
+            y = agent.cache.load("codepred_cache_y")
+            X_dev = agent.cache.load("codepred_cache_X_dev")
+            y_dev = agent.cache.load("codepred_cache_y_dev")
+        else:
+            logger.info("Cache not found, generating...")
+            cfg_dict = copy.deepcopy(config.data)
+
+            config.eval.data["sample_outputs"] = False
+
+            cfg_dict["training"]["batch_size"] = 24
+            cfg_dict["eval"]["eval_batch_size"] = 24
+            cfg_dict["training"]["dataset"] = "json"
+            cfg_dict["training"]["truncate_dataset"] = MAX_SAMPLES
+            cfg_dict["eval"]["truncate_dataset"] = MAX_SAMPLES
+            cfg_dict["training"]["shuffle_data"] = False
+            cfg_dict["json_dataset"] = {
+                "path": dataset_all,
+                "field_map": [
+                    {"type": "copy", "from": "q", "to": "s2"},
+                    {"type": "copy", "from": "q", "to": "s1"},
+                ],
+            }
+            cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+
+            data_loader = JsonDataLoader(Config(cfg_dict))
+
+            _, _, _, memory_train = agent.inference(
+                data_loader.train_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+            )
+
+            X = torch.cat([memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], dim=1)
+            y = memory_train["vq_codes"].tolist()
+
+            del memory_train
+
+            _, _, _, memory_dev = agent.inference(
+                data_loader.valid_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+            )
+
+            X_dev = torch.cat([memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], dim=1)
+            y_dev = memory_dev["vq_codes"].tolist()
+
+            del memory_dev
+
+            agent.cache.save("codepred_cache_X", X)
+            agent.cache.save("codepred_cache_y", y)
+            agent.cache.save("codepred_cache_X_dev", X_dev)
+            agent.cache.save("codepred_cache_y_dev", y_dev)
+
+            logger.info("Cache built")
+        return X, y, X_dev, y_dev
+
+    @abstractmethod
     def eval_gen_codepred_v2(
         config,
         agent,
@@ -410,7 +470,6 @@ class SepAEMetricHook(MetricHook):
 
             logger.info("Generating encodings and vq codes to train code predictor")
 
-            dataset_all = config.eval.metrics.sep_ae.flattened_dataset
             dataset_clusters = config.eval.metrics.sep_ae.cluster_dataset
 
             # if use_qqp:
@@ -422,64 +481,7 @@ class SepAEMetricHook(MetricHook):
             #     dataset_clusters = "wikianswers-pp"
             #     # dataset_geneval = "wikianswers-para-splitforgeneval"
 
-            if os.path.exists(agent.run_output_path + "/codepred_cache_X.npy"):
-                print("Loading from cache")
-                X = np.load(agent.run_output_path + "/codepred_cache_X.npy")
-                y = np.load(agent.run_output_path + "/codepred_cache_y.npy")
-                X_dev = np.load(agent.run_output_path + "/codepred_cache_X_dev.npy")
-                y_dev = np.load(agent.run_output_path + "/codepred_cache_y_dev.npy")
-            else:
-                print("Cache not found, generating...")
-                cfg_dict = copy.deepcopy(config.data)
-
-                config.eval.data["sample_outputs"] = False
-
-                cfg_dict["training"]["batch_size"] = 24
-                cfg_dict["eval"]["eval_batch_size"] = 24
-                cfg_dict["training"]["dataset"] = "json"
-                cfg_dict["training"]["truncate_dataset"] = MAX_SAMPLES
-                cfg_dict["eval"]["truncate_dataset"] = MAX_SAMPLES
-                cfg_dict["training"]["shuffle_data"] = False
-                cfg_dict["json_dataset"] = {
-                    "path": dataset_all,
-                    "field_map": [
-                        {"type": "copy", "from": "q", "to": "s2"},
-                        {"type": "copy", "from": "q", "to": "s1"},
-                    ],
-                }
-                cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
-
-                data_loader = JsonDataLoader(Config(cfg_dict))
-
-                _, _, _, memory_train = agent.inference(
-                    data_loader.train_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
-                )
-
-                X = np.concatenate(
-                    [memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], axis=1
-                )
-                y = memory_train["vq_codes"].tolist()
-
-                del memory_train
-
-                _, _, _, memory_dev = agent.inference(
-                    data_loader.valid_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
-                )
-
-                X_dev = np.concatenate(
-                    [memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], axis=1
-                )
-                y_dev = memory_dev["vq_codes"].tolist()
-
-                del memory_dev
-
-                if cache_data:
-                    np.save(agent.run_output_path + "/codepred_cache_X.npy", X)
-                    np.save(agent.run_output_path + "/codepred_cache_y.npy", y)
-                    np.save(agent.run_output_path + "/codepred_cache_X_dev.npy", X_dev)
-                    np.save(agent.run_output_path + "/codepred_cache_y_dev.npy", y_dev)
-
-                print("Cache built")
+            X, y, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent)
 
             with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "train.jsonl")) as f:
                 train_qs = [row for row in f]
@@ -703,6 +705,96 @@ class SepAEMetricHook(MetricHook):
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
         return (tgt_bleu, self_bleu, ibleu), output
+
+    @abstractmethod
+    def eval_gen_codepred_diversity(
+        config,
+        agent,
+        test=False,
+        use_qqp=False,
+        mask_length=0,
+        top_k=2,
+    ):
+
+        if test:
+            raise Exception("Code pred diversity is not yet implemented for test!")
+
+        # First, get top-k predicted codes
+        _, _, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent)
+
+        logger.info("Running code predictor")
+
+        if agent.model.code_predictor.config.get("beam_width", 0) > top_k:
+            agent.model.code_predictor.config.data["beam_width"] = top_k
+
+        pred_codes = []
+        # TODO: batchify!
+        for ix, x_batch in enumerate(X_dev):
+            curr_codes = agent.model.code_predictor.infer(
+                x_batch.unsqueeze(0).to(agent.device), {}, outputs_to_block=y_dev[ix], top_k=top_k
+            )
+            pred_codes.append(curr_codes)
+
+        pred_codes = torch.cat(pred_codes, dim=0)
+
+        config_pred_diversity = copy.deepcopy(config.data)
+        config_pred_diversity["dataset"] = "json"
+        config_pred_diversity["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
+            ],
+        }
+        config_pred_diversity["eval"]["topk"] = 1
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
+        data_loader = JsonDataLoader(config=Config(config_pred_diversity))
+
+        sample_outputs = agent.config.eval.get("sample_outputs", True)
+        config.eval.data["sample_outputs"] = True
+
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(
+                config.env.data_path,
+                config.eval.metrics.sep_ae.eval_dataset,
+                f"{split}.jsonl",
+            )
+        ) as f:
+            rows = [row for row in f][: config_pred_diversity["eval"].get("truncate_dataset", None)]
+
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+
+        max_num_refs = max([len(x) for x in refs])
+        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+        scores = {}
+
+        for k in range(top_k):
+            logger.info(f"Running generation with {k+1}th best codes")
+
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "forced_codes": pred_codes[i, k, :].tolist()} for i, x in enumerate(samples)]
+            forced_loader = JsonDataLoader(config=Config(config_pred_diversity), dev_samples=samples)
+
+            _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
+
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+
+            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+            scores[k + 1] = (tgt_bleu, self_bleu, ibleu)
+
+        agent.config.eval.data["sample_outputs"] = sample_outputs
+
+        return scores
 
     @abstractmethod
     def eval_gen_beam_diversity(config, agent, test=False):

@@ -35,6 +35,7 @@ def parse_args():
     # Model loading
     parser.add_argument("--load_chkpt", type=str, metavar="CHECKPOINT", default=None, help="Path to checkpoint file")
     parser.add_argument("-l", "--load", type=str, metavar="MODEL", default=None, help="Path to model folder")
+    parser.add_argument("--nocache", action="store_true", help="Disable loading from an old cache")
 
     # Paths
     parser.add_argument("-d", "--data_path", type=str, metavar="DATA", default="./data/", help="Path to data sources")
