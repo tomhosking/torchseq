@@ -69,6 +69,20 @@ class SepAEMetricHook(MetricHook):
                 f.write("\n".join(codepred_output))
             logger.info("...done")
 
+        if self.config.eval.metrics.sep_ae.get("run_codepred_topk", True):
+            logger.info("Running generation with top-k predicated templates")
+            self.scores["sepae_codepred_topk"] = SepAEMetricHook.eval_gen_codepred_diversity(
+                self.config, agent, test=use_test, top_k=self.config.eval.metrics.sep_ae.get("codepred_topk", 3)
+            )
+            logger.info("...done")
+
+        if self.config.eval.metrics.sep_ae.get("run_unsupervised", True):
+            logger.info("Running generation without supervision (using depth masking)")
+            self.scores["sepae_unsupervised"] = SepAEMetricHook.eval_gen_pred_unsupervised_masked(
+                self.config, agent, test=use_test
+            )
+            logger.info("...done")
+
         if self.config.eval.metrics.sep_ae.get("run_oracle", True):
             logger.info("Running generation with oracle template")
             self.scores["sepae_oracle"] = SepAEMetricHook.eval_gen_with_oracle(self.config, agent, test=use_test)
@@ -533,7 +547,9 @@ class SepAEMetricHook(MetricHook):
             for iter in tqdm(range(num_steps), desc="Training code predictor", disable=agent.silent):
                 batch_ixs = rand_ixs[iter, :]
 
-                inputs = Variable(torch.tensor([X[ix] for ix in batch_ixs if len(train_cluster_ixs[ix]) > 0])).cuda()
+                inputs = Variable(
+                    torch.stack([X[ix] for ix in batch_ixs if len(train_cluster_ixs[ix]) > 0], dim=0)
+                ).cuda()
 
                 if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                     tgt_ixs = [
@@ -572,7 +588,7 @@ class SepAEMetricHook(MetricHook):
                     for x_ix, cluster in enumerate(dev_cluster_ixs):
                         if len(cluster) == 0:
                             continue
-                        inputs = Variable(torch.tensor([X_dev[x_ix]])).cuda()
+                        inputs = Variable(torch.stack([X_dev[x_ix]], dim=0)).cuda()
 
                         if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                             tgt_ixs = [np.random.choice(dev_cluster_ixs[cix]) for cix in [x_ix]]
