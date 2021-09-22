@@ -11,8 +11,17 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class LangModelAgent(ModelAgent):
-    def __init__(self, config, run_id, output_path, silent=False, training_mode=True, verbose=True):
-        super().__init__(config, run_id, output_path, silent, training_mode, verbose)
+    def __init__(
+        self,
+        config,
+        run_id,
+        output_path,
+        silent=False,
+        training_mode=True,
+        verbose=True,
+        cache_root=None,
+    ):
+        super().__init__(config, run_id, output_path, silent, training_mode, verbose, cache_root)
 
         self.tgt_field = "sent"
 
