@@ -401,8 +401,8 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu), output
 
     @abstractmethod
-    def populate_cache(config, agent):
-        MAX_SAMPLES = config.bottleneck.code_predictor.get("max_samples", 1e10)
+    def populate_cache(config, agent, MAX_SAMPLES=1e10):
+
         dataset_all = config.eval.metrics.sep_ae.flattened_dataset
 
         if agent.cache.load("codepred_cache_X") is not None:
@@ -496,7 +496,7 @@ class SepAEMetricHook(MetricHook):
             #     dataset_clusters = "wikianswers-pp"
             #     # dataset_geneval = "wikianswers-para-splitforgeneval"
 
-            X, y, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent)
+            X, y, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent, MAX_SAMPLES)
 
             with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "train.jsonl")) as f:
                 train_qs = [row for row in f]
