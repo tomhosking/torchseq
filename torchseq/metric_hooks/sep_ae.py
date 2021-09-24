@@ -560,8 +560,7 @@ class SepAEMetricHook(MetricHook):
                     ]
                     tgt = torch.cat(
                         [
-                            onehot(y[tgt_ix], N=config.bottleneck.code_predictor.output_dim).unsqueeze(0)
-                            * 1.0
+                            onehot(y[tgt_ix], N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) * 1.0
                             for tgt_ix in tgt_ixs
                         ],
                         dim=0,
@@ -596,9 +595,7 @@ class SepAEMetricHook(MetricHook):
                             tgt_ixs = [np.random.choice(dev_cluster_ixs[cix]) for cix in [x_ix]]
                             dev_tgt = torch.cat(
                                 [
-                                    onehot(
-                                        y_dev[tgt_ix], N=config.bottleneck.code_predictor.output_dim
-                                    ).unsqueeze(0)
+                                    onehot(y_dev[tgt_ix], N=config.bottleneck.code_predictor.output_dim).unsqueeze(0)
                                     * 1.0
                                     for tgt_ix in tgt_ixs
                                 ],
