@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+import numpy as np
+import math
 
 
 def onehot(indexes, N=None, ignore_index=None):
@@ -83,3 +85,11 @@ def evaluating(net):
     finally:
         if istrain:
             net.train()
+
+
+def batchify(input, batch_size=1, shuffle=False):
+    if shuffle:
+        np.random.shuffle(input)
+    for bix in range(math.ceil((1.0 * len(input)) / batch_size)):
+        batch = input[bix * batch_size : (bix + 1) * batch_size]
+        yield bix, batch

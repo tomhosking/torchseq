@@ -15,7 +15,7 @@ from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
 
 from torch.autograd import Variable
-from torchseq.utils.functions import onehot
+from torchseq.utils.functions import onehot, batchify
 
 
 import logging
@@ -71,7 +71,7 @@ class SepAEMetricHook(MetricHook):
 
         if self.config.eval.metrics.sep_ae.get("run_codepred_topk", True):
             logger.info("Running generation with top-k predicated templates")
-            self.scores["sepae_codepred_topk"] = SepAEMetricHook.eval_gen_codepred_diversity(
+            self.scores["sepae_codepred_topk"], _ = SepAEMetricHook.eval_gen_codepred_diversity(
                 self.config, agent, test=use_test, top_k=self.config.eval.metrics.sep_ae.get("codepred_topk", 3)
             )
             logger.info("...done")
@@ -249,6 +249,7 @@ class SepAEMetricHook(MetricHook):
         scores = {}
 
         for mask_length in range(0, num_heads):
+            logger.info(f"Running masked generation with depth={mask_length}")
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
@@ -438,7 +439,7 @@ class SepAEMetricHook(MetricHook):
             )
 
             X = torch.cat([memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], dim=1)
-            y = memory_train["vq_codes"].tolist()
+            y = memory_train["vq_codes"]
 
             del memory_train
 
@@ -447,7 +448,7 @@ class SepAEMetricHook(MetricHook):
             )
 
             X_dev = torch.cat([memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], dim=1)
-            y_dev = memory_dev["vq_codes"].tolist()
+            y_dev = memory_dev["vq_codes"]
 
             del memory_dev
 
@@ -510,7 +511,7 @@ class SepAEMetricHook(MetricHook):
                     # if args.dataset != 'qqp':
                     cluster_ixs.remove(ix + i)
                     if enforce_unique_codes:
-                        cluster_ixs = [cix for cix in cluster_ixs if (y[cix] != y[ix])]
+                        cluster_ixs = [cix for cix in cluster_ixs if (y[cix] != y[ix]).any()]
 
                     train_cluster_ixs.append(cluster_ixs)
                 ix += clen
@@ -559,7 +560,7 @@ class SepAEMetricHook(MetricHook):
                     ]
                     tgt = torch.cat(
                         [
-                            onehot(torch.tensor(y[tgt_ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0)
+                            onehot(y[tgt_ix], N=config.bottleneck.code_predictor.output_dim).unsqueeze(0)
                             * 1.0
                             for tgt_ix in tgt_ixs
                         ],
@@ -585,6 +586,7 @@ class SepAEMetricHook(MetricHook):
 
                     dev_loss = 0
 
+                    # TODO: batchify
                     for x_ix, cluster in enumerate(dev_cluster_ixs):
                         if len(cluster) == 0:
                             continue
@@ -595,7 +597,7 @@ class SepAEMetricHook(MetricHook):
                             dev_tgt = torch.cat(
                                 [
                                     onehot(
-                                        torch.tensor(y_dev[tgt_ix]), N=config.bottleneck.code_predictor.output_dim
+                                        y_dev[tgt_ix], N=config.bottleneck.code_predictor.output_dim
                                     ).unsqueeze(0)
                                     * 1.0
                                     for tgt_ix in tgt_ixs
@@ -735,21 +737,57 @@ class SepAEMetricHook(MetricHook):
         if test:
             raise Exception("Code pred diversity is not yet implemented for test!")
 
-        # First, get top-k predicted codes
-        _, _, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent)
+        sample_outputs = agent.config.eval.get("sample_outputs", True)
+
+        # Generate encodings
+        logger.info("Generating encodings for eval set")
+        config_gen_eval = copy.deepcopy(config.data)
+        config_gen_eval["dataset"] = "json"
+        config_gen_eval["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+            ],
+        }
+        config_gen_eval["eval"]["topk"] = 1
+        config.bottleneck.data["prior_var_weight"] = 0.0
+
+        data_loader = JsonDataLoader(config=Config(config_gen_eval))
+
+        config.eval.data["sample_outputs"] = False
+
+        _, _, (_, _, _), memory_eval = agent.inference(
+            data_loader.test_loader if test else data_loader.valid_loader,
+            memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"],
+        )
+
+        X_eval = torch.cat([memory_eval["sep_encoding_1"][:, 0, :], memory_eval["sep_encoding_2"][:, 0, :]], dim=1)
+        y_eval = memory_eval["vq_codes"]
+
+        # Get top-k predicted codes
 
         logger.info("Running code predictor")
 
-        if agent.model.code_predictor.config.get("beam_width", 0) > top_k:
+        if agent.model.code_predictor.config.get("beam_width", 0) < top_k:
             agent.model.code_predictor.config.data["beam_width"] = top_k
 
         pred_codes = []
-        # TODO: batchify!
-        for ix, x_batch in enumerate(X_dev):
+        # # TODO: batchify!
+        for ix, x_batch in enumerate(X_eval):
             curr_codes = agent.model.code_predictor.infer(
-                x_batch.unsqueeze(0).to(agent.device), {}, outputs_to_block=y_dev[ix], top_k=top_k
+                x_batch.unsqueeze(0).to(agent.device), {}, outputs_to_block=y_eval[ix].unsqueeze(0), top_k=top_k
             )
             pred_codes.append(curr_codes)
+
+        # dev_set = list(zip(X_dev, y_dev))
+
+        # for bix, (x_batch, y_batch) in batchify(dev_set, 32):
+        #     curr_codes = agent.model.code_predictor.infer(
+        #         x_batch.to(agent.device), {}, outputs_to_block=y_batch, top_k=top_k
+        #     )
+        #     pred_codes.extend(curr_codes)
 
         pred_codes = torch.cat(pred_codes, dim=0)
 
@@ -769,7 +807,6 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_pred_diversity))
 
-        sample_outputs = agent.config.eval.get("sample_outputs", True)
         config.eval.data["sample_outputs"] = True
 
         split = "test" if test else "dev"
@@ -790,6 +827,7 @@ class SepAEMetricHook(MetricHook):
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
         scores = {}
+        topk_outputs = []
 
         for k in range(top_k):
             logger.info(f"Running generation with {k+1}th best codes")
@@ -808,9 +846,15 @@ class SepAEMetricHook(MetricHook):
 
             scores[k + 1] = (tgt_bleu, self_bleu, ibleu)
 
+            if k > 0:
+                intra_bleu = sacrebleu.corpus_bleu(output, list(zip(*[[x] for x in topk_outputs[-1]]))).score
+                scores[f"intra_{k}"] = intra_bleu
+
+            topk_outputs.append(output)
+
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
-        return scores
+        return scores, topk_outputs
 
     @abstractmethod
     def eval_gen_beam_diversity(config, agent, test=False):
