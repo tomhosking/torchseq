@@ -185,7 +185,9 @@ class JsonDataset(Dataset):
         tensor_batch = {}
         for k in keys:
             if k[-5:] != "_text":
-                tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
+                tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
+                if k[-4:] == "_len":
+                    tensor_batch[k] = tensor_batch[k].squeeze()
             else:
                 tensor_batch[k] = [x[k] for x in batch]
 

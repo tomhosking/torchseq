@@ -53,6 +53,7 @@ class BottleneckAutoencoderModel(nn.Module):
                 vq_embeddings = self.bottleneck.module_list[1].quantizer._embedding
             else:
                 vq_embeddings = self.bottleneck.quantizer._embedding
+
             self.code_predictor = VQCodePredictor(pred_config, transitions=vq_transitions, embeddings=vq_embeddings)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
@@ -123,6 +124,7 @@ class BottleneckAutoencoderModel(nn.Module):
 
                 if "forced_templ_encoding" in batch:
                     template_encoding_pooled = batch["forced_templ_encoding"]
+                    template_memory["encoding_pooled"] = batch["forced_templ_encoding"]
                 else:
                     template_encoding_pooled, template_memory = self.bottleneck(
                         template_encoding,
