@@ -123,8 +123,9 @@ class BottleneckAutoencoderModel(nn.Module):
                 )
 
                 if "forced_templ_encoding" in batch:
-                    template_encoding_pooled = batch["forced_templ_encoding"]
-                    template_memory["encoding_pooled"] = batch["forced_templ_encoding"]
+                    # print(batch["forced_templ_encoding"].shape, template_encoding)
+                    template_encoding_pooled = batch["forced_templ_encoding"].unsqueeze(1)
+                    template_memory["encoding_pooled"] = batch["forced_templ_encoding"].unsqueeze(1)
                 else:
                     template_encoding_pooled, template_memory = self.bottleneck(
                         template_encoding,

@@ -242,6 +242,9 @@ class VQCodePredictor(torch.nn.Module):
             dim=-1,
         ).mean()  #
         if take_step:
+            clip_grad = self.config.get("clip_grad", None)
+            if clip_grad is not None:
+                torch.nn.utils.clip_grad_norm_(self.parameters(), clip_grad)
             loss.backward()
             self.optimizer.step()
 

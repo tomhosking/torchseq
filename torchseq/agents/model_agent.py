@@ -212,6 +212,10 @@ class ModelAgent(BaseAgent):
             self.global_step = checkpoint["global_step"]
         else:
             self.logger.warn("Checkpoint is missing global_step value!")
+
+        if "epoch" in checkpoint:
+            self.current_epoch = checkpoint["epoch"]
+
         self.loss = checkpoint["loss"]
         self.best_metric = (
             checkpoint["best_metric"]
@@ -236,6 +240,7 @@ class ModelAgent(BaseAgent):
         os.makedirs(save_path, exist_ok=True)
         torch.save(
             {
+                "epoch": self.current_epoch,
                 "global_step": self.global_step,
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizer.state_dict() if self.training_mode else None,

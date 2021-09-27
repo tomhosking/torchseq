@@ -139,7 +139,14 @@ class JsonDataset(Dataset):
                 sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
                 sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
             else:
-                sample[f["to"]] = torch.LongTensor(parsed.field_as_ids(f["to"]))
+                field = parsed.field_as_ids(f["to"])
+                if isinstance(field, torch.Tensor):
+                    if torch.is_floating_point(field):
+                        sample[f["to"]] = torch.FloatTensor(field.tolist())
+                    else:
+                        sample[f["to"]] = torch.LongTensor(field.tolist())
+                else:
+                    sample[f["to"]] = torch.LongTensor(field)
                 sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]])])
 
             # HACK: hard coded field name!

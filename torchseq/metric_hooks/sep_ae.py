@@ -76,9 +76,9 @@ class SepAEMetricHook(MetricHook):
             )
             logger.info("...done")
 
-        if self.config.eval.metrics.sep_ae.get("run_unsupervised", True):
+        if self.config.eval.metrics.sep_ae.get("run_unsupervised", False):
             logger.info("Running generation without supervision (using depth masking)")
-            self.scores["sepae_unsupervised"] = SepAEMetricHook.eval_gen_pred_unsupervised_masked(
+            self.scores["sepae_unsupervised"], _ = SepAEMetricHook.eval_gen_pred_unsupervised_masked(
                 self.config, agent, test=use_test
             )
             logger.info("...done")
@@ -247,6 +247,7 @@ class SepAEMetricHook(MetricHook):
             num_heads = config.bottleneck.modules[1].quantizer.num_heads
 
         scores = {}
+        outputs = {}
 
         for mask_length in range(0, num_heads):
             logger.info(f"Running masked generation with depth={mask_length}")
@@ -281,8 +282,9 @@ class SepAEMetricHook(MetricHook):
             ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
             scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+            outputs[mask_length] = output
 
-        return scores
+        return scores, outputs
 
     @abstractmethod
     def eval_gen_noised_diversity(config, agent, noise_weight=2.0, code_offset=2, test=False):
@@ -567,14 +569,15 @@ class SepAEMetricHook(MetricHook):
                     ).cuda()
                 else:
                     tgt_ixs = [
-                        [y[ix] for ix in train_cluster_ixs[cix]][:100]
+                        [y[ix].tolist() for ix in train_cluster_ixs[cix]][:100]
                         for cix in batch_ixs
                         if len(train_cluster_ixs[cix]) > 0
                     ]
                     max_len = max([len(tgt) for tgt in tgt_ixs])
                     # pad
-                    tgt_ixs = torch.LongTensor([tgt + [tgt[0]] * (max_len - len(tgt)) for tgt in tgt_ixs]).cuda()
-                    tgt = onehot(tgt_ixs, N=config.bottleneck.code_predictor.output_dim).sum(dim=1)
+                    tgt_ixs_padded = [tgt + [tgt[0]] * (max_len - len(tgt)) for tgt in tgt_ixs]
+                    tgt_ixs_padded = torch.LongTensor(tgt_ixs_padded).cuda()
+                    tgt = onehot(tgt_ixs_padded, N=config.bottleneck.code_predictor.output_dim).sum(dim=1)
                     tgt = torch.where(tgt > 0, 1, 0)
                     # tgt = torch.where(torch.cat([torch.sum(torch.cat([onehot(torch.tensor(y[ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) for ix in train_cluster_ixs[cix][:20]], dim=0), dim=0, keepdims=True) for cix in batch_ixs], dim=0) > 0, 1, 0).cuda()
 
@@ -602,7 +605,7 @@ class SepAEMetricHook(MetricHook):
                                 dim=0,
                             ).cuda()
                         else:
-                            tgt_ixs = [[y_dev[ix] for ix in cluster][:100]]
+                            tgt_ixs = [[y_dev[ix].tolist() for ix in cluster][:100]]
                             max_len = max([len(tgt) for tgt in tgt_ixs])
                             # pad
                             tgt_ixs = torch.LongTensor(

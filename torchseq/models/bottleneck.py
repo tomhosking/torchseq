@@ -59,7 +59,7 @@ class PoolingBottleneck(nn.Module):
                 self.config.bottleneck.codebook_size,
                 (self.config.bottleneck.embedding_dim * num_quantizer_heads) // total_quantizer_heads,
                 commitment_cost=0.25,
-                decay=0.99,
+                decay=self.config.bottleneck.get("quantizer_ema_decay", 0.99),
                 num_heads=num_quantizer_heads,
                 residual=self.config.bottleneck.get("quantizer_residual", False),
                 code_offset=self.config.bottleneck.get("code_offset", 0),
