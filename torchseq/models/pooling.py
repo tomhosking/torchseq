@@ -6,7 +6,14 @@ import torch.nn as nn
 
 class MultiHeadedPooling(nn.Module):
     def __init__(
-        self, head_count, model_dim, dropout=0.1, use_bilinear=False, use_final_linear=True, model_dim_out=None
+        self,
+        head_count,
+        model_dim,
+        dropout=0.1,
+        use_bilinear=False,
+        use_final_linear=True,
+        model_dim_out=None,
+        use_layer_norm=False,
     ):
         assert model_dim % head_count == 0
         self.dim_per_head = model_dim // head_count
@@ -22,6 +29,10 @@ class MultiHeadedPooling(nn.Module):
         if use_final_linear:
             self.final_linear = nn.Linear(model_dim, model_dim_out)
         self.use_final_linear = use_final_linear
+
+        self.use_layer_norm = use_layer_norm
+        if use_layer_norm:
+            self.final_layer_norm = nn.LayerNorm(model_dim)
 
     def forward(self, key, value, query=None, mask=None):
         batch_size = key.size(0)
@@ -54,9 +65,9 @@ class MultiHeadedPooling(nn.Module):
         attn = self.softmax(scores)
         drop_attn = self.dropout(attn)
         context = torch.sum((drop_attn.unsqueeze(-1) * value), -2)
+        context = unshape(context).squeeze(1)
         if self.use_final_linear:
-            context = unshape(context).squeeze(1)
             output = self.final_linear(context)
-            return output
+            return self.final_layer_norm(output) if self.use_layer_norm else output
         else:
-            return unshape(context).squeeze(1)
+            return self.final_layer_norm(context) if self.use_layer_norm else context

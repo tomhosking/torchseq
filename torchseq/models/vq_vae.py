@@ -12,12 +12,13 @@ class VectorQuantizerMultiHead(nn.Module):
         self,
         num_embeddings,
         embedding_dim,
-        commitment_cost,
-        decay,
+        commitment_cost=0.25,
+        decay=0.99,
         epsilon=1e-5,
         num_heads=1,
         residual=False,
         ema=True,
+        ema_schedule_steps=None,
         code_offset=0,
         soft_em=True,
         warmup_steps=None,
@@ -45,6 +46,8 @@ class VectorQuantizerMultiHead(nn.Module):
         full_dim_input=False,
         init_decay_weight=1.0,
         init_embeds_xavier=False,
+        init_delay_steps=None,
+        init_dynamic_var=False,
         head_dropout=None,
         head_dropout_keep_first=True,
     ):
@@ -72,6 +75,7 @@ class VectorQuantizerMultiHead(nn.Module):
         self._embedding_dim = embedding_dim if full_dim_input else embedding_dim // self._num_heads
 
         self._ema = ema
+        self._ema_schedule_steps = ema_schedule_steps
         self._code_offset = code_offset
 
         self._soft_em = soft_em
@@ -191,6 +195,17 @@ class VectorQuantizerMultiHead(nn.Module):
         self._alpha = nn.Parameter(torch.Tensor(num_heads))
         self._code_entropy_weight = code_entropy_weight
 
+        self._init_decay_weight = init_decay_weight
+        self._init_delay_steps = init_delay_steps
+        self._init_dynamic_var = init_dynamic_var
+        if self._init_delay_steps is not None:
+            self.register_buffer("_init_cumsum", torch.zeros(embedding_dim))
+            self.register_buffer("_init_cumsquared", torch.zeros(embedding_dim))
+            self._init_samples = 0
+            self._init_done = False
+        else:
+            self._init_done = True
+
         if code_entropy_weight > 0:
             cooccur_shape = [num_embeddings] * num_heads
             self.register_buffer("_code_cooccurrence", torch.zeros(*cooccur_shape))
@@ -204,6 +219,30 @@ class VectorQuantizerMultiHead(nn.Module):
         quantized_list = []
         vq_codes = []
         all_probs = []
+
+        if (
+            self.training
+            and not self._init_done
+            and self._init_delay_steps is not None
+            and global_step < self._init_delay_steps
+        ):
+            self._init_cumsum += inputs.squeeze(dim=1).sum(dim=0)
+            self._init_cumsquared += (inputs ** 2).squeeze(dim=1).sum(dim=0)
+            self._init_samples += input_shape[0]
+        elif self.training and not self._init_done and global_step >= self._init_delay_steps:
+            init_mean = self._init_cumsum / float(self._init_samples)
+            init_var = (
+                torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean ** 2)
+                if self._init_dynamic_var
+                else torch.full_like(init_mean, 0.5)
+            )
+            for hix, embedding in enumerate(self._embedding):
+                this_mean = init_mean if hix == 0 else torch.zeros_like(init_mean)
+                self._embedding[hix].weight.data = torch.normal(
+                    mean=this_mean.unsqueeze(0).expand(self._num_embeddings, -1),
+                    std=init_var.unsqueeze(0).expand(self._num_embeddings, -1) * self._init_decay_weight ** hix,
+                )
+            self._init_done = True
 
         all_distances = []
         for head_ix, embedding in enumerate(self._embedding):
@@ -285,8 +324,15 @@ class VectorQuantizerMultiHead(nn.Module):
             # Use EMA to update the embedding vectors
             if self.training and self._ema:
                 with torch.no_grad():
+
+                    curr_decay = self._decay * (
+                        1
+                        if self._ema_schedule_steps is None
+                        else max(0, (1 - global_step / float(self._ema_schedule_steps)))
+                    )
+
                     _ema_cluster_size = getattr(self, "_ema_cluster_size" + str(head_ix))
-                    _ema_cluster_size = _ema_cluster_size * self._decay + (1 - self._decay) * torch.sum(probs, 0)
+                    _ema_cluster_size = _ema_cluster_size * curr_decay + (1 - curr_decay) * torch.sum(probs, 0)
 
                     # Laplace smoothing of the cluster size
                     n = torch.sum(_ema_cluster_size.data)
@@ -299,7 +345,7 @@ class VectorQuantizerMultiHead(nn.Module):
                         dw = torch.matmul(probs.t(), resid_error)
                     else:
                         dw = torch.matmul(probs.t(), this_input)
-                    self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * self._decay + (1 - self._decay) * dw)
+                    self._ema_w[head_ix] = nn.Parameter(self._ema_w[head_ix] * curr_decay + (1 - curr_decay) * dw)
 
                     self._embedding[head_ix].weight.data = nn.Parameter(
                         self._ema_w[head_ix] / _ema_cluster_size.unsqueeze(1)

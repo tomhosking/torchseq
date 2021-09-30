@@ -87,6 +87,7 @@ class BottleneckPart(nn.Module):
                 self.embedding_dim,
                 dropout=global_config.dropout,
                 use_final_linear=False,
+                use_layer_norm=self.config.get("layer_norm", False),
             )
             # print('built pooling, dim=', self.embedding_dim)
 
@@ -121,8 +122,8 @@ class BottleneckPart(nn.Module):
             self.quantizer = VectorQuantizerMultiHead(
                 config.quantizer.codebook_size,
                 embedding_dim,
-                commitment_cost=0.25,
-                decay=0.99,
+                # commitment_cost=0.25,
+                # decay=0.99,
                 # num_heads=self.config.get("quantizer_heads", 1),
                 # residual=self.config.get("quantizer_residual", False),
                 # code_offset=self.config.get("code_offset", 0),
