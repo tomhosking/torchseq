@@ -19,6 +19,7 @@ class VectorQuantizerMultiHead(nn.Module):
         residual=False,
         ema=True,
         ema_schedule_steps=None,
+        ema_first_only=False,
         code_offset=0,
         soft_em=True,
         warmup_steps=None,
@@ -48,6 +49,7 @@ class VectorQuantizerMultiHead(nn.Module):
         init_embeds_xavier=False,
         init_delay_steps=None,
         init_dynamic_var=False,
+        init_scale=0.5,
         head_dropout=None,
         head_dropout_keep_first=True,
     ):
@@ -76,6 +78,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._ema = ema
         self._ema_schedule_steps = ema_schedule_steps
+        self._ema_first_only = ema_first_only
         self._code_offset = code_offset
 
         self._soft_em = soft_em
@@ -141,8 +144,8 @@ class VectorQuantizerMultiHead(nn.Module):
             )
         for hix, embedding in enumerate(self._embedding):
             torch.nn.init.xavier_uniform_(
-                embedding.weight.data, gain=6.0 * init_decay_weight ** hix
-            ) if init_embeds_xavier else embedding.weight.data.normal_(std=0.5 * init_decay_weight ** hix)
+                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight ** hix
+            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight ** hix)
 
         if separate_output_embedding:
             self._output_embedding = nn.ModuleList(
@@ -254,29 +257,36 @@ class VectorQuantizerMultiHead(nn.Module):
             # print(f"h{head_ix} embed", torch.linalg.norm(embedding.weight, dim=-1)[:4])
 
             # Calculate distances
-            if self._cos_sim:
-                distances = cos_sim(this_input, self._embedding[head_ix].weight)
-            elif self._use_code_classifier:
-                distances = self._code_classifiers[head_ix](this_input)
-            else:
-                if self._relative_error and len(all_probs) > 0:
-                    if self._relative_error_cumulative:
-                        resid_error = this_input
-                        for hix in range(head_ix):
-                            resid_error = resid_error - torch.matmul(
-                                all_probs[hix], self._embedding[hix].weight  # .detach()
-                            ).squeeze(1)
-                    else:
-                        prev_embed = torch.matmul(
-                            all_probs[head_ix - 1], self._embedding[head_ix - 1].weight  # .detach()
+            if self._relative_error and len(all_probs) > 0:
+                if self._relative_error_cumulative:
+                    resid_error = this_input
+                    for hix in range(head_ix):
+                        resid_error = resid_error - torch.matmul(
+                            all_probs[hix], self._embedding[hix].weight  # .detach()
                         ).squeeze(1)
+                else:
+                    prev_embed = torch.matmul(
+                        all_probs[head_ix - 1], self._embedding[head_ix - 1].weight  # .detach()
+                    ).squeeze(1)
 
-                        resid_error = this_input - prev_embed
+                    resid_error = this_input - prev_embed
+
+                if self._cos_sim:
+                    distances = cos_sim(resid_error, self._embedding[head_ix].weight)
+                elif self._use_code_classifier:
+                    distances = self._code_classifiers[head_ix](resid_error)
+                else:
                     distances = -1.0 * (
                         torch.sum(resid_error ** 2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
                     )
+            else:
+
+                if self._cos_sim:
+                    distances = cos_sim(this_input, self._embedding[head_ix].weight)
+                elif self._use_code_classifier:
+                    distances = self._code_classifiers[head_ix](this_input)
                 else:
                     distances = -1.0 * (
                         torch.sum(this_input ** 2, dim=1, keepdim=True)
@@ -322,10 +332,15 @@ class VectorQuantizerMultiHead(nn.Module):
             all_probs.append(probs.unsqueeze(1))
 
             # Use EMA to update the embedding vectors
-            if self.training and self._ema:
+            if (
+                self.training
+                and self._ema
+                and (head_ix == 0 or not self._ema_first_only)
+                and (self._ema_schedule_steps is None or global_step <= self._ema_schedule_steps)
+            ):
                 with torch.no_grad():
 
-                    curr_decay = self._decay * (
+                    curr_decay = 1 - (1 - self._decay) * (
                         1
                         if self._ema_schedule_steps is None
                         else max(0, (1 - global_step / float(self._ema_schedule_steps)))
@@ -394,7 +409,8 @@ class VectorQuantizerMultiHead(nn.Module):
             if self.training and (self._soft_em or self._transitions or not self._use_straight_through):
                 this_quantized = torch.matmul(
                     all_probs[head_ix],
-                    embedding.weight.detach() if (self._ema and self._output_embedding is None) else embedding.weight,
+                    # embedding.weight.detach() if (self._ema and self._output_embedding is None) else embedding.weight,
+                    embedding.weight,
                 )
 
             # otherwise use one hot

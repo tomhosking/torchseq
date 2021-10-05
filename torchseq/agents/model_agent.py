@@ -436,9 +436,9 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
-            # print("q1 grad", self.model.bottleneck.quantizer._embedding[1].weight.grad.norm(dim=-1)[:4])
-            # print("q1 norm", self.model.bottleneck.quantizer._embedding[1].weight.norm(dim=-1)[:4])
-            # print(self.model.bottleneck.quantizer._transitions[1].weight.grad.norm())
+            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[0].weight.grad.norm(dim=-1).max())
+            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[1].weight.grad.norm(dim=-1).max())
+            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[2].weight.grad.norm(dim=-1).max())
             # exit()
 
             steps_accum += curr_batch_size
@@ -728,7 +728,7 @@ class ModelAgent(BaseAgent):
                 with open(os.path.join(self.run_output_path, "output.txt"), "w") as f:
                     f.write("\n".join([json.dumps(pred) for pred in pred_output]))
                 with open(os.path.join(self.run_output_path, "metrics.json"), "w") as f:
-                    json.dump(self.all_metrics_at_best, f)
+                    json.dump(self.all_metrics_at_best, f, indent=4)
 
         if (
             self.best_metric is None
