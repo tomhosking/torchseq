@@ -63,7 +63,7 @@ def main():
 
     if args.patch is not None and len(args.patch) > 0:
         for mask_path in args.patch:
-            logger.info(f'Applying patch: {mask_path}')
+            logger.info(f"Applying patch: {mask_path}")
             with open(mask_path) as f:
                 cfg_mask = json.load(f)
             cfg_dict = merge_cfg_dicts(cfg_dict, cfg_mask)
