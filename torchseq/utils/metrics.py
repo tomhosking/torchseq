@@ -41,7 +41,12 @@ def sari_corpus(golds, preds, inputs):
 
 
 def meteor_corpus(golds, preds):
-    return sum([single_meteor_score(g, p) for g, p in zip(golds, preds)]) / len(golds)
+    return sum(
+        [
+            single_meteor_score(TreebankWordTokenizer().tokenize(g), TreebankWordTokenizer().tokenize(p))
+            for g, p in zip(golds, preds)
+        ]
+    ) / len(golds)
 
 
 def f1(gold, prediction):
