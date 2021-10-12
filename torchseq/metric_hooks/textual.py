@@ -40,6 +40,7 @@ class TextualMetricHook(MetricHook):
         # print(len(self.gold_targets), len(self.pred_targets), len(self.inputs))
 
         self.scores["bleu"] = bleu_corpus(self.gold_targets, self.pred_targets)
+        self.scores["selfbleu"] = bleu_corpus(self.inputs, self.pred_targets)
 
         self.scores["ibleu"] = ibleu_corpus(self.gold_targets, self.pred_targets, self.inputs)
 

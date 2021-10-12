@@ -69,8 +69,8 @@ class SepAEMetricHook(MetricHook):
                 f.write("\n".join(codepred_output))
             logger.info("...done")
 
-        if self.config.eval.metrics.sep_ae.get("run_codepred_topk", True):
-            logger.info("Running generation with top-k predicated templates")
+        if self.config.eval.metrics.sep_ae.get("run_codepred_topk", False):
+            logger.info("Running generation with top-k predicted templates")
             self.scores["sepae_codepred_topk"], _ = SepAEMetricHook.eval_gen_codepred_diversity(
                 self.config, agent, test=use_test, top_k=self.config.eval.metrics.sep_ae.get("codepred_topk", 3)
             )
@@ -130,8 +130,8 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        _, _, (output, _, _), memory = agent.inference(
-            data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+        _, _, (output, _, _), _ = agent.inference(
+            data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=[]
         )
 
         split = "test" if test else "dev"
@@ -151,8 +151,8 @@ class SepAEMetricHook(MetricHook):
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -181,8 +181,12 @@ class SepAEMetricHook(MetricHook):
         if config.bottleneck.get("quantizer_heads", None) is not None:
             num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
         else:
-            # HACK
-            num_heads = config.bottleneck.modules[1].quantizer.num_heads
+            bneck_types = [x.type for x in config.bottleneck.modules]
+            if "vqvae" not in bneck_types:
+                logger.warn("Tried to run oracle masked eval on a model without a quantizer!")
+                return {}
+            quantizer_index = bneck_types.index("vqvae")
+            num_heads = config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
         scores = {}
 
@@ -211,8 +215,8 @@ class SepAEMetricHook(MetricHook):
             max_num_refs = max([len(x) for x in refs])
             refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
             alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
             ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -275,8 +279,8 @@ class SepAEMetricHook(MetricHook):
             max_num_refs = max([len(x) for x in refs])
             refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
             alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
             ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -341,8 +345,8 @@ class SepAEMetricHook(MetricHook):
         config.bottleneck.data["prior_var_weight"] = 0.0
         agent.model.bottleneck.quantizer._code_offset = 0
 
-        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -394,8 +398,8 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -716,8 +720,8 @@ class SepAEMetricHook(MetricHook):
 
         # config.bottleneck.data["prior_var_weight"] = 0.0
 
-        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+        tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+        self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -733,9 +737,6 @@ class SepAEMetricHook(MetricHook):
         mask_length=0,
         top_k=2,
     ):
-
-        if test:
-            raise Exception("Code pred diversity is not yet implemented for test!")
 
         sample_outputs = agent.config.eval.get("sample_outputs", True)
 
@@ -838,8 +839,8 @@ class SepAEMetricHook(MetricHook):
 
             _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs))).score
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
             alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
             ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
@@ -847,7 +848,9 @@ class SepAEMetricHook(MetricHook):
             scores[k + 1] = (tgt_bleu, self_bleu, ibleu)
 
             if k > 0:
-                intra_bleu = sacrebleu.corpus_bleu(output, list(zip(*[[x] for x in topk_outputs[-1]]))).score
+                intra_bleu = sacrebleu.corpus_bleu(
+                    output, list(zip(*[[x] for x in topk_outputs[-1]])), lowercase=True
+                ).score
                 scores[f"intra_{k}"] = intra_bleu
 
             topk_outputs.append(output)
@@ -899,8 +902,8 @@ class SepAEMetricHook(MetricHook):
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
-        tgt_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*refs_padded))).score
-        self_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*other_outs))).score
+        tgt_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+        self_bleu_div = sacrebleu.corpus_bleu(output, list(zip(*other_outs)), lowercase=True).score
         ibleu_div = alpha * tgt_bleu_div - (1 - alpha) * self_bleu_div
 
         config.eval.data["topk"] = prev_topk

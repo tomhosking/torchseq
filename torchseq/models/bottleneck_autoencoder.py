@@ -101,17 +101,15 @@ class BottleneckAutoencoderModel(nn.Module):
                 else:
                     encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
 
+            num_heads = self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
+
             if self.config.bottleneck.get("num_similar_heads", None) is not None:
                 # print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
                 splice_head_offset = self.config.bottleneck.num_similar_heads
             else:
-                splice_head_offset = self.config.bottleneck.get("splice_head_offset", 0)
+                splice_head_offset = self.config.bottleneck.get("splice_head_offset", num_heads)
 
-            sep_splice_ix = (
-                self.config.bottleneck.embedding_dim
-                // self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
-                * splice_head_offset
-            )
+            sep_splice_ix = self.config.bottleneck.embedding_dim // num_heads * splice_head_offset
 
             if "template" in batch:
                 template_memory = {}
