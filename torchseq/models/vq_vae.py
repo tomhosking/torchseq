@@ -52,6 +52,7 @@ class VectorQuantizerMultiHead(nn.Module):
         init_scale=0.5,
         head_dropout=None,
         head_dropout_keep_first=True,
+        learnable_priors=False,
     ):
 
         # residual_head_range=(0, 0),
@@ -184,6 +185,13 @@ class VectorQuantizerMultiHead(nn.Module):
             #     nn.init.xavier_uniform_(trans.weight, gain=10)
             # self._transition = nn.Linear(num_embeddings, num_embeddings)
 
+        if learnable_priors:
+            self._learnable_priors = nn.ParameterList(
+                [nn.Parameter(torch.zeros(num_embeddings)) for _ in range(num_heads)]
+            )
+        else:
+            self._learnable_priors = None
+
         self._commitment_cost = commitment_cost
 
         for ix in range(self._num_heads):
@@ -223,6 +231,8 @@ class VectorQuantizerMultiHead(nn.Module):
         vq_codes = []
         all_probs = []
 
+        loss = torch.zeros(input_shape[0]).to(inputs.device)
+
         if (
             self.training
             and not self._init_done
@@ -256,6 +266,10 @@ class VectorQuantizerMultiHead(nn.Module):
             # print(f"h{head_ix} input", torch.linalg.norm(this_input, dim=-1)[:4])
             # print(f"h{head_ix} embed", torch.linalg.norm(embedding.weight, dim=-1)[:4])
 
+            distances = torch.zeros(input_shape[0], embedding.weight.shape[0]).to(this_input.device)
+            if self._learnable_priors is not None:
+                distances += self._learnable_priors[head_ix]
+
             # Calculate distances
             if self._relative_error and len(all_probs) > 0:
                 if self._relative_error_cumulative:
@@ -272,11 +286,11 @@ class VectorQuantizerMultiHead(nn.Module):
                     resid_error = this_input - prev_embed
 
                 if self._cos_sim:
-                    distances = cos_sim(resid_error, self._embedding[head_ix].weight)
+                    distances += cos_sim(resid_error, self._embedding[head_ix].weight)
                 elif self._use_code_classifier:
-                    distances = self._code_classifiers[head_ix](resid_error)
+                    distances += self._code_classifiers[head_ix](resid_error)
                 else:
-                    distances = -1.0 * (
+                    distances += -1.0 * (
                         torch.sum(resid_error ** 2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
@@ -284,11 +298,11 @@ class VectorQuantizerMultiHead(nn.Module):
             else:
 
                 if self._cos_sim:
-                    distances = cos_sim(this_input, self._embedding[head_ix].weight)
+                    distances += cos_sim(this_input, self._embedding[head_ix].weight)
                 elif self._use_code_classifier:
-                    distances = self._code_classifiers[head_ix](this_input)
+                    distances += self._code_classifiers[head_ix](this_input)
                 else:
-                    distances = -1.0 * (
+                    distances += -1.0 * (
                         torch.sum(this_input ** 2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(this_input, self._embedding[head_ix].weight.t())
@@ -296,6 +310,13 @@ class VectorQuantizerMultiHead(nn.Module):
 
             # Convert distances into log probs
             logits = distances.detach() if self._use_straight_through else distances
+
+            if self._learnable_priors is not None:
+                prior = torch.softmax(self._learnable_priors[head_ix], dim=-1)
+                posterior = torch.softmax(logits, dim=-1)
+                kl_loss = torch.nn.KLDivLoss(reduction="none")
+                loss += kl_loss(posterior, prior).sum(dim=-1)
+
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
                 logits += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)

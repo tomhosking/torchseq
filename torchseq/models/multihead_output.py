@@ -76,7 +76,6 @@ class MultiHeadOutput(nn.Module):
                     eps = torch.randn_like(std)
                     return mu + eps * std
 
-                print("var")
                 logits_split = reparameterize(mu, logvar)
 
             # Combine logits from each head

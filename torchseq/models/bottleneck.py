@@ -4,7 +4,7 @@ from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
-from torchseq.models.kl_divergence import get_kl
+from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 
@@ -216,12 +216,12 @@ class PoolingBottleneck(nn.Module):
                 )
                 encoding_pooled = torch.cat([var_encoding, encoding_pooled[:, :, splice_ix:]], dim=-1)
 
-                kl_loss = torch.mean(get_kl(mu[:, :, :splice_ix], logvar[:, :, :splice_ix]), dim=1)
+                kl_loss = torch.mean(gaussian_kl(mu[:, :, :splice_ix], logvar[:, :, :splice_ix]), dim=1)
             else:
 
                 encoding_pooled = reparameterize_gaussian(mu, logvar, var_weight=var_weight)
 
-                kl_loss = torch.mean(get_kl(mu, logvar), dim=1)
+                kl_loss = torch.mean(gaussian_kl(mu, logvar), dim=1)
 
             kl_warmup_steps = self.config.training.data.get("kl_warmup_steps", 0)
             kl_weight_mult = self.config.training.data.get("kl_weight", 1.0)

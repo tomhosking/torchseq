@@ -76,6 +76,13 @@ class SepAEMetricHook(MetricHook):
             )
             logger.info("...done")
 
+        if self.config.eval.metrics.sep_ae.get("run_codepred_masked", False):
+            logger.info("Running generation with predicted templates, masked")
+            self.scores["sepae_codepred_masked"], _ = SepAEMetricHook.eval_gen_codepred_masked(
+                self.config, agent, test=use_test
+            )
+            logger.info("...done")
+
         if self.config.eval.metrics.sep_ae.get("run_unsupervised", False):
             logger.info("Running generation without supervision (using depth masking)")
             self.scores["sepae_unsupervised"], _ = SepAEMetricHook.eval_gen_pred_unsupervised_masked(
@@ -224,6 +231,74 @@ class SepAEMetricHook(MetricHook):
             scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
 
         return scores
+
+    @abstractmethod
+    def eval_gen_pred_codepred_masked(config, agent, test=False):
+        config_gen_with_templ = copy.deepcopy(config.data)
+        config_gen_with_templ["dataset"] = "json"
+        config_gen_with_templ["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "head_mask", "to": "head_mask"},
+            ],
+        }
+        config_gen_with_templ["eval"]["topk"] = 1
+        config.bottleneck.data["prior_var_weight"] = 0.0
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        config.bottleneck.code_predictor.data["infer_codes"] = True
+
+        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+
+        if config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        else:
+            # HACK
+            num_heads = config.bottleneck.modules[1].quantizer.num_heads
+
+        scores = {}
+        outputs = {}
+
+        for mask_length in range(0, num_heads):
+            logger.info(f"Running masked generation with depth={mask_length}")
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask} for x in samples]
+            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+
+            split = "test" if test else "dev"
+
+            with jsonlines.open(
+                os.path.join(
+                    config.env.data_path,
+                    config.eval.metrics.sep_ae.eval_dataset,
+                    f"{split}.jsonl",
+                )
+            ) as f:
+                rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+            refs = [q["paras"] for q in rows]
+            inputs = [[q["sem_input"]] for q in rows]
+
+            # refs = [x["paras"] for x in qs_by_para_split]
+            max_num_refs = max([len(x) for x in refs])
+            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
+
+            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+            scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+            outputs[mask_length] = output
+
+        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+
+        return scores, outputs
 
     @abstractmethod
     def eval_gen_pred_unsupervised_masked(config, agent, test=False, use_qqp=False):

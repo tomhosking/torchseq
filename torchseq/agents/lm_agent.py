@@ -6,7 +6,7 @@ from torchseq.agents.model_agent import ModelAgent
 
 
 from torchseq.models.lm_transformer import TransformerLanguageModel
-from torchseq.models.kl_divergence import get_kl
+from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.utils.tokenizer import Tokenizer
 
 

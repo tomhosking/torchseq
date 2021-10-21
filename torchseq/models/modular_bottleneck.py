@@ -4,7 +4,7 @@ from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
-from torchseq.models.kl_divergence import get_kl
+from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 
@@ -196,14 +196,14 @@ class BottleneckPart(nn.Module):
         #     encoding_post, memory = self.hyperbolic_bottleneck(encoding_post, memory, global_step)
 
         # Reparameterise for VAE
-        if self.config.get("variational", False):
+        if self.config.get("variational", False) or self.config.get("type", None) == "vae":
 
             mu = encoding_post
             logvar = self.logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
 
             encoding_post = reparameterize_gaussian(mu, logvar, var_weight=var_weight)
 
-            kl_loss = torch.mean(get_kl(mu, logvar), dim=1)
+            kl_loss = torch.mean(gaussian_kl(mu, logvar), dim=1)
 
             kl_warmup_steps = self.global_config.training.data.get("kl_warmup_steps", 0)
             kl_weight_mult = self.global_config.training.data.get("kl_weight", 1.0)
