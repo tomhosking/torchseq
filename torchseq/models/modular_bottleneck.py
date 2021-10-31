@@ -91,14 +91,18 @@ class BottleneckPart(nn.Module):
             )
             # print('built pooling, dim=', self.embedding_dim)
 
+        self.logvar_pooling = MultiHeadedPooling(
+            num_heads,
+            self.embedding_dim,
+            dropout=global_config.dropout,
+            use_final_linear=False,
+        )
+
         if config.get("type", None) == "vae":
             # Extra modules for a variational bottleneck
-            self.logvar_pooling = MultiHeadedPooling(
-                num_heads,
-                self.embedding_dim,
-                dropout=global_config.dropout,
-                use_final_linear=False,
-            )
+            if not config.get("pooling", False):
+                self.mu_proj = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
+                self.var_proj = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
             # print('built logvar pooling, dim=', self.embedding_dim)
 
         if config.get("type", None) == "vmf":
@@ -184,7 +188,9 @@ class BottleneckPart(nn.Module):
         if self.config.get("type", None) == "vmf":
             raise Exception("VMF is not yet implemented for the modular bottleneck!")
 
-        var_weight = self.config.get("prior_var_weight", 1.0)
+        var_weight = self.config.get("prior_var_weight", 1.0) * (
+            1.0 if self.training or not self.global_config.eval.get("vae_use_map", True) else 0.0
+        )
 
         if not isinstance(var_weight, float) and len(var_weight) > 1:
             raise Exception("Varying VAE noise weight is not yet supported for the modular bottleneck!")
@@ -198,8 +204,12 @@ class BottleneckPart(nn.Module):
         # Reparameterise for VAE
         if self.config.get("variational", False) or self.config.get("type", None) == "vae":
 
-            mu = encoding_post
-            logvar = self.logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+            if self.config.get("pooling", False):
+                mu = encoding_post
+                logvar = self.logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+            else:
+                mu = self.mu_proj(encoding_post)
+                logvar = self.var_proj(encoding_post)
 
             encoding_post = reparameterize_gaussian(mu, logvar, var_weight=var_weight)
 

@@ -6,8 +6,9 @@ from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
 from torchseq.models.modular_bottleneck import ModularBottleneck
 from torchseq.utils.logging import Logger
-from torchseq.utils.functions import cos_sim
+from torchseq.utils.functions import cos_sim, onehot
 from torchseq.models.vq_code_predictor import VQCodePredictor
+from torchseq.models.pooling import MultiHeadedPooling
 
 
 class BottleneckAutoencoderModel(nn.Module):
@@ -18,6 +19,15 @@ class BottleneckAutoencoderModel(nn.Module):
         # TEMP: deprecation warning
         if self.config.bottleneck.get("num_similar_heads", None) is not None:
             print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
+
+        num_heads = self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
+
+        if self.config.bottleneck.get("num_similar_heads", None) is not None:
+            splice_head_offset = self.config.bottleneck.num_similar_heads
+        else:
+            splice_head_offset = self.config.bottleneck.get("splice_head_offset", num_heads)
+
+        self.sep_splice_ix = self.config.bottleneck.embedding_dim // num_heads * splice_head_offset
 
         self.src_field = src_field
 
@@ -56,6 +66,24 @@ class BottleneckAutoencoderModel(nn.Module):
 
             self.code_predictor = VQCodePredictor(pred_config, transitions=vq_transitions, embeddings=vq_embeddings)
 
+        if self.config.bottleneck.get("reduce_fn", "max") == "pool":
+            if self.config.bottleneck.get(
+                "code_predictor", None
+            ) is not None and not self.config.bottleneck.code_predictor.get("sem_only", False):
+                raise Exception("If pooling is used as the reduce_fn, sem_only must be set to true!")
+            self.reduce_pooling = MultiHeadedPooling(
+                1,
+                self.sep_splice_ix,
+                dropout=self.config.dropout,
+                use_final_linear=False,
+            )
+
+    def reduce_fn(self, inputs):
+        if self.config.bottleneck.get("reduce_fn", "max") == "pool":
+            return self.reduce_pooling(inputs, inputs)
+        else:
+            return inputs.max(dim=1).values
+
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
             memory = {}
@@ -78,8 +106,13 @@ class BottleneckAutoencoderModel(nn.Module):
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
+                if self.config.bottleneck.code_predictor.get("sem_only", False):
+                    codepred_input = raw_encoding_pooled[:, : self.sep_splice_ix, :]
+                else:
+                    codepred_input = raw_encoding_pooled
+
                 pred_codes = self.code_predictor.infer(
-                    raw_encoding_pooled.max(dim=1).values.detach(), batch, outputs_to_block=memory.get("vq_codes")
+                    self.reduce_fn(codepred_input).detach(), batch, outputs_to_block=memory.get("vq_codes")
                 )
                 batch["forced_codes"] = pred_codes
 
@@ -100,16 +133,6 @@ class BottleneckAutoencoderModel(nn.Module):
                     )
                 else:
                     encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
-
-            num_heads = self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
-
-            if self.config.bottleneck.get("num_similar_heads", None) is not None:
-                # print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
-                splice_head_offset = self.config.bottleneck.num_similar_heads
-            else:
-                splice_head_offset = self.config.bottleneck.get("splice_head_offset", num_heads)
-
-            sep_splice_ix = self.config.bottleneck.embedding_dim // num_heads * splice_head_offset
 
             if "template" in batch:
                 template_memory = {}
@@ -160,26 +183,46 @@ class BottleneckAutoencoderModel(nn.Module):
                 if self.config.bottleneck.get("use_templ_encoding", False):
                     if self.config.bottleneck.get("invert_templ", False):
                         raise Exception("invert_templ is no longer supported")
-                        encoding_pooled[:, :, :sep_splice_ix] = template_encoding_pooled[:, :, :sep_splice_ix]
-                        raw_encoding_pooled[:, :, :sep_splice_ix] = template_memory["encoding_pooled"][
-                            :, :, :sep_splice_ix
+                        encoding_pooled[:, :, : self.sep_splice_ix] = template_encoding_pooled[
+                            :, :, : self.sep_splice_ix
+                        ]
+                        raw_encoding_pooled[:, :, : self.sep_splice_ix] = template_memory["encoding_pooled"][
+                            :, :, : self.sep_splice_ix
                         ]
                     else:
                         encoding_pooled = torch.cat(
                             [
-                                encoding_pooled[:, :, :sep_splice_ix],
-                                template_encoding_pooled[:, :1, sep_splice_ix:].expand(
+                                encoding_pooled[:, :, : self.sep_splice_ix],
+                                template_encoding_pooled[:, :1, self.sep_splice_ix :].expand(
                                     -1, encoding_pooled.shape[1], -1
                                 ),
                             ],
                             dim=2,
                         )
-                        templ_raw_enc = template_memory["encoding_pooled"][:, :1, sep_splice_ix:].expand(
+                        templ_raw_enc = template_memory["encoding_pooled"][:, :1, self.sep_splice_ix :].expand(
                             -1, raw_encoding_pooled.shape[1], -1
                         )
                         raw_encoding_pooled = torch.cat(
-                            [raw_encoding_pooled[:, :, :sep_splice_ix], templ_raw_enc], dim=2
+                            [raw_encoding_pooled[:, :, : self.sep_splice_ix], templ_raw_enc], dim=2
                         )
+
+                if self.config.bottleneck.get("joint_train_codepred", False) and self.training:
+                    if "loss" not in memory:
+                        memory["loss"] = 0
+
+                    if self.config.bottleneck.code_predictor.get("sem_only", False):
+                        codepred_input = self.reduce_fn(encoding_pooled[:, :, : self.sep_splice_ix])
+                    else:
+                        codepred_input = self.reduce_fn(encoding_pooled)
+
+                    codepred_loss = self.code_predictor.train_step(
+                        codepred_input,
+                        onehot(memory["vq_codes"], N=self.code_predictor.config.output_dim),
+                        take_step=False,
+                    )
+                    Logger().log_scalar("bottleneck/codepred_loss", codepred_loss.mean(), batch["_global_step"])
+                    if batch["_global_step"] > self.config.bottleneck.get("joint_train_codepred_warmup_steps", 0):
+                        memory["loss"] += codepred_loss
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:
@@ -188,10 +231,12 @@ class BottleneckAutoencoderModel(nn.Module):
                     # TODO: there must be a cleaner way of flipping the tensor ranges here...
                     if self.config.bottleneck.get("cos_separation_loss", True):
                         diff1 = cos_sim(
-                            encoding_pooled[:, :, sep_splice_ix:], template_encoding_pooled[:, :, sep_splice_ix:]
+                            encoding_pooled[:, :, self.sep_splice_ix :],
+                            template_encoding_pooled[:, :, self.sep_splice_ix :],
                         )
                         diff2 = cos_sim(
-                            encoding_pooled[:, :, :sep_splice_ix], template_encoding_pooled[:, :, :sep_splice_ix]
+                            encoding_pooled[:, :, : self.sep_splice_ix],
+                            template_encoding_pooled[:, :, : self.sep_splice_ix],
                         )
                         if self.config.bottleneck.get("flip_separation_loss", False):
                             similarity_loss = 1 - 1 * diff1.mean(dim=-1).mean(dim=-1)
@@ -202,22 +247,26 @@ class BottleneckAutoencoderModel(nn.Module):
                     else:
                         if self.config.bottleneck.get("flip_separation_loss", False):
                             diff1 = (
-                                encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
+                                encoding_pooled[:, :, self.sep_splice_ix :]
+                                - template_encoding_pooled[:, :, self.sep_splice_ix :]
                             )
                             similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
                             diff2 = (
-                                encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
+                                encoding_pooled[:, :, : self.sep_splice_ix]
+                                - template_encoding_pooled[:, :, : self.sep_splice_ix]
                             )
                             dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
                         else:
                             diff1 = (
-                                encoding_pooled[:, :, :sep_splice_ix] - template_encoding_pooled[:, :, :sep_splice_ix]
+                                encoding_pooled[:, :, : self.sep_splice_ix]
+                                - template_encoding_pooled[:, :, : self.sep_splice_ix]
                             )
                             similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
 
                             diff2 = (
-                                encoding_pooled[:, :, sep_splice_ix:] - template_encoding_pooled[:, :, sep_splice_ix:]
+                                encoding_pooled[:, :, self.sep_splice_ix :]
+                                - template_encoding_pooled[:, :, self.sep_splice_ix :]
                             )
                             dissimilarity_loss = torch.log(1 + 1 / (1e-2 + (diff2) ** 2)).mean(dim=-1).mean(dim=-1)
 
@@ -237,18 +286,16 @@ class BottleneckAutoencoderModel(nn.Module):
             memory["encoding_mask"] = None
 
             # Note: this returns the encodings *before* bottleneck!
-            if sep_splice_ix > 0:
-                memory["sep_encoding_1"] = (
-                    raw_encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
-                )
-                memory["sep_encoding_1_after_bottleneck"] = (
-                    encoding_pooled[:, :, :sep_splice_ix].max(dim=1, keepdim=True).values.detach()
-                )
+            if self.sep_splice_ix > 0:
+                memory["sep_encoding_1"] = self.reduce_fn(raw_encoding_pooled[:, :, : self.sep_splice_ix]).detach()
+                memory["sep_encoding_1_after_bottleneck"] = self.reduce_fn(
+                    encoding_pooled[:, :, : self.sep_splice_ix]
+                ).detach()
             memory["sep_encoding_2"] = (
-                raw_encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
+                raw_encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()
             )
             memory["sep_encoding_2_after_bottleneck"] = (
-                encoding_pooled[:, :, sep_splice_ix:].max(dim=1, keepdim=True).values.detach()
+                encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()
             )
 
         # Fwd pass through decoder block

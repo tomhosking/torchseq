@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
-from torchseq.models.vq_vae import VectorQuantizerMultiHead
+from torchseq.models.vq_vae_v1 import VectorQuantizerMultiHeadV1
 from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
@@ -55,7 +55,7 @@ class PoolingBottleneck(nn.Module):
             num_quantizer_heads = total_quantizer_heads - self.residual_head_range[1] - self.residual_head_range[0]
 
             quantizer_kwargs = self.config.bottleneck.get("quantizer", {})
-            self.quantizer = VectorQuantizerMultiHead(
+            self.quantizer = VectorQuantizerMultiHeadV1(
                 self.config.bottleneck.codebook_size,
                 (self.config.bottleneck.embedding_dim * num_quantizer_heads) // total_quantizer_heads,
                 commitment_cost=0.25,
@@ -67,7 +67,7 @@ class PoolingBottleneck(nn.Module):
                 ema=self.config.bottleneck.get("quantizer_ema", True),
                 use_gumbel=self.config.bottleneck.get("quantizer_gumbel", False),
                 gumbel_temp=self.config.bottleneck.get("quantizer_gumbel_temp", 1.0),
-                temp_schedule=self.config.bottleneck.get("quantizer_gumbel_temp_schedule", False),
+                # temp_schedule=self.config.bottleneck.get("quantizer_gumbel_temp_schedule", False),
                 use_straight_through=self.config.bottleneck.get("quantizer_straight_through", True),
                 warmup_steps=self.config.bottleneck.get("quantizer_warmup_steps", None),
                 code_entropy_weight=self.config.bottleneck.get("quantizer_entropy_weight", 0),
@@ -77,13 +77,13 @@ class PoolingBottleneck(nn.Module):
                 transitions_bias=self.config.bottleneck.get("quantizer_transitions_bias", False),
                 transitions_embed=self.config.bottleneck.get("quantizer_transitions_embed", False),
                 transitions_log=self.config.bottleneck.get("quantizer_transitions_log", False),
-                relative_error=self.config.bottleneck.get("quantizer_relative_error", False),
+                # relative_error=self.config.bottleneck.get("quantizer_relative_error", False),
                 use_cosine_similarities=self.config.bottleneck.get("quantizer_cosine", False),
                 separate_output_embedding=self.config.bottleneck.get("quantizer_separate_output_embedding", False),
                 use_code_classifier=self.config.bottleneck.get("quantizer_classifier", False),
                 additive=self.config.bottleneck.get("quantizer_additive", False),
                 only_final=self.config.bottleneck.get("quantizer_only_final", False),
-                norm_loss_weight=self.config.bottleneck.get("quantizer_norm_loss_weight", None),
+                # norm_loss_weight=self.config.bottleneck.get("quantizer_norm_loss_weight", None),
                 **quantizer_kwargs,
             )
 
@@ -113,7 +113,7 @@ class PoolingBottleneck(nn.Module):
             #     raise Exception("Arbitrary quantizer residual ranges are not currently supported")
 
             vq_loss, quantized_encoding, quantizer_indices = self.quantizer(
-                encoding_pooled[:, :, splice_ix:], global_step, forced_codes, head_mask
+                encoding_pooled[:, :, splice_ix:], global_step, forced_codes
             )
 
             encoding_pooled = torch.cat([encoding_pooled[:, :, :splice_ix], quantized_encoding], dim=-1)
@@ -178,7 +178,9 @@ class PoolingBottleneck(nn.Module):
                 memory["loss"] = 0
             memory["loss"] += kld
 
-        var_weight = self.config.bottleneck.get("prior_var_weight", 1.0)
+        var_weight = self.config.get("prior_var_weight", 1.0) * (
+            1.0 if self.training or not self.config.eval.get("vae_use_map", True) else 0.0
+        )
 
         if not isinstance(var_weight, float) and len(var_weight) > 1:
             assert len(var_weight) == self.config.encdec.num_heads

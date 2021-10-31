@@ -93,7 +93,7 @@ def main():
         run_id,
         args.output_path,
         silent=args.silent,
-        verbose=(not args.silent),
+        verbose=args.verbose,
         training_mode=args.train,
         profile=args.profile,
         cache_root=(
@@ -127,6 +127,9 @@ def main():
         logger.info("...loaded!")
 
     if args.validate_train:
+        if data_loader.train_loader is None:
+            raise Exception("Selected dataset does not include a training split - cannot train!")
+
         set_status_mckenzie("validating")
         logger.info("Starting validation (on training set)...")
         _ = agent.validate(
@@ -135,12 +138,18 @@ def main():
         logger.info("...validation done!")
 
     if args.validate:
+        if data_loader.valid_loader is None:
+            raise Exception("Selected dataset does not include a dev split - cannot run validation!")
+
         set_status_mckenzie("validating")
         logger.info("Starting validation...")
         _ = agent.validate(data_loader, save=False, force_save_output=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
 
     if args.test:
+        if data_loader.test_loader is None:
+            raise Exception("Selected dataset does not include a test split - cannot run test evaluation!")
+
         set_status_mckenzie("validating")
         logger.info("Starting testing...")
         _ = agent.validate(

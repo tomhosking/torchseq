@@ -38,8 +38,6 @@ class SepAEMetricHook(MetricHook):
 
     def on_end_epoch(self, agent, use_test=False):
         # Temporarily change the config so the bottleneck is noiseless
-        var_weight = self.config.bottleneck.data.get("prior_var_weight", 1.0)
-        self.config.bottleneck.data["prior_var_weight"] = 0.0
 
         sample_outputs = self.config.data["eval"].get("sample_outputs", True)
         self.config.eval.data["sample_outputs"] = True
@@ -115,7 +113,6 @@ class SepAEMetricHook(MetricHook):
         # logger.info("...done")
 
         # Reset the config
-        self.config.bottleneck.data["prior_var_weight"] = var_weight
         self.config.eval.data["sample_outputs"] = sample_outputs
         return self.scores
 
@@ -132,8 +129,6 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
-
-        config.bottleneck.data["prior_var_weight"] = 0.0
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
@@ -180,8 +175,6 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
-
-        config.bottleneck.data["prior_var_weight"] = 0.0
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
@@ -233,20 +226,19 @@ class SepAEMetricHook(MetricHook):
         return scores
 
     @abstractmethod
-    def eval_gen_pred_codepred_masked(config, agent, test=False):
+    def eval_gen_codepred_masked(config, agent, test=False):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "s2"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
                 {"type": "copy", "from": "sem_input", "to": "s1"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
-        config.bottleneck.data["prior_var_weight"] = 0.0
         infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
         config.bottleneck.code_predictor.data["infer_codes"] = True
 
@@ -314,8 +306,6 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
-
-        config.bottleneck.data["prior_var_weight"] = 0.0
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
@@ -396,6 +386,7 @@ class SepAEMetricHook(MetricHook):
             else:
                 var1 = 0.0
                 var2 = noise_weight
+            # TODO: This won't work with modular bottlenecks!
             config.bottleneck.data["prior_var_weight"] = (
                 [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
             )
@@ -417,7 +408,6 @@ class SepAEMetricHook(MetricHook):
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-        config.bottleneck.data["prior_var_weight"] = 0.0
         agent.model.bottleneck.quantizer._code_offset = 0
 
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
@@ -444,8 +434,6 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_noised["eval"]["topk"] = 1
 
-        config.bottleneck.data["prior_var_weight"] = 0.0
-
         split = "test" if test else "dev"
         with jsonlines.open(
             os.path.join(
@@ -470,8 +458,6 @@ class SepAEMetricHook(MetricHook):
 
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
-
-        # config.bottleneck.data["prior_var_weight"] = 0.0
 
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
@@ -511,24 +497,51 @@ class SepAEMetricHook(MetricHook):
                     {"type": "copy", "from": "q", "to": "s1"},
                 ],
             }
-            cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
 
             data_loader = JsonDataLoader(Config(cfg_dict))
 
             _, _, _, memory_train = agent.inference(
-                data_loader.train_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                data_loader.train_loader,
+                memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                # data_loader.train_loader,
+                # memory_keys_to_return=[
+                #     "sep_encoding_1_after_bottleneck",
+                #     "sep_encoding_2_after_bottleneck",
+                #     "vq_codes",
+                # ],
             )
 
             X = torch.cat([memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], dim=1)
+            # X = torch.cat(
+            #     [
+            #         memory_train["sep_encoding_1_after_bottleneck"][:, 0, :],
+            #         memory_train["sep_encoding_2_after_bottleneck"][:, 0, :],
+            #     ],
+            #     dim=1,
+            # )
             y = memory_train["vq_codes"]
 
             del memory_train
 
             _, _, _, memory_dev = agent.inference(
-                data_loader.valid_loader, memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                data_loader.valid_loader,
+                memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                # data_loader.valid_loader,
+                # memory_keys_to_return=[
+                #     "sep_encoding_1_after_bottleneck",
+                #     "sep_encoding_2_after_bottleneck",
+                #     "vq_codes",
+                # ],
             )
 
             X_dev = torch.cat([memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], dim=1)
+            # X_dev = torch.cat(
+            #     [
+            #         memory_dev["sep_encoding_1_after_bottleneck"][:, 0, :],
+            #         memory_dev["sep_encoding_2_after_bottleneck"][:, 0, :],
+            #     ],
+            #     dim=1,
+            # )
             y_dev = memory_dev["vq_codes"]
 
             del memory_dev
@@ -614,7 +627,6 @@ class SepAEMetricHook(MetricHook):
             # Train the code predictor
 
             logger.info("Training code predictor")
-            logger.info("Single training: {:}".format("on" if single_training_target else "off"))
 
             rand_ixs = np.random.randint(0, high=len(train_cluster_ixs), size=(num_steps, bsz))
 
@@ -660,7 +672,7 @@ class SepAEMetricHook(MetricHook):
                     tgt = torch.where(tgt > 0, 1, 0)
                     # tgt = torch.where(torch.cat([torch.sum(torch.cat([onehot(torch.tensor(y[ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) for ix in train_cluster_ixs[cix][:20]], dim=0), dim=0, keepdims=True) for cix in batch_ixs], dim=0) > 0, 1, 0).cuda()
 
-                train_loss = agent.model.code_predictor.train_step(inputs, tgt)
+                train_loss = agent.model.code_predictor.train_step(inputs, tgt).detach()
 
                 if iter % 1000 == 0:
                     agent.model.code_predictor.eval()
@@ -694,7 +706,7 @@ class SepAEMetricHook(MetricHook):
                             dev_tgt = torch.where(tgt > 0, 1, 0)
                             # dev_tgt = torch.where(torch.cat([torch.sum(torch.cat([onehot(torch.tensor(y[ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) for ix in cluster[:20]], dim=0), dim=0, keepdims=True)], dim=0) > 0, 1, 0).cuda()
 
-                        dev_loss += agent.model.code_predictor.train_step(inputs, dev_tgt, take_step=False)
+                        dev_loss += agent.model.code_predictor.train_step(inputs, dev_tgt, take_step=False).detach()
                         # outputs = agent.model.code_predictor(inputs)
 
                         # logits = [outputs[:, 0, :].unsqueeze(1)]
@@ -755,8 +767,6 @@ class SepAEMetricHook(MetricHook):
 
         config.bottleneck.code_predictor.data["infer_codes"] = True
 
-        config.bottleneck.data["prior_var_weight"] = 0.0
-
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
         agent.config.eval.data["sample_outputs"] = True
@@ -793,8 +803,6 @@ class SepAEMetricHook(MetricHook):
         max_num_refs = max([len(x) for x in refs])
         refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-        # config.bottleneck.data["prior_var_weight"] = 0.0
-
         tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
         self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
@@ -828,7 +836,6 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_eval["eval"]["topk"] = 1
-        config.bottleneck.data["prior_var_weight"] = 0.0
 
         data_loader = JsonDataLoader(config=Config(config_gen_eval))
 
@@ -879,7 +886,6 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_pred_diversity["eval"]["topk"] = 1
-        config.bottleneck.data["prior_var_weight"] = 0.0
 
         data_loader = JsonDataLoader(config=Config(config_pred_diversity))
 

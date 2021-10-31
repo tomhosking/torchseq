@@ -197,8 +197,8 @@ class VQCodePredictor(torch.nn.Module):
             return top_k_codes
 
     def train_step(self, encoding, code_mask, take_step=True):
-        # Encoding should be shape: bsz x dim
-        # code_mask should be a n-hot vector, shape: bsz x codebook
+        # Encoding should be shape: bsz x head x dim
+        # code_mask should be a n-hot vector, shape: bsz x head x codebook
         self.classifier.train()
 
         self.optimizer.zero_grad()
@@ -248,7 +248,7 @@ class VQCodePredictor(torch.nn.Module):
             loss.backward()
             self.optimizer.step()
 
-        return loss.detach()
+        return loss
 
     def forward(self, encoding):
         raise Exception(

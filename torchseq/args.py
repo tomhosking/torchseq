@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument("--validate_train", action="store_true", help="Run eval on train?")
     parser.add_argument("--test", action="store_true", help="Run eval on test?")
     parser.add_argument("--silent", action="store_true", help="Disable logging")
+    parser.add_argument("--verbose", action="store_true", help="Extra logging")
     parser.add_argument(
         "--reload_after_train", action="store_true", help="Reload model after training to do a validation run"
     )

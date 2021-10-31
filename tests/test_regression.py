@@ -84,6 +84,7 @@ def test_paraphrasing_vae():
             cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
+        cfg_dict["eval"]["vae_use_map"] = False
 
         config = Config(cfg_dict)
 
@@ -222,7 +223,7 @@ def test_separator():
             cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
-        cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
+        cfg_dict["eval"]["vae_use_map"] = True
         cfg_dict["beam_search"] = {"beam_width": 4, "beam_expansion": 2, "length_alpha": 1.0}
 
         config = Config(cfg_dict)
