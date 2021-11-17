@@ -25,7 +25,7 @@ setuptools.setup(
         'console_scripts': ['torchseq=torchseq.main:main'],
     },
     install_requires = [
-        'tensorboard==2.6.0',
+        'tensorboard==2.7.0',
         'torch==1.9.0',
         'tqdm>=4.62',
         'scipy>=1.5',

@@ -28,6 +28,7 @@ from torchseq.utils.sari import SARIsent
 import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.cache import Cache
+from torchseq.utils.optimizer_group import OptimizerGroup, SchedulerGroup
 
 
 from torchseq.models.ranger import Ranger
@@ -113,13 +114,48 @@ class ModelAgent(BaseAgent):
         Initialise the optimizer this agent will use
         """
         param_group_config = self.config.training.optimizer.get("param_groups", {})
+        optimizer_list = []
+        scheduler_list = []
         if len(param_group_config) > 0:
-            param_groups = []
-            lr_by_group = []
             for pattern, cfg in param_group_config.items():
                 params = [p for n, p in self.model.named_parameters() if p.requires_grad and pattern in n]
-                param_groups.append({"params": params, "lr": cfg["lr"]})
-                lr_by_group.append(cfg["lr"])
+
+                curr_lr = cfg.get("lr", self.config.training.optimizer.lr)
+                curr_bsz = cfg.get("optim_batch_size", self.config.training.optim_batch_size)
+                curr_group = [{"params": params, "lr": curr_lr}]
+
+                # Adjust LR for different batch sizes
+                curr_lr *= float(self.config.training.optim_batch_size) / float(curr_bsz)
+
+                if self.config.training.optimizer.type == "adam":
+                    betas = cfg.get(
+                        "betas", (self.config.training.optimizer.beta1, self.config.training.optimizer.beta2)
+                    )
+                    curr_optimizer = optim.Adam(
+                        curr_group,
+                        lr=curr_lr,
+                        betas=betas,
+                        eps=1e-9,
+                    )
+                elif self.config.training.optimizer.type == "sgd":
+                    curr_optimizer = optim.SGD(curr_group, lr=curr_lr)
+                elif self.config.training.optimizer.type == "ranger":
+                    curr_optimizer = Ranger(curr_group)
+                else:
+                    raise Exception("Unrecognised optimiser: " + self.config.training.optimizer.type)
+
+                curr_optimizer.optim_batch_size = curr_bsz
+
+                curr_scheduler = get_scheduler(
+                    curr_optimizer,
+                    base_lr=curr_lr,
+                    scheduled=self.config.training.optimizer.lr_schedule,
+                    warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
+                    num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
+                )
+
+                optimizer_list.append(curr_optimizer)
+                scheduler_list.append(curr_scheduler)
 
             # Add the remaining parameters as a default group
             remaining_params = [
@@ -127,33 +163,39 @@ class ModelAgent(BaseAgent):
                 for n, p in self.model.named_parameters()
                 if p.requires_grad and sum([1 if p in n else 0 for p in param_group_config.keys()]) == 0
             ]
-            param_groups.append({"params": remaining_params})
+            def_param_group = [{"params": remaining_params}]
         else:
-            lr_by_group = self.config.training.optimizer.lr
-            param_groups = [p for p in self.model.parameters() if p.requires_grad]
+            def_param_group = [p for p in self.model.parameters() if p.requires_grad]
 
         if self.config.training.optimizer.type == "adam":
-            self.optimizer = optim.Adam(
-                param_groups,
+            def_optimizer = optim.Adam(
+                def_param_group,
                 lr=self.config.training.optimizer.lr,
                 betas=(self.config.training.optimizer.beta1, self.config.training.optimizer.beta2),
                 eps=1e-9,
             )
         elif self.config.training.optimizer.type == "sgd":
-            self.optimizer = optim.SGD(param_groups, lr=self.config.training.optimizer.lr)
+            def_optimizer = optim.SGD(def_param_group, lr=self.config.training.optimizer.lr)
         elif self.config.training.optimizer.type == "ranger":
-            self.optimizer = Ranger(param_groups)
-
+            def_optimizer = Ranger(def_param_group)
         else:
             raise Exception("Unrecognised optimiser: " + self.config.training.optimizer.type)
 
-        self.scheduler = get_scheduler(
-            self.optimizer,
-            base_lr=lr_by_group,
+        def_optimizer.optim_batch_size = self.config.training.optim_batch_size
+
+        def_scheduler = get_scheduler(
+            def_optimizer,
+            base_lr=self.config.training.optimizer.lr,
             scheduled=self.config.training.optimizer.lr_schedule,
             warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
             num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
         )
+
+        optimizer_list.append(def_optimizer)
+        scheduler_list.append(def_scheduler)
+
+        self.optimizers = OptimizerGroup(optimizer_list)
+        self.schedulers = SchedulerGroup(scheduler_list)
 
     def create_samplers(self):
         """
@@ -196,16 +238,17 @@ class ModelAgent(BaseAgent):
             )
 
         if self.training_mode:
-            self.optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
-            self.scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
+            # self.optimizers.load_state_dict(checkpoint["optimizer_state_dict"])
+            # self.schedulers.load_state_dict(checkpoint["scheduler_state_dict"])
 
             if self.config.training.optimizer.type == "sgd":
                 # Insert meta params if not there already
-                for param_group in self.optimizer.param_groups:
-                    if "momentum" not in param_group:
-                        param_group["momentum"] = 0
-                    if "dampening" not in param_group:
-                        param_group["dampening"] = 0
+                for opt in self.optimizers:
+                    for param_group in opt.param_groups:
+                        if "momentum" not in param_group:
+                            param_group["momentum"] = 0
+                        if "dampening" not in param_group:
+                            param_group["dampening"] = 0
 
         # self.current_epoch = checkpoint['epoch']
         if "global_step" in checkpoint:
@@ -243,8 +286,8 @@ class ModelAgent(BaseAgent):
                 "epoch": self.current_epoch,
                 "global_step": self.global_step,
                 "model_state_dict": self.model.state_dict(),
-                "optimizer_state_dict": self.optimizer.state_dict() if self.training_mode else None,
-                "scheduler_state_dict": self.scheduler.state_dict() if self.training_mode else None,
+                "optimizer_state_dict": self.optimizers.state_dict() if self.training_mode else None,
+                "scheduler_state_dict": self.schedulers.state_dict() if self.training_mode else None,
                 "loss": self.loss,
                 "best_metric": self.best_metric,
             },
@@ -330,6 +373,9 @@ class ModelAgent(BaseAgent):
 
         update_mckenzie(0, "-")
 
+        epochs_without_improvement = 0
+        best_loss = 1e10
+
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
@@ -338,10 +384,13 @@ class ModelAgent(BaseAgent):
                     _ = self.validate(data_loader, save=True)
                 print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
             else:
-                _ = self.validate(data_loader, save=True)
+                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
 
-        epochs_without_improvement = 0
-        best_loss = 1e10
+                best_loss = test_loss
+
+                self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
+
+                Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
@@ -364,12 +413,15 @@ class ModelAgent(BaseAgent):
                     print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
                 else:
                     test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+                    self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
+
+                    Logger().log_scalar("dev/loss", test_loss, self.global_step)
                     if test_loss < best_loss:
                         best_loss = test_loss
                         epochs_without_improvement = 0
                     else:
                         epochs_without_improvement += 1
-                if epochs_without_improvement > 3:
+                if epochs_without_improvement > self.config.training.get("early_stopping_patience", 3):
                     self.logger.info("No improvement in dev loss for 3 epochs - stopping early")
                     break
             else:
@@ -389,8 +441,8 @@ class ModelAgent(BaseAgent):
 
         self.logger.info("## Training epoch {:}".format(self.current_epoch))
 
-        self.optimizer.zero_grad()
-        steps_accum = 0
+        self.optimizers.zero_grad()
+        steps_accum = [0 for _ in self.optimizers]
 
         start_step = self.global_step
 
@@ -430,7 +482,7 @@ class ModelAgent(BaseAgent):
                         "loss": loss.detach().item()
                         * float(self.config.training.optim_batch_size)
                         / float(curr_batch_size),
-                        "lr": self.optimizer.param_groups[-1]["lr"],
+                        "lr": self.optimizers[-1].param_groups[-1]["lr"],
                     }
                 )
 
@@ -441,7 +493,7 @@ class ModelAgent(BaseAgent):
             # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[2].weight.grad.norm(dim=-1).max())
             # exit()
 
-            steps_accum += curr_batch_size
+            steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
 
@@ -452,25 +504,28 @@ class ModelAgent(BaseAgent):
             #     self.config.training.data.get("lr_warmup", True),
             # )
 
-            Logger().log_scalar("train/lr", self.optimizer.param_groups[-1]["lr"], self.global_step)
             # for param_group in self.optimizer.param_groups:
             #     param_group["lr"] = lr
 
             # Gradient accumulation
-            if steps_accum >= self.config.training.optim_batch_size:
-                self.optimizer.step()
-                self.optimizer.zero_grad()
-                self.scheduler.step()
-                steps_accum = 0
-                self.global_step += 1
+            for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
+                if steps >= opt.optim_batch_size:
+                    opt.step()
+                    opt.zero_grad()
+                    sched.step()
+                    steps_accum[ix] = 0
+                    # If this is the default opt, update the global step param
+                    if ix == len(self.optimizers) - 1:
+                        self.global_step += 1
 
-            if batch_idx % self.config.training.log_interval == 0:
+            if self.global_step % self.config.training.log_interval == 0:
                 # Loss is weighted for grad accumulation - unweight it for reporting
                 Logger().log_scalar(
                     "train/loss",
                     loss * float(self.config.training.optim_batch_size) / float(curr_batch_size),
                     self.global_step,
                 )
+                Logger().log_scalar("train/lr", self.optimizers[-1].param_groups[-1]["lr"], self.global_step)
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
@@ -489,7 +544,7 @@ class ModelAgent(BaseAgent):
                 torch.cuda.empty_cache()
 
             if (
-                self.config.training.data.get("epoch_steps", 0) > 0
+                self.config.training.get("epoch_steps", 0) > 0
                 and self.global_step - start_step >= self.config.training.epoch_steps
             ):
                 self.logger.info(
@@ -541,9 +596,13 @@ class ModelAgent(BaseAgent):
         if calculate_loss:
             _, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
-            normed_loss = torch.mean(
-                torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss), dim=0
-            )
+
+            normed_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
+
+            if "loss" in memory:
+                normed_loss += memory["loss"]
+
+            normed_loss = torch.mean(normed_loss, dim=0)
 
             # if self.config.encdec.get("vector_quantized", False):
             #     for h_ix in range(memory["vq_codes"].shape[1]):
@@ -636,9 +695,6 @@ class ModelAgent(BaseAgent):
                     hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory, use_test)
 
         test_loss /= num_samples
-        self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
-
-        Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
         all_metrics = {}
         for hook in metric_hooks:

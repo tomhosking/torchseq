@@ -7,47 +7,47 @@ from torchseq.utils.functions import onehot
 import logging
 
 
-class MLPClassifier(torch.nn.Module):
+class MLPClassifier(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, num_heads):
         super(MLPClassifier, self).__init__()
-        self.linear = torch.nn.Linear(input_dim, hidden_dim)
-        self.linear2 = torch.nn.Linear(hidden_dim, hidden_dim)
-        self.linear3 = torch.nn.Linear(hidden_dim, output_dim * num_heads)
+        self.linear = nn.Linear(input_dim, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, hidden_dim)
+        self.linear3 = nn.Linear(hidden_dim, output_dim * num_heads)
 
-        self.drop1 = torch.nn.Dropout(p=0.2)
-        self.drop2 = torch.nn.Dropout(p=0.2)
+        self.drop1 = nn.Dropout(p=0.2)
+        self.drop2 = nn.Dropout(p=0.2)
         self.num_heads = num_heads
         self.output_dim = output_dim
 
     def forward(self, x, seq=None):
-        outputs = self.drop1(torch.nn.functional.relu(self.linear(x)))
-        outputs = self.drop2(torch.nn.functional.relu(self.linear2(outputs)))
+        outputs = self.drop1(nn.functional.relu(self.linear(x)))
+        outputs = self.drop2(nn.functional.relu(self.linear2(outputs)))
         outputs = self.linear3(outputs)
         return outputs.reshape(-1, self.num_heads, self.output_dim)
 
 
-class LstmClassifier(torch.nn.Module):
+class LstmClassifier(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_dim, num_heads, seq_dim=None):
         super(LstmClassifier, self).__init__()
-        self.lstm_in = torch.nn.Linear(input_dim, hidden_dim)
+        self.lstm_in = nn.Linear(input_dim, hidden_dim)
         self.rnn = nn.LSTMCell(
             hidden_dim,
             hidden_dim,
         )
-        self.lstm_out = torch.nn.Linear(hidden_dim, output_dim)
+        self.lstm_out = nn.Linear(hidden_dim, output_dim)
 
         if seq_dim is not None and seq_dim != hidden_dim:
-            self.seq_proj = torch.nn.Linear(seq_dim, hidden_dim, bias=False)
+            self.seq_proj = nn.Linear(seq_dim, hidden_dim, bias=False)
         else:
             self.seq_proj = None
 
-        self.drop1 = torch.nn.Dropout(p=0.2)
-        self.drop2 = torch.nn.Dropout(p=0.2)
+        self.drop1 = nn.Dropout(p=0.2)
+        self.drop2 = nn.Dropout(p=0.2)
         self.num_heads = num_heads
         self.output_dim = output_dim
 
     def forward(self, x, seq=None):
-        outputs = self.drop1(torch.nn.functional.relu(self.lstm_in(x)))
+        outputs = self.drop1(nn.functional.relu(self.lstm_in(x)))
         rnn_out = []
         hx, cx = outputs, torch.zeros_like(outputs)
         if self.seq_proj is not None and seq is not None:
@@ -60,18 +60,38 @@ class LstmClassifier(torch.nn.Module):
         return outputs
 
 
-class RecurrentMlpClassifier(torch.nn.Module):
-    def __init__(self, input_dim, output_dim, hidden_dim, num_heads, seq_dim=None):
+class RecurrentMlpClassifier(nn.Module):
+    def __init__(self, input_dim, output_dim, hidden_dim, num_heads, num_hidden=1, seq_dim=None, dropout=0.2):
         super(RecurrentMlpClassifier, self).__init__()
         recur_in_dim = input_dim + (seq_dim if seq_dim is not None else hidden_dim)
         # dims = [input_dim] + [recur_in_dim] * (num_heads - 1)
 
-        self.linear = torch.nn.ModuleList([torch.nn.Linear(recur_in_dim, hidden_dim) for i in range(num_heads)])
-        self.linear2 = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, hidden_dim) for i in range(num_heads)])
-        self.linear3 = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, output_dim) for i in range(num_heads)])
+        self.linear = nn.ModuleList([nn.Linear(recur_in_dim, hidden_dim) for i in range(num_heads)])
+        if num_hidden != 1:
+            self.hidden = nn.ModuleList(
+                [
+                    nn.Sequential(
+                        *[
+                            x
+                            for _ in range(num_hidden)
+                            for x in [
+                                nn.Linear(hidden_dim, hidden_dim),
+                                nn.Dropout(p=dropout),
+                                nn.ReLU(),
+                            ]
+                        ]
+                    )
+                    for i in range(num_heads)
+                ]
+            )
+        else:
+            self.hidden = None
+            self.linear2 = torch.nn.ModuleList([torch.nn.Linear(hidden_dim, hidden_dim) for i in range(num_heads)])
 
-        self.drop1 = torch.nn.ModuleList([torch.nn.Dropout(p=0.2) for i in range(num_heads)])
-        self.drop2 = torch.nn.ModuleList([torch.nn.Dropout(p=0.2) for i in range(num_heads)])
+        self.linear3 = nn.ModuleList([nn.Linear(hidden_dim, output_dim) for i in range(num_heads)])
+
+        self.drop1 = nn.ModuleList([nn.Dropout(p=dropout) for i in range(num_heads)])
+        self.drop2 = nn.ModuleList([nn.Dropout(p=dropout) for i in range(num_heads)])
         self.num_heads = num_heads
         self.output_dim = output_dim
 
@@ -79,15 +99,18 @@ class RecurrentMlpClassifier(torch.nn.Module):
         all_outputs = []
         for hix in range(self.num_heads if seq is None else seq.shape[1]):
             full_input = torch.cat([x, seq[:, hix, :]], dim=-1)
-            outputs = self.drop1[hix](torch.nn.functional.relu(self.linear[hix](full_input)))
-            outputs = self.drop2[hix](torch.nn.functional.relu(self.linear2[hix](outputs)))
+            outputs = self.drop1[hix](nn.functional.relu(self.linear[hix](full_input)))
+            if self.hidden is not None:
+                outputs = self.hidden[hix](outputs)
+            else:
+                outputs = self.drop2[hix](torch.nn.functional.relu(self.linear2[hix](outputs)))
             outputs = self.linear3[hix](outputs)
             all_outputs.append(outputs)
         all_outputs = torch.stack(all_outputs, dim=1)
         return all_outputs
 
 
-class VQCodePredictor(torch.nn.Module):
+class VQCodePredictor(nn.Module):
     def __init__(self, config, transitions=None, embeddings=None):
         super(VQCodePredictor, self).__init__()
 
@@ -107,7 +130,9 @@ class VQCodePredictor(torch.nn.Module):
                 config.output_dim,
                 config.hidden_dim,
                 config.num_heads,
+                num_hidden=config.get("num_hidden", 1),
                 seq_dim=config.get("lstm_seq_dim", None),
+                dropout=config.get("dropout", 0.2),
             )
         else:
             self.classifier = MLPClassifier(config.input_dim, config.output_dim, config.hidden_dim, config.num_heads)
@@ -118,7 +143,7 @@ class VQCodePredictor(torch.nn.Module):
 
         self.config = config
 
-        # self.criterion = torch.nn.CrossEntropyLoss().cuda() # computes softmax and then the cross entropy
+        # self.criterion = nn.CrossEntropyLoss().cuda() # computes softmax and then the cross entropy
 
         self.optimizer = torch.optim.Adam(self.classifier.parameters(), lr=config.lr)
 
@@ -190,14 +215,14 @@ class VQCodePredictor(torch.nn.Module):
             all_pred_codes.append(pred_codes)
 
         if top_k == 1:
-            top_1_codes = torch.IntTensor(all_pred_codes)[:, 0, :].to(encoding.device)
+            top_1_codes = torch.LongTensor(all_pred_codes)[:, 0, :].to(encoding.device)
             return top_1_codes
         else:
-            top_k_codes = torch.IntTensor(all_pred_codes)[:, :top_k, :].to(encoding.device)
+            top_k_codes = torch.LongTensor(all_pred_codes)[:, :top_k, :].to(encoding.device)
             return top_k_codes
 
     def train_step(self, encoding, code_mask, take_step=True):
-        # Encoding should be shape: bsz x head x dim
+        # Encoding should be shape: bsz x dim
         # code_mask should be a n-hot vector, shape: bsz x head x codebook
         self.classifier.train()
 
@@ -238,14 +263,17 @@ class VQCodePredictor(torch.nn.Module):
         logits = torch.cat(logits, dim=1)
 
         loss = torch.sum(
-            -1 * torch.nn.functional.log_softmax(logits, dim=-1) * code_mask / code_mask.sum(dim=-1, keepdims=True),
+            -1
+            * nn.functional.log_softmax(logits, dim=-1)
+            * code_mask
+            / (code_mask.sum(dim=-1, keepdims=True) + 1e-10),
             dim=-1,
-        ).mean()  #
+        ).mean(dim=1)
         if take_step:
             clip_grad = self.config.get("clip_grad", None)
             if clip_grad is not None:
-                torch.nn.utils.clip_grad_norm_(self.classifier.parameters(), clip_grad)
-            loss.backward()
+                nn.utils.clip_grad_norm_(self.classifier.parameters(), clip_grad)
+            loss.mean().backward()
             self.optimizer.step()
 
         return loss

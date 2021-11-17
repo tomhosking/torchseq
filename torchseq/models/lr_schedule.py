@@ -1,4 +1,5 @@
 from torch.optim.lr_scheduler import LambdaLR
+from math import exp, tanh
 
 
 # TODO: control diff types of schedule in a more granular way - eg we may want linear warmup -> poly/exp decay
@@ -27,3 +28,11 @@ def get_scheduler(optimizer, base_lr, scheduled=False, warmup=True, num_warmup_s
             return 1.0
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)
+
+
+def get_hyperbolic_schedule(gamma, step):
+    return 2 / (1 + exp(-float(step) / float(gamma))) - 1
+
+
+def get_tanh_schedule(gamma, step):
+    return tanh(float(step) / float(gamma)) ** 4

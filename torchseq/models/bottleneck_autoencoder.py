@@ -7,6 +7,7 @@ from torchseq.models.bottleneck import PoolingBottleneck
 from torchseq.models.modular_bottleneck import ModularBottleneck
 from torchseq.utils.logging import Logger
 from torchseq.utils.functions import cos_sim, onehot
+from torchseq.models.lr_schedule import get_hyperbolic_schedule, get_tanh_schedule
 from torchseq.models.vq_code_predictor import VQCodePredictor
 from torchseq.models.pooling import MultiHeadedPooling
 
@@ -71,18 +72,28 @@ class BottleneckAutoencoderModel(nn.Module):
                 "code_predictor", None
             ) is not None and not self.config.bottleneck.code_predictor.get("sem_only", False):
                 raise Exception("If pooling is used as the reduce_fn, sem_only must be set to true!")
+
+            pool_dim = self.config.bottleneck.get("reduce_fn_dim", self.sep_splice_ix)
+            if pool_dim != self.sep_splice_ix:
+                self.reduce_proj = nn.Linear(self.sep_splice_ix, pool_dim, bias=False)
+            else:
+                self.reduce_proj = None
+
             self.reduce_pooling = MultiHeadedPooling(
-                1,
-                self.sep_splice_ix,
+                self.config.bottleneck.get("reduce_fn_heads", 1),
+                pool_dim,
                 dropout=self.config.dropout,
                 use_final_linear=False,
             )
 
     def reduce_fn(self, inputs):
         if self.config.bottleneck.get("reduce_fn", "max") == "pool":
-            return self.reduce_pooling(inputs, inputs)
+            if self.reduce_proj is not None:
+                inputs = self.reduce_proj(inputs)
+            reduced = self.reduce_pooling(inputs, inputs).unsqueeze(1)
         else:
-            return inputs.max(dim=1).values
+            reduced = inputs.max(dim=1).values.unsqueeze(1)
+        return reduced
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:
@@ -101,18 +112,26 @@ class BottleneckAutoencoderModel(nn.Module):
                 encoding, memory, batch["_global_step"], head_mask=batch.get("head_mask", None)
             )
 
-            raw_encoding_pooled = memory["encoding_pooled"]
+            prebn_encoding_pooled = memory["encoding_pooled"]
 
             if self.config.bottleneck.get(
                 "code_predictor", None
             ) is not None and self.config.bottleneck.code_predictor.get("infer_codes", False):
                 if self.config.bottleneck.code_predictor.get("sem_only", False):
-                    codepred_input = raw_encoding_pooled[:, : self.sep_splice_ix, :]
+                    codepred_input = (
+                        encoding_pooled[:, :, : self.sep_splice_ix]
+                        if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                        else prebn_encoding_pooled[:, :, : self.sep_splice_ix]
+                    )
                 else:
-                    codepred_input = raw_encoding_pooled
+                    codepred_input = (
+                        encoding_pooled
+                        if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                        else prebn_encoding_pooled
+                    )
 
                 pred_codes = self.code_predictor.infer(
-                    self.reduce_fn(codepred_input).detach(), batch, outputs_to_block=memory.get("vq_codes")
+                    self.reduce_fn(codepred_input).squeeze(1).detach(), batch, outputs_to_block=memory.get("vq_codes")
                 )
                 batch["forced_codes"] = pred_codes
 
@@ -159,9 +178,6 @@ class BottleneckAutoencoderModel(nn.Module):
                 if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
-                if "vq_codes" in template_memory:
-                    memory["vq_codes"] = template_memory["vq_codes"]
-
                 if self.config.bottleneck.get("split_encoder", False):
                     template_encoding2, memory = self.seq_encoder(
                         batch["template"], batch["template_len"], template_memory
@@ -181,48 +197,90 @@ class BottleneckAutoencoderModel(nn.Module):
                     template_encoding_pooled = template_encoding_pooled_joint
 
                 if self.config.bottleneck.get("use_templ_encoding", False):
+                    if "vq_codes" in template_memory:
+                        memory["vq_codes_sem"] = memory["vq_codes"]
+                        memory["vq_codes"] = template_memory["vq_codes"]
+
                     if self.config.bottleneck.get("invert_templ", False):
                         raise Exception("invert_templ is no longer supported")
-                        encoding_pooled[:, :, : self.sep_splice_ix] = template_encoding_pooled[
-                            :, :, : self.sep_splice_ix
-                        ]
-                        raw_encoding_pooled[:, :, : self.sep_splice_ix] = template_memory["encoding_pooled"][
-                            :, :, : self.sep_splice_ix
-                        ]
-                    else:
-                        encoding_pooled = torch.cat(
-                            [
-                                encoding_pooled[:, :, : self.sep_splice_ix],
-                                template_encoding_pooled[:, :1, self.sep_splice_ix :].expand(
-                                    -1, encoding_pooled.shape[1], -1
-                                ),
-                            ],
-                            dim=2,
-                        )
-                        templ_raw_enc = template_memory["encoding_pooled"][:, :1, self.sep_splice_ix :].expand(
-                            -1, raw_encoding_pooled.shape[1], -1
-                        )
-                        raw_encoding_pooled = torch.cat(
-                            [raw_encoding_pooled[:, :, : self.sep_splice_ix], templ_raw_enc], dim=2
-                        )
 
-                if self.config.bottleneck.get("joint_train_codepred", False) and self.training:
+                    sem_encoding_pooled = encoding_pooled
+                    prebn_sem_encoding_pooled = prebn_encoding_pooled
+
+                    encoding_pooled = torch.cat(
+                        [
+                            encoding_pooled[:, :, : self.sep_splice_ix],
+                            template_encoding_pooled[:, :1, self.sep_splice_ix :].expand(
+                                -1, encoding_pooled.shape[1], -1
+                            ),
+                        ],
+                        dim=2,
+                    )
+                    templ_prebn_enc = template_memory["encoding_pooled"][:, :1, self.sep_splice_ix :].expand(
+                        -1, prebn_encoding_pooled.shape[1], -1
+                    )
+                    prebn_encoding_pooled = torch.cat(
+                        [prebn_encoding_pooled[:, :, : self.sep_splice_ix], templ_prebn_enc], dim=2
+                    )
+
+                if self.config.bottleneck.get("joint_train_codepred", False):
                     if "loss" not in memory:
                         memory["loss"] = 0
 
                     if self.config.bottleneck.code_predictor.get("sem_only", False):
-                        codepred_input = self.reduce_fn(encoding_pooled[:, :, : self.sep_splice_ix])
+                        codepred_input = self.reduce_fn(
+                            sem_encoding_pooled[:, :, : self.sep_splice_ix]
+                            if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                            else prebn_sem_encoding_pooled[:, :, : self.sep_splice_ix]
+                        )
                     else:
-                        codepred_input = self.reduce_fn(encoding_pooled)
+                        codepred_input = self.reduce_fn(
+                            sem_encoding_pooled
+                            if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                            else prebn_sem_encoding_pooled
+                        )
+
+                    codepred_tgt = onehot(template_memory["vq_codes"], N=self.code_predictor.config.output_dim)
+
+                    if self.config.bottleneck.code_predictor.get("force_unique", False):
+                        codepred_tgt = codepred_tgt - onehot(
+                            memory["vq_codes_sem"], N=self.code_predictor.config.output_dim
+                        )
+                        codepred_tgt = torch.max(codepred_tgt, torch.zeros_like(codepred_tgt))
 
                     codepred_loss = self.code_predictor.train_step(
-                        codepred_input,
-                        onehot(memory["vq_codes"], N=self.code_predictor.config.output_dim),
+                        codepred_input.squeeze(1),
+                        codepred_tgt.detach(),
                         take_step=False,
                     )
-                    Logger().log_scalar("bottleneck/codepred_loss", codepred_loss.mean(), batch["_global_step"])
+
+                    if batch["_global_step"] % self.config.training.log_interval == 0 or not self.training:
+                        Logger().log_scalar(
+                            "bottleneck/codepred_loss" + ("_dev" if not self.training else ""),
+                            codepred_loss.mean(),
+                            batch["_global_step"],
+                        )
+
+                    loss_scale = 1.0
+
+                    gamma = self.config.bottleneck.get("joint_train_codepred_schedule_gamma", None)
+                    if gamma is not None:
+                        loss_scale *= get_hyperbolic_schedule(gamma, batch["_global_step"])
+                        codepred_loss = codepred_loss * loss_scale
+
+                    tanh_gamma = self.config.bottleneck.get("joint_train_codepred_schedule_tanh_scale", None)
+                    if tanh_gamma is not None:
+                        loss_scale *= get_tanh_schedule(tanh_gamma, batch["_global_step"])
+
+                    if batch["_global_step"] % self.config.training.log_interval == 0:
+                        Logger().log_scalar("bottleneck/codepred_loss_scale", loss_scale, batch["_global_step"])
+
                     if batch["_global_step"] > self.config.bottleneck.get("joint_train_codepred_warmup_steps", 0):
-                        memory["loss"] += codepred_loss
+                        memory["loss"] += codepred_loss * (
+                            loss_scale * self.config.bottleneck.get("joint_train_codepred_weight", 1.0)
+                            if self.training
+                            else 1.0
+                        )
 
                 if self.config.bottleneck.get("separation_loss_weight", 0) > 0:
                     if "loss" not in memory:
@@ -287,12 +345,12 @@ class BottleneckAutoencoderModel(nn.Module):
 
             # Note: this returns the encodings *before* bottleneck!
             if self.sep_splice_ix > 0:
-                memory["sep_encoding_1"] = self.reduce_fn(raw_encoding_pooled[:, :, : self.sep_splice_ix]).detach()
+                memory["sep_encoding_1"] = self.reduce_fn(prebn_encoding_pooled[:, :, : self.sep_splice_ix]).detach()
                 memory["sep_encoding_1_after_bottleneck"] = self.reduce_fn(
                     encoding_pooled[:, :, : self.sep_splice_ix]
                 ).detach()
             memory["sep_encoding_2"] = (
-                raw_encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()
+                prebn_encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()
             )
             memory["sep_encoding_2_after_bottleneck"] = (
                 encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()

@@ -472,6 +472,9 @@ class SepAEMetricHook(MetricHook):
 
         dataset_all = config.eval.metrics.sep_ae.flattened_dataset
 
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        config.bottleneck.code_predictor.data["infer_codes"] = False
+
         if agent.cache.load("codepred_cache_X") is not None:
             logger.info("Loading from cache")
             X = agent.cache.load("codepred_cache_X")
@@ -500,9 +503,17 @@ class SepAEMetricHook(MetricHook):
 
             data_loader = JsonDataLoader(Config(cfg_dict))
 
+            post_bottleneck = (
+                "_after_bottleneck" if config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
+            )
+
             _, _, _, memory_train = agent.inference(
                 data_loader.train_loader,
-                memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                memory_keys_to_return=[
+                    f"sep_encoding_1{post_bottleneck}",
+                    f"sep_encoding_2{post_bottleneck}",
+                    "vq_codes",
+                ]
                 # data_loader.train_loader,
                 # memory_keys_to_return=[
                 #     "sep_encoding_1_after_bottleneck",
@@ -511,7 +522,13 @@ class SepAEMetricHook(MetricHook):
                 # ],
             )
 
-            X = torch.cat([memory_train["sep_encoding_1"][:, 0, :], memory_train["sep_encoding_2"][:, 0, :]], dim=1)
+            X = torch.cat(
+                [
+                    memory_train[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                    memory_train[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+                ],
+                dim=1,
+            )
             # X = torch.cat(
             #     [
             #         memory_train["sep_encoding_1_after_bottleneck"][:, 0, :],
@@ -525,7 +542,11 @@ class SepAEMetricHook(MetricHook):
 
             _, _, _, memory_dev = agent.inference(
                 data_loader.valid_loader,
-                memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"]
+                memory_keys_to_return=[
+                    f"sep_encoding_1{post_bottleneck}",
+                    f"sep_encoding_2{post_bottleneck}",
+                    "vq_codes",
+                ]
                 # data_loader.valid_loader,
                 # memory_keys_to_return=[
                 #     "sep_encoding_1_after_bottleneck",
@@ -534,7 +555,13 @@ class SepAEMetricHook(MetricHook):
                 # ],
             )
 
-            X_dev = torch.cat([memory_dev["sep_encoding_1"][:, 0, :], memory_dev["sep_encoding_2"][:, 0, :]], dim=1)
+            X_dev = torch.cat(
+                [
+                    memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                    memory_dev[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+                ],
+                dim=1,
+            )
             # X_dev = torch.cat(
             #     [
             #         memory_dev["sep_encoding_1_after_bottleneck"][:, 0, :],
@@ -552,6 +579,8 @@ class SepAEMetricHook(MetricHook):
             agent.cache.save("codepred_cache_y_dev", y_dev)
 
             logger.info("Cache built")
+
+        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
         return X, y, X_dev, y_dev
 
     @abstractmethod
@@ -818,7 +847,7 @@ class SepAEMetricHook(MetricHook):
         test=False,
         use_qqp=False,
         mask_length=0,
-        top_k=2,
+        top_k=3,
     ):
 
         sample_outputs = agent.config.eval.get("sample_outputs", True)
@@ -841,12 +870,20 @@ class SepAEMetricHook(MetricHook):
 
         config.eval.data["sample_outputs"] = False
 
+        post_bottleneck = "_after_bottleneck" if config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
+
         _, _, (_, _, _), memory_eval = agent.inference(
             data_loader.test_loader if test else data_loader.valid_loader,
-            memory_keys_to_return=["sep_encoding_1", "sep_encoding_2", "vq_codes"],
+            memory_keys_to_return=[f"sep_encoding_1{post_bottleneck}", f"sep_encoding_2{post_bottleneck}", "vq_codes"],
         )
 
-        X_eval = torch.cat([memory_eval["sep_encoding_1"][:, 0, :], memory_eval["sep_encoding_2"][:, 0, :]], dim=1)
+        X_eval = torch.cat(
+            [
+                memory_eval[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                memory_eval[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+            ],
+            dim=1,
+        )
         y_eval = memory_eval["vq_codes"]
 
         # Get top-k predicted codes

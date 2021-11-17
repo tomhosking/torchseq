@@ -154,6 +154,15 @@ class BottleneckPart(nn.Module):
                 # norm_loss_weight=self.config.get("quantizer_norm_loss_weight", None),
                 **quantizer_kwargs,
             )
+        # HRQ-VAE bottleneck
+        if config.get("type", None) == "hrqvae":
+            quantizer_kwargs = config.get("quantizer", {})
+            quantizer_kwargs.pop("codebook_size")
+            self.quantizer = VectorQuantizerMultiHead(
+                config.quantizer.codebook_size,
+                embedding_dim,
+                **quantizer_kwargs,
+            )
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
         # if head_mask is not None:
@@ -169,7 +178,7 @@ class BottleneckPart(nn.Module):
         encoding_post = encoding_pooled
 
         # Quantize
-        if self.config.get("type", None) == "vqvae":
+        if self.config.get("type", None) in ["vqvae", "hrqvae"]:
 
             vq_loss, encoding_post, quantizer_indices = self.quantizer(
                 encoding_post, global_step, forced_codes, head_mask

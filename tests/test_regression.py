@@ -84,7 +84,7 @@ def test_paraphrasing_vae():
             cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
-        cfg_dict["eval"]["vae_use_map"] = False
+        cfg_dict["eval"]["vae_use_map"] = True
 
         config = Config(cfg_dict)
 
@@ -102,9 +102,9 @@ def test_paraphrasing_vae():
     loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
-    assert abs(loss.item() - 2.041666) < 1e-3, "Loss is different to expected!"
+    assert abs(loss.item() - 2.2377) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 33.8669) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 36.0317) < 1e-2, "BLEU score is different to expected!"
 
     # Targets for full dataset:
     # assert abs(loss.item() - ???) < 1e-3, "Loss is different to expected!"
@@ -198,8 +198,8 @@ def test_qg_transformer():
 @test_utils.slow
 def test_separator():
 
-    CONFIG = "./models/examples/separator-wa-v1.1/config.json"
-    CHKPT = "./models/examples/separator-wa-v1.1/model/checkpoint.pt"
+    CONFIG = "./models/examples/separator-wa/config.json"
+    CHKPT = "./models/examples/separator-wa/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123

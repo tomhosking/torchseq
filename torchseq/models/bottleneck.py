@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
-from torchseq.models.vq_vae_v1 import VectorQuantizerMultiHeadV1
+from torchseq.models.vq_vae_legacy import VectorQuantizerMultiHeadLegacy
 from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
@@ -52,16 +52,17 @@ class PoolingBottleneck(nn.Module):
                 ), "bottlneck residual_head_range must be length 2! (lower, upper)"
 
             total_quantizer_heads = self.config.bottleneck.get("quantizer_heads", 1)
-            num_quantizer_heads = total_quantizer_heads - self.residual_head_range[1] - self.residual_head_range[0]
+            # num_quantizer_heads = total_quantizer_heads - self.residual_head_range[1] - self.residual_head_range[0]
 
             quantizer_kwargs = self.config.bottleneck.get("quantizer", {})
-            self.quantizer = VectorQuantizerMultiHeadV1(
+            self.quantizer = VectorQuantizerMultiHeadLegacy(
                 self.config.bottleneck.codebook_size,
-                (self.config.bottleneck.embedding_dim * num_quantizer_heads) // total_quantizer_heads,
+                self.config.bottleneck.embedding_dim,
                 commitment_cost=0.25,
                 decay=self.config.bottleneck.get("quantizer_ema_decay", 0.99),
-                num_heads=num_quantizer_heads,
+                num_heads=total_quantizer_heads,
                 residual=self.config.bottleneck.get("quantizer_residual", False),
+                residual_head_range=self.residual_head_range,
                 code_offset=self.config.bottleneck.get("code_offset", 0),
                 soft_em=self.config.bottleneck.get("quantizer_soft", True),
                 ema=self.config.bottleneck.get("quantizer_ema", True),
@@ -112,21 +113,19 @@ class PoolingBottleneck(nn.Module):
             # if splice_begin > 0:
             #     raise Exception("Arbitrary quantizer residual ranges are not currently supported")
 
-            vq_loss, quantized_encoding, quantizer_indices = self.quantizer(
-                encoding_pooled[:, :, splice_ix:], global_step, forced_codes
-            )
+            vq_loss, encoding_pooled, quantizer_indices = self.quantizer(encoding_pooled, global_step, forced_codes)
 
-            encoding_pooled = torch.cat([encoding_pooled[:, :, :splice_ix], quantized_encoding], dim=-1)
+            # encoding_pooled = torch.cat([encoding_pooled[:, :, :splice_ix], quantized_encoding], dim=-1)
 
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += vq_loss
             memory["vq_codes"] = torch.cat([x.unsqueeze(1).detach() for x in quantizer_indices], dim=1)
 
-            if forced_codes is not None:
-                assert (
-                    forced_codes.detach().tolist() == memory["vq_codes"].detach().tolist()
-                ), "Forced codes != vq_codes assigned by quantizer!"
+            # if forced_codes is not None:
+            #     assert (
+            #         forced_codes.detach().tolist() == memory["vq_codes"].detach().tolist()
+            #     ), "Forced codes != vq_codes assigned by quantizer!"
 
         if self.config.bottleneck.get("pooling_range", None) is not None:
             begin_hix, end_hix = self.config.bottleneck.get("pooling_range", (0, 0))
