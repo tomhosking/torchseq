@@ -26,11 +26,11 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.7.0',
-        'torch==1.9.0',
+        'torch==1.9.1',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.5',
-        'transformers==4.10.2',
+        'transformers==4.12.4',
         'tokenizers==0.10.3',
         'jsonlines>=2',
         'sacrebleu>=2.0',

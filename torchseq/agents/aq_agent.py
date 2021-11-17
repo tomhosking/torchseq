@@ -19,7 +19,6 @@ from torchseq.datasets.qa_dataset import QADataset
 from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.aq_transformer import TransformerAqModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
-from torchseq.models.cross_entropy import CrossEntropyLossWithLS
 from torchseq.models.suppression_loss import SuppressionLoss
 
 from torchseq.utils.mckenzie import update_mckenzie
@@ -45,12 +44,11 @@ class AQAgent(ModelAgent):
         self.tgt_field = "q"
 
         # define loss
-        if self.config.training.label_smoothing != "UNUSED" and self.config.training.label_smoothing > 1e-6:
-            self.loss = CrossEntropyLossWithLS(
-                ignore_index=Tokenizer().pad_id, smooth_eps=self.config.training.label_smoothing, reduction="none"
-            )
-        else:
-            self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
+        self.loss = nn.CrossEntropyLoss(
+            ignore_index=Tokenizer().pad_id,
+            reduction="none",
+            # label_smoothing=self.config.training.get("label_smoothing", 0.0),
+        )
 
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
