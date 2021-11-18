@@ -130,6 +130,9 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_with_templ["eval"]["topk"] = 1
 
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        config.bottleneck.code_predictor.data["infer_codes"] = False
+
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
         _, _, (output, _, _), _ = agent.inference(
@@ -159,6 +162,8 @@ class SepAEMetricHook(MetricHook):
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
+        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
@@ -175,6 +180,9 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
+
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        config.bottleneck.code_predictor.data["infer_codes"] = False
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
@@ -222,6 +230,8 @@ class SepAEMetricHook(MetricHook):
             ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
             scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+
+        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
         return scores
 

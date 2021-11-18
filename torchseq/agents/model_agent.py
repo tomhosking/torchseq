@@ -636,7 +636,7 @@ class ModelAgent(BaseAgent):
             for batch_idx, batch in enumerate(
                 tqdm(data_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
             ):
-                batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
+                batch = {k: (v.to(self.device) if k[-5:] != "_text" and k[0] != "_" else v) for k, v in batch.items()}
 
                 curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 

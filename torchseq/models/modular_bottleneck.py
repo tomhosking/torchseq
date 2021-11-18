@@ -91,15 +91,14 @@ class BottleneckPart(nn.Module):
             )
             # print('built pooling, dim=', self.embedding_dim)
 
-        self.logvar_pooling = MultiHeadedPooling(
-            num_heads,
-            self.embedding_dim,
-            dropout=global_config.dropout,
-            use_final_linear=False,
-        )
-
         if config.get("type", None) == "vae":
             # Extra modules for a variational bottleneck
+            self.logvar_pooling = MultiHeadedPooling(
+                num_heads,
+                self.embedding_dim,
+                dropout=global_config.dropout,
+                use_final_linear=False,
+            )
             if not config.get("pooling", False):
                 self.mu_proj = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
                 self.var_proj = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)

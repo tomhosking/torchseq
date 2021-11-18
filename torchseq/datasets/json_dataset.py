@@ -138,7 +138,7 @@ class JsonDataset(Dataset):
             if include_lang_codes:
                 sample[f["to"]] = torch.LongTensor(lang_tok + parsed.field_as_ids(f["to"]))
                 sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]]) + len(lang_tok)])
-            else:
+            elif f["to"][0] != "_":
                 field = parsed.field_as_ids(f["to"])
                 if isinstance(field, torch.Tensor):
                     if torch.is_floating_point(field):
@@ -148,6 +148,8 @@ class JsonDataset(Dataset):
                 else:
                     sample[f["to"]] = torch.LongTensor(field)
                 sample[f["to"] + "_len"] = torch.LongTensor([len(sample[f["to"]])])
+            else:
+                sample[f["to"]] = field
 
             # HACK: hard coded field name!
             if f["to"] == "s1" and mask_prob > 0:
@@ -184,6 +186,8 @@ class JsonDataset(Dataset):
 
         for x in batch:
             for k in keys:
+                if k[0] == "_":
+                    continue
                 if k == "a_pos":
                     x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=0)
                 elif k[-5:] != "_text":
@@ -191,7 +195,7 @@ class JsonDataset(Dataset):
 
         tensor_batch = {}
         for k in keys:
-            if k[-5:] != "_text":
+            if k[-5:] != "_text" and k[0] != "_":
                 tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
                 if k[-4:] == "_len":
                     tensor_batch[k] = tensor_batch[k].squeeze(dim=1)
