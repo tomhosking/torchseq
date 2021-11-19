@@ -879,7 +879,9 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_eval["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_gen_eval), dev_samples=dev_samples, test_samples=test_samples)
+        data_loader = JsonDataLoader(
+            config=Config(config_gen_eval), dev_samples=dev_samples, test_samples=test_samples
+        )
 
         config.eval.data["sample_outputs"] = False
 
@@ -937,7 +939,9 @@ class SepAEMetricHook(MetricHook):
         }
         config_pred_diversity["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_pred_diversity), dev_samples=dev_samples, test_samples=test_samples)
+        data_loader = JsonDataLoader(
+            config=Config(config_pred_diversity), dev_samples=dev_samples, test_samples=test_samples
+        )
 
         config.eval.data["sample_outputs"] = True
 
