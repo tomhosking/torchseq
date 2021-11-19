@@ -858,6 +858,9 @@ class SepAEMetricHook(MetricHook):
         use_qqp=False,
         mask_length=0,
         top_k=3,
+        dev_samples=None,
+        test_samples=None,
+        skip_scores=False,
     ):
 
         sample_outputs = agent.config.eval.get("sample_outputs", True)
@@ -876,7 +879,7 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_eval["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_gen_eval))
+        data_loader = JsonDataLoader(config=Config(config_gen_eval), dev_samples=dev_samples, test_samples=test_samples)
 
         config.eval.data["sample_outputs"] = False
 
@@ -905,7 +908,7 @@ class SepAEMetricHook(MetricHook):
 
         pred_codes = []
         # # TODO: batchify!
-        for ix, x_batch in enumerate(X_eval):
+        for ix, x_batch in enumerate(tqdm(X_eval, desc="Predicting codes")):
             curr_codes = agent.model.code_predictor.infer(
                 x_batch.unsqueeze(0).to(agent.device), {}, outputs_to_block=y_eval[ix].unsqueeze(0), top_k=top_k
             )
@@ -934,7 +937,7 @@ class SepAEMetricHook(MetricHook):
         }
         config_pred_diversity["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_pred_diversity))
+        data_loader = JsonDataLoader(config=Config(config_pred_diversity), dev_samples=dev_samples, test_samples=test_samples)
 
         config.eval.data["sample_outputs"] = True
 
@@ -967,34 +970,36 @@ class SepAEMetricHook(MetricHook):
 
             _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
+            if not skip_scores:
+                tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+                self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
-            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
-            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+                alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+                ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
-            scores[k + 1] = (tgt_bleu, self_bleu, ibleu)
+                scores[k + 1] = (tgt_bleu, self_bleu, ibleu)
 
-            if k > 0:
-                intra_bleu = sacrebleu.corpus_bleu(
-                    output, list(zip(*[[x] for x in topk_outputs[-1]])), lowercase=True
-                ).score
-                scores[f"intra_{k}"] = intra_bleu
+            # if k > 0:
+            #     intra_bleu = sacrebleu.corpus_bleu(
+            #         output, list(zip(*[[x] for x in topk_outputs[-1]])), lowercase=True
+            #     ).score
+            #     scores[f"intra_{k}"] = intra_bleu
 
             topk_outputs.append(output)
 
-        # calculate p-BLEU (Cao and Wan, 2020)
-        # p-BLEU = sum_i, sum_{j neq i} BLEU(yi, yj) / k * (k-1)
-        pbleu_scores = []
-        for i in range(top_k):
-            for j in range(top_k):
-                if i == j:
-                    continue
-                this_bleu = sacrebleu.corpus_bleu(
-                    topk_outputs[i], list(zip(*[[x] for x in topk_outputs[j]])), lowercase=True
-                ).score
-                pbleu_scores.append(this_bleu)
-        scores["pbleu"] = np.mean(pbleu_scores)
+        if not skip_scores:
+            # calculate p-BLEU (Cao and Wan, 2020)
+            # p-BLEU = sum_i, sum_{j neq i} BLEU(yi, yj) / k * (k-1)
+            pbleu_scores = []
+            for i in range(top_k):
+                for j in range(top_k):
+                    if i == j:
+                        continue
+                    this_bleu = sacrebleu.corpus_bleu(
+                        topk_outputs[i], list(zip(*[[x] for x in topk_outputs[j]])), lowercase=True
+                    ).score
+                    pbleu_scores.append(this_bleu)
+            scores["pbleu"] = np.mean(pbleu_scores)
 
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
