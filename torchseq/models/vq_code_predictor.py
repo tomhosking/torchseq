@@ -165,7 +165,7 @@ class VQCodePredictor(nn.Module):
         beam_width = self.config.get("beam_width", 3)
 
         if top_k > beam_width:
-            self.logger.warn("top-k is larger than beam_width - fewer candidates than expected will be returned!")
+            self.logger.warning("top-k is larger than beam_width - fewer candidates than expected will be returned!")
 
         # print(encoding.shape, seq_init.shape)
         outputs = self.classifier(encoding, seq=seq_init)

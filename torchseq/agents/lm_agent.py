@@ -28,7 +28,11 @@ class LangModelAgent(ModelAgent):
         self.src_field = "sent"
 
         # define loss
-        self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
+        self.loss = nn.CrossEntropyLoss(
+            ignore_index=Tokenizer().pad_id,
+            reduction="none",
+            label_smoothing=self.config.training.get("label_smoothing", 0.0),
+        )
 
         # define model
         self.model = TransformerLanguageModel(self.config, src_field=self.src_field)

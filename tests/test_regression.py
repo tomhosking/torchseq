@@ -243,3 +243,111 @@ def test_separator():
 
     # Now check the output (for first 100 samples)
     assert pred_output[0] == examples[0]["tgt"]
+
+
+@test_utils.slow
+def test_hrq():
+
+    CONFIG = "./models/hrqvae/20211008_173053_wa_base/config.json"
+    CHKPT = "./models/hrqvae/20211008_173053_wa_base/model/checkpoint.pt"
+    DATA_PATH = "./data/"
+    OUTPUT_PATH = "./runs/"
+    SEED = 123
+
+    # Most of this is copied from main.py
+    use_cuda = torch.cuda.is_available()
+
+    assert use_cuda, "This test needs to run on GPU!"
+
+    examples = [
+        {
+            "sem_input": "What is the weight of an average moose?",
+            "syn_input": "How much does a surgeon make?",
+            "tgt": "how much does a moose weight?",
+        },
+        {
+            "sem_input": "What is the weight of an average moose?",
+            "syn_input": "What is the income of a surgeon?",
+            "tgt": "what is the weight of a moose?",
+        },
+    ]
+
+    with open(CONFIG) as f:
+        cfg_dict = json.load(f)
+        if DATA_PATH is not None:
+            cfg_dict["env"]["data_path"] = DATA_PATH
+
+        cfg_dict["eval"]["truncate_dataset"] = 100
+        cfg_dict["eval"]["vae_use_map"] = True
+        cfg_dict["bottleneck"]["code_predictor"]["infer_codes"] = False
+        cfg_dict["beam_search"] = {"beam_width": 4, "beam_expansion": 2, "length_alpha": 1.0}
+
+        config = Config(cfg_dict)
+
+    set_seed(SEED)
+
+    if config.task == "aq":
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+    elif config.task in ["para", "autoencoder"]:
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+
+    data_loader = JsonDataLoader(config, test_samples=examples)
+
+    agent.load_checkpoint(CHKPT)
+    agent.model.eval()
+    loss, metrics, (pred_output, gold_output, gold_input), memory = agent.inference(data_loader.test_loader)
+
+    # Now check the output (for first 100 samples)
+    assert pred_output[0] == examples[0]["tgt"]
+    assert pred_output[1] == examples[1]["tgt"]
+
+
+@test_utils.slow
+def test_hrq_codepred():
+
+    CONFIG = "./models/hrqvae/20211008_173053_wa_base/config.json"
+    CHKPT = "./models/hrqvae/20211008_173053_wa_base/model/checkpoint.pt"
+    DATA_PATH = "./data/"
+    OUTPUT_PATH = "./runs/"
+    SEED = 123
+
+    # Most of this is copied from main.py
+    use_cuda = torch.cuda.is_available()
+
+    assert use_cuda, "This test needs to run on GPU!"
+
+    examples = [
+        {
+            "sem_input": "What is the weight of an average moose?",
+            "syn_input": "What is the income of a surgeon?",
+            "tgt": "how much does a moose weight?",
+        }
+    ]
+
+    with open(CONFIG) as f:
+        cfg_dict = json.load(f)
+        if DATA_PATH is not None:
+            cfg_dict["env"]["data_path"] = DATA_PATH
+
+        cfg_dict["eval"]["truncate_dataset"] = 100
+        cfg_dict["eval"]["vae_use_map"] = True
+        cfg_dict["bottleneck"]["code_predictor"]["infer_codes"] = True
+        cfg_dict["beam_search"] = {"beam_width": 4, "beam_expansion": 2, "length_alpha": 1.0}
+
+        config = Config(cfg_dict)
+
+    set_seed(SEED)
+
+    if config.task == "aq":
+        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+    elif config.task in ["para", "autoencoder"]:
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+
+    data_loader = JsonDataLoader(config, test_samples=examples)
+
+    agent.load_checkpoint(CHKPT)
+    agent.model.eval()
+    loss, metrics, (pred_output, gold_output, gold_input), memory = agent.inference(data_loader.test_loader)
+
+    # Now check the output (for first 100 samples)
+    assert pred_output[0] == examples[0]["tgt"]

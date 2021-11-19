@@ -47,7 +47,7 @@ class AQAgent(ModelAgent):
         self.loss = nn.CrossEntropyLoss(
             ignore_index=Tokenizer().pad_id,
             reduction="none",
-            # label_smoothing=self.config.training.get("label_smoothing", 0.0),
+            label_smoothing=self.config.training.get("label_smoothing", 0.0),
         )
 
         # define models

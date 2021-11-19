@@ -191,7 +191,7 @@ class SepAEMetricHook(MetricHook):
         else:
             bneck_types = [x.type for x in config.bottleneck.modules]
             if "vqvae" not in bneck_types:
-                logger.warn("Tried to run oracle masked eval on a model without a quantizer!")
+                logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
                 return {}
             quantizer_index = bneck_types.index("vqvae")
             num_heads = config.bottleneck.modules[quantizer_index].quantizer.num_heads

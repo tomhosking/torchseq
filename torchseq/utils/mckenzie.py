@@ -16,7 +16,7 @@ def update_mckenzie(progress, metric):
                 data={"jobid": job_id, "partition": partition, "progress": progress, "metric": metric},
             )
         except Exception as e:
-            logger.warn("Error updating McKenzie: " + repr(e))
+            logger.warning("Error updating McKenzie: " + repr(e))
 
 
 def set_status_mckenzie(status):
@@ -32,4 +32,4 @@ def set_status_mckenzie(status):
                 data={"jobid": job_id, "partition": partition, "status": status},
             )
         except Exception as e:
-            logger.warn("Error updating McKenzie: " + repr(e))
+            logger.warning("Error updating McKenzie: " + repr(e))

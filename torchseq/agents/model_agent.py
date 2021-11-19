@@ -86,7 +86,7 @@ class ModelAgent(BaseAgent):
         if run_id is not None:
             self.run_output_path = os.path.join(output_path, self.config.tag, self.run_id)
             if os.path.exists(self.run_output_path):
-                self.logger.warn(
+                self.logger.warning(
                     "Output path ({:}) already exists! Files may be overwritten".format(self.run_output_path)
                 )
             else:
@@ -229,11 +229,11 @@ class ModelAgent(BaseAgent):
         checkpoint = torch.load(file_name, map_location=(None if torch.cuda.is_available() else "cpu"))
         missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         if len(missing_keys) > 0:
-            self.logger.warn(
+            self.logger.warning(
                 "Some keys were missing from the loaded checkpoint: \n{:}".format("\n".join(missing_keys))
             )
         if len(unexpected_keys) > 0:
-            self.logger.warn(
+            self.logger.warning(
                 "Some unexpected keys were found in the loaded checkpoint: \n{:}".format("\n".join(unexpected_keys))
             )
 
@@ -254,12 +254,12 @@ class ModelAgent(BaseAgent):
         if "global_step" in checkpoint:
             self.global_step = checkpoint["global_step"]
         else:
-            self.logger.warn("Checkpoint is missing global_step value!")
+            self.logger.warning("Checkpoint is missing global_step value!")
 
         if "epoch" in checkpoint:
             self.current_epoch = checkpoint["epoch"]
 
-        self.loss = checkpoint["loss"]
+        # self.loss = checkpoint["loss"]
         self.best_metric = (
             checkpoint["best_metric"]
             if ("reset_metrics" not in self.config.training.data or not self.config.training.reset_metrics)
@@ -288,7 +288,7 @@ class ModelAgent(BaseAgent):
                 "model_state_dict": self.model.state_dict(),
                 "optimizer_state_dict": self.optimizers.state_dict() if self.training_mode else None,
                 "scheduler_state_dict": self.schedulers.state_dict() if self.training_mode else None,
-                "loss": self.loss,
+                # "loss": self.loss,
                 "best_metric": self.best_metric,
             },
             os.path.join(save_path, file_name),
@@ -310,7 +310,7 @@ class ModelAgent(BaseAgent):
     #     """
     #     Run inference on a dictionary of raw inputs
     #     """
-    #     self.logger.warn("infer() method is deprecated - use inference() with a real dataset instead")
+    #     self.logger.warning("infer() method is deprecated - use inference() with a real dataset instead")
 
     #     batch = self.text_to_batch(input, self.device)
 

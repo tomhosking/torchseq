@@ -51,7 +51,11 @@ class ParaphraseAgent(ModelAgent):
             )
 
         # define loss
-        self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
+        self.loss = nn.CrossEntropyLoss(
+            ignore_index=Tokenizer().pad_id,
+            reduction="none",
+            label_smoothing=self.config.training.get("label_smoothing", 0.0),
+        )
 
         # define model
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
