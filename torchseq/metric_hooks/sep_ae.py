@@ -167,7 +167,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu)
 
     @abstractmethod
-    def eval_gen_with_oracle_masked(config, agent, test=False, use_qqp=False):
+    def eval_gen_with_oracle_masked(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
@@ -184,7 +184,9 @@ class SepAEMetricHook(MetricHook):
         infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
         config.bottleneck.code_predictor.data["infer_codes"] = False
 
-        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+        data_loader = JsonDataLoader(
+            config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
+        )
 
         if config.bottleneck.get("quantizer_heads", None) is not None:
             num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
@@ -197,17 +199,11 @@ class SepAEMetricHook(MetricHook):
             num_heads = config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
         scores = {}
+        outputs = {}
 
-        for mask_length in range(1, num_heads):
-            mask = [1] * (num_heads - mask_length) + [0] * mask_length
-            samples = (data_loader._test if test else data_loader._valid).samples
-            samples = [{**x, "head_mask": mask} for x in samples]
-            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+        split = "test" if test else "dev"
 
-            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
-
-            split = "test" if test else "dev"
-
+        if not skip_scores:
             with jsonlines.open(
                 os.path.join(
                     config.env.data_path,
@@ -219,24 +215,34 @@ class SepAEMetricHook(MetricHook):
             refs = [q["paras"] for q in rows]
             inputs = [[q["sem_input"]] for q in rows]
 
-            # refs = [x["paras"] for x in qs_by_para_split]
-            max_num_refs = max([len(x) for x in refs])
-            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+        for mask_length in range(0, num_heads + 1):
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask} for x in samples]
+            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
 
-            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
-            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+            if not skip_scores:
+                # refs = [x["paras"] for x in qs_by_para_split]
+                max_num_refs = max([len(x) for x in refs])
+                refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-            scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+                tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+                self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
+
+                alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+                ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
+
+                scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+            outputs[mask_length] = output
 
         config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
-        return scores
+        return scores, outputs
 
     @abstractmethod
-    def eval_gen_codepred_masked(config, agent, test=False):
+    def eval_gen_codepred_masked(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):
         config_gen_with_templ = copy.deepcopy(config.data)
         config_gen_with_templ["dataset"] = "json"
         config_gen_with_templ["json_dataset"] = {
@@ -252,7 +258,9 @@ class SepAEMetricHook(MetricHook):
         infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
         config.bottleneck.code_predictor.data["infer_codes"] = True
 
-        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+        data_loader = JsonDataLoader(
+            config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
+        )
 
         if config.bottleneck.get("quantizer_heads", None) is not None:
             num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
@@ -263,7 +271,20 @@ class SepAEMetricHook(MetricHook):
         scores = {}
         outputs = {}
 
-        for mask_length in range(0, num_heads):
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(
+                config.env.data_path,
+                config.eval.metrics.sep_ae.eval_dataset,
+                f"{split}.jsonl",
+            )
+        ) as f:
+            rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
+        refs = [q["paras"] for q in rows]
+        inputs = [[q["sem_input"]] for q in rows]
+
+        for mask_length in range(0, num_heads + 1):
             logger.info(f"Running masked generation with depth={mask_length}")
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
@@ -272,30 +293,18 @@ class SepAEMetricHook(MetricHook):
 
             _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
 
-            split = "test" if test else "dev"
+            if not skip_scores:
+                # refs = [x["paras"] for x in qs_by_para_split]
+                max_num_refs = max([len(x) for x in refs])
+                refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
-            with jsonlines.open(
-                os.path.join(
-                    config.env.data_path,
-                    config.eval.metrics.sep_ae.eval_dataset,
-                    f"{split}.jsonl",
-                )
-            ) as f:
-                rows = [row for row in f][: config_gen_with_templ["eval"].get("truncate_dataset", None)]
-            refs = [q["paras"] for q in rows]
-            inputs = [[q["sem_input"]] for q in rows]
+                tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+                self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
 
-            # refs = [x["paras"] for x in qs_by_para_split]
-            max_num_refs = max([len(x) for x in refs])
-            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+                alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
+                ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
-            tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
-            self_bleu = sacrebleu.corpus_bleu(output, list(zip(*inputs)), lowercase=True).score
-
-            alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
-            ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
-
-            scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
+                scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
             outputs[mask_length] = output
 
         config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
@@ -947,20 +956,21 @@ class SepAEMetricHook(MetricHook):
 
         split = "test" if test else "dev"
 
-        with jsonlines.open(
-            os.path.join(
-                config.env.data_path,
-                config.eval.metrics.sep_ae.eval_dataset,
-                f"{split}.jsonl",
-            )
-        ) as f:
-            rows = [row for row in f][: config_pred_diversity["eval"].get("truncate_dataset", None)]
+        if not skip_scores:
+            with jsonlines.open(
+                os.path.join(
+                    config.env.data_path,
+                    config.eval.metrics.sep_ae.eval_dataset,
+                    f"{split}.jsonl",
+                )
+            ) as f:
+                rows = [row for row in f][: config_pred_diversity["eval"].get("truncate_dataset", None)]
 
-        refs = [q["paras"] for q in rows]
-        inputs = [[q["sem_input"]] for q in rows]
+            refs = [q["paras"] for q in rows]
+            inputs = [[q["sem_input"]] for q in rows]
 
-        max_num_refs = max([len(x) for x in refs])
-        refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+            max_num_refs = max([len(x) for x in refs])
+            refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
 
         scores = {}
         topk_outputs = []
