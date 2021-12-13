@@ -94,7 +94,7 @@ class SepAEMetricHook(MetricHook):
             logger.info("...done")
 
             logger.info("Running generation with oracle, with head mask")
-            self.scores["sepae_oracle_masked"] = SepAEMetricHook.eval_gen_with_oracle_masked(
+            self.scores["sepae_oracle_masked"], _ = SepAEMetricHook.eval_gen_with_oracle_masked(
                 self.config, agent, test=use_test
             )
             logger.info("...done")
