@@ -532,29 +532,20 @@ class SepAEMetricHook(MetricHook):
                     f"sep_encoding_1{post_bottleneck}",
                     f"sep_encoding_2{post_bottleneck}",
                     "vq_codes",
-                ]
-                # data_loader.train_loader,
-                # memory_keys_to_return=[
-                #     "sep_encoding_1_after_bottleneck",
-                #     "sep_encoding_2_after_bottleneck",
-                #     "vq_codes",
-                # ],
+                ],
             )
 
-            X = torch.cat(
-                [
-                    memory_train[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
-                    memory_train[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
-                ],
-                dim=1,
-            )
-            # X = torch.cat(
-            #     [
-            #         memory_train["sep_encoding_1_after_bottleneck"][:, 0, :],
-            #         memory_train["sep_encoding_2_after_bottleneck"][:, 0, :],
-            #     ],
-            #     dim=1,
-            # )
+            if not config.bottleneck.code_predictor.get("sem_only", False):
+                X = torch.cat(
+                    [
+                        memory_train[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                        memory_train[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+                    ],
+                    dim=1,
+                )
+            else:
+                X = memory_train[f"sep_encoding_1{post_bottleneck}"][:, 0, :]
+
             y = memory_train["vq_codes"]
 
             del memory_train
@@ -565,29 +556,20 @@ class SepAEMetricHook(MetricHook):
                     f"sep_encoding_1{post_bottleneck}",
                     f"sep_encoding_2{post_bottleneck}",
                     "vq_codes",
-                ]
-                # data_loader.valid_loader,
-                # memory_keys_to_return=[
-                #     "sep_encoding_1_after_bottleneck",
-                #     "sep_encoding_2_after_bottleneck",
-                #     "vq_codes",
-                # ],
+                ],
             )
 
-            X_dev = torch.cat(
-                [
-                    memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
-                    memory_dev[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
-                ],
-                dim=1,
-            )
-            # X_dev = torch.cat(
-            #     [
-            #         memory_dev["sep_encoding_1_after_bottleneck"][:, 0, :],
-            #         memory_dev["sep_encoding_2_after_bottleneck"][:, 0, :],
-            #     ],
-            #     dim=1,
-            # )
+            if not config.bottleneck.code_predictor.get("sem_only", False):
+                X_dev = torch.cat(
+                    [
+                        memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                        memory_dev[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+                    ],
+                    dim=1,
+                )
+            else:
+                X = memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :]
+
             y_dev = memory_dev["vq_codes"]
 
             del memory_dev
@@ -755,38 +737,6 @@ class SepAEMetricHook(MetricHook):
                             # dev_tgt = torch.where(torch.cat([torch.sum(torch.cat([onehot(torch.tensor(y[ix]), N=config.bottleneck.code_predictor.output_dim).unsqueeze(0) for ix in cluster[:20]], dim=0), dim=0, keepdims=True)], dim=0) > 0, 1, 0).cuda()
 
                         dev_loss += agent.model.code_predictor.train_step(inputs, dev_tgt, take_step=False).detach()
-                        # outputs = agent.model.code_predictor(inputs)
-
-                        # logits = [outputs[:, 0, :].unsqueeze(1)]
-
-                        # for head_ix in range(1, config.bottleneck.code_predictor.num_heads):
-                        #     if config.bottleneck.get("quantizer_transitions", False):
-                        #         prev_oh = (
-                        #             onehot(
-                        #                 torch.max(logits[-1], dim=-1).indices,
-                        #                 N=config.bottleneck.code_predictor.output_dim,
-                        #             )
-                        #             * 1.0
-                        #         )
-                        #         logits.append(
-                        #             outputs[:, head_ix, :].unsqueeze(1)
-                        #             + agent.model.code_predictor.transitions[head_ix - 1](prev_oh)
-                        #         )
-                        #     else:
-                        #         logits.append(outputs[:, head_ix, :].unsqueeze(1))
-                        # logits = torch.cat(logits, dim=1)
-
-                        # dev_loss += (
-                        #     torch.sum(
-                        #         -1
-                        #         * torch.nn.functional.log_softmax(logits, dim=-1)
-                        #         * dev_tgt
-                        #         / dev_tgt.sum(dim=-1, keepdims=True),
-                        #         dim=-1,
-                        #     )
-                        #     .mean()
-                        #     .detach()
-                        # )
 
                     dev_loss /= x_ix
 
@@ -901,13 +851,16 @@ class SepAEMetricHook(MetricHook):
             memory_keys_to_return=[f"sep_encoding_1{post_bottleneck}", f"sep_encoding_2{post_bottleneck}", "vq_codes"],
         )
 
-        X_eval = torch.cat(
-            [
-                memory_eval[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
-                memory_eval[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
-            ],
-            dim=1,
-        )
+        if not config.bottleneck.code_predictor.get("sem_only", False):
+            X_eval = torch.cat(
+                [
+                    memory_eval[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
+                    memory_eval[f"sep_encoding_2{post_bottleneck}"][:, 0, :],
+                ],
+                dim=1,
+            )
+        else:
+            X_eval = memory_eval[f"sep_encoding_1{post_bottleneck}"][:, 0, :]
         y_eval = memory_eval["vq_codes"]
 
         # Get top-k predicted codes
