@@ -39,6 +39,7 @@ from torchseq.metric_hooks.qg_metric import QGMetricHook
 from torchseq.metric_hooks.textual import TextualMetricHook
 from torchseq.metric_hooks.default import DefaultMetricHook
 from torchseq.metric_hooks.sep_ae import SepAEMetricHook
+from torchseq.metric_hooks.hrq_agg import HRQAggregationMetricHook
 from torchseq.metric_hooks.rouge import RougeMetricHook
 
 import torch.autograd.profiler as profiler
@@ -741,18 +742,24 @@ class ModelAgent(BaseAgent):
         if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
 
+        if slow_metrics and "hrq_agg" in self.config.eval.get("metrics", {}).keys():
+            metric_hooks += [HRQAggregationMetricHook(self.config, self.src_field, self.tgt_field)]
+
         if "rouge" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [RougeMetricHook(self.config, self.src_field, self.tgt_field)]
 
         self.vq_codes = defaultdict(lambda: [])
 
         if use_test:
+            split_slug = "test"
             self.logger.info("***** USING TEST SET ******")
             valid_loader = data_loader.test_loader
         elif use_train:
+            split_slug = "train"
             self.logger.info("***** USING TRAINING SET ******")
             valid_loader = data_loader.train_loader
         else:
+            split_slug = "dev"
             valid_loader = data_loader.valid_loader
 
         test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = self.inference(
@@ -781,9 +788,9 @@ class ModelAgent(BaseAgent):
             self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
 
             if self.run_id is not None:
-                with open(os.path.join(self.run_output_path, "output.txt"), "w") as f:
+                with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:
                     f.write("\n".join([json.dumps(pred) for pred in pred_output]))
-                with open(os.path.join(self.run_output_path, "metrics.json"), "w") as f:
+                with open(os.path.join(self.run_output_path, f"metrics.{split_slug}.json"), "w") as f:
                     json.dump(self.all_metrics_at_best, f, indent=4)
 
         if (

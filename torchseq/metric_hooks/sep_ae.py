@@ -61,7 +61,7 @@ class SepAEMetricHook(MetricHook):
                 enforce_unique_codes=self.config.eval.metrics.sep_ae.get("enforce_unique_codes", False),
             )
             with open(
-                os.path.join(agent.run_output_path, "codepred_output_{:}.txt".format("test" if use_test else "dev")),
+                os.path.join(agent.run_output_path, "codepred_output.{:}.txt".format("test" if use_test else "dev")),
                 "w",
             ) as f:
                 f.write("\n".join(codepred_output))
