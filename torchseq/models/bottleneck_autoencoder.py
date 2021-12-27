@@ -131,7 +131,7 @@ class BottleneckAutoencoderModel(nn.Module):
                     )
 
                 pred_codes = self.code_predictor.infer(
-                    self.reduce_fn(codepred_input).squeeze(1).detach(), batch, outputs_to_block=memory.get("vq_codes")
+                    self.reduce_fn(codepred_input).squeeze(1), batch, outputs_to_block=memory.get("vq_codes")
                 )
                 batch["forced_codes"] = pred_codes
 

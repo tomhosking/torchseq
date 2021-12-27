@@ -2,7 +2,7 @@ from torchseq.utils.functions import cos_sim, onehot
 import torch
 import torch.nn as nn
 
-from math import e, floor, pow
+from math import e, floor, pow, exp
 
 # https://github.com/zalandoresearch/pytorch-vq-vae/blob/master/vq-vae.ipynb
 
@@ -36,7 +36,9 @@ class VectorQuantizerMultiHead(nn.Module):
         use_cosine_similarities=False,
         use_gumbel=False,
         gumbel_temp=1.0,
+        temp_min=0.5,
         temp_schedule=False,
+        temp_schedule_gamma=1000,
         use_straight_through=True,
         separate_output_embedding=False,
         use_code_classifier=False,
@@ -85,7 +87,9 @@ class VectorQuantizerMultiHead(nn.Module):
         self._soft_em = soft_em
         self._use_gumbel = use_gumbel
         self._gumbel_temp = gumbel_temp
+        self._temp_min = temp_min
         self._temp_schedule = temp_schedule
+        self._temp_schedule_gamma = temp_schedule_gamma
         self._use_straight_through = use_straight_through
         self._use_code_classifier = use_code_classifier
 
@@ -338,8 +342,10 @@ class VectorQuantizerMultiHead(nn.Module):
                 all_distances.append(distances)
 
             if self._use_gumbel and self.training:
+
+                gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
                 gumbel_temp = (
-                    self._gumbel_temp / pow(1.0 + global_step * 1.0, 0.25)
+                    self._gumbel_temp * max(gumbel_sched_weight, self._temp_min)
                     if self._temp_schedule
                     else self._gumbel_temp
                 )
