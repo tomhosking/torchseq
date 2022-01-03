@@ -42,6 +42,13 @@ class SepAEMetricHook(MetricHook):
         sample_outputs = self.config.data["eval"].get("sample_outputs", True)
         self.config.eval.data["sample_outputs"] = True
 
+        if self.config.eval.metrics.sep_ae.get("run_codepred_recall", True):
+            logger.info("Running code predictor recall eval")
+            self.scores["sepae_codepred_recall"] = SepAEMetricHook.eval_codepred_recall(
+                self.config, agent, test=use_test
+            )
+            logger.info("...done")
+
         if (
             self.config.eval.metrics.sep_ae.get("run_codepred", False)
             and self.config.bottleneck.get("code_predictor", None) is not None
@@ -69,7 +76,7 @@ class SepAEMetricHook(MetricHook):
 
         if self.config.eval.metrics.sep_ae.get("run_codepred_topk", False):
             logger.info("Running generation with top-k predicted templates")
-            self.scores["sepae_codepred_topk"], _ = SepAEMetricHook.eval_gen_codepred_diversity(
+            self.scores["sepae_codepred_topk"], _ = SepAEMetricHook.eval_gen_codepred_topk(
                 self.config, agent, test=use_test, top_k=self.config.eval.metrics.sep_ae.get("codepred_topk", 3)
             )
             logger.info("...done")
@@ -165,6 +172,74 @@ class SepAEMetricHook(MetricHook):
         config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
         return (tgt_bleu, self_bleu, ibleu)
+
+    @abstractmethod
+    def eval_codepred_recall(config, agent, test=False):
+        if test:
+            logger.warn("Codepred recall evaluation isn't supported on test!")
+            return 0.0
+
+        config_gen_noised = copy.deepcopy(config.data)
+        config_gen_noised["dataset"] = "json"
+        config_gen_noised["json_dataset"] = {
+            "path": config.eval.metrics.sep_ae.eval_dataset,
+            "field_map": [
+                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "template"},
+                {"type": "copy", "from": "sem_input", "to": "s1"},
+            ],
+        }
+        config_gen_noised["eval"]["topk"] = 1
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = True
+
+        sample_outputs = agent.config.eval.get("sample_outputs", True)
+        agent.config.eval.data["sample_outputs"] = False
+
+        _, _, _, memory = agent.inference(
+            data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+        )
+
+        pred_codes = memory["vq_codes"]
+
+        split = "test" if test else "dev"
+
+        with jsonlines.open(
+            os.path.join(config.env.data_path, config.eval.metrics.sep_ae.eval_dataset, f"{split}.jsonl")
+        ) as f:
+            rows = [x for x in f]
+
+        gold_qs = [q for row in rows for q in row["paras"]]
+
+        gold_samples = [{"sem_input": q} for q in gold_qs]
+
+        data_loader = JsonDataLoader(config=Config(config_gen_noised), dev_samples=gold_samples)
+
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = False
+        _, _, _, memory_gold = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+
+        gold_codes_by_q = memory_gold["vq_codes"]
+
+        gold_codes = []
+        ix = 0
+        for row in rows:
+            code_cluster = []
+            for _ in row["paras"]:
+                code_cluster.append(tuple(gold_codes_by_q[ix]))
+                ix += 1
+            gold_codes.append(code_cluster)
+
+        agent.config.eval.data["sample_outputs"] = sample_outputs
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes  # reset this flag
+
+        recalls = [1 if tuple(pred) in gold else 0 for pred, gold in zip(pred_codes, gold_codes)]
+
+        logger.info("Codepred recall: {:0.3f}".format(np.mean(recalls)))
+
+        return np.mean(recalls)
 
     @abstractmethod
     def eval_gen_with_oracle_masked(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):
@@ -487,7 +562,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu), output
 
     @abstractmethod
-    def populate_cache(config, agent, MAX_SAMPLES=1e10):
+    def populate_cache(config, agent, MAX_SAMPLES=int(1e10)):
 
         dataset_all = config.eval.metrics.sep_ae.flattened_dataset
 
@@ -568,7 +643,7 @@ class SepAEMetricHook(MetricHook):
                     dim=1,
                 )
             else:
-                X = memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :]
+                X_dev = memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :]
 
             y_dev = memory_dev["vq_codes"]
 
@@ -763,6 +838,7 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_noised["eval"]["topk"] = 1
 
+        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
         config.bottleneck.code_predictor.data["infer_codes"] = True
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
@@ -780,9 +856,9 @@ class SepAEMetricHook(MetricHook):
         else:
             _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
-        config.eval.data["sample_outputs"] = sample_outputs
+        agent.config.eval.data["sample_outputs"] = sample_outputs
 
-        config.bottleneck.code_predictor.data["infer_codes"] = False  # reset this flag
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes  # reset this flag
 
         split = "test" if test else "dev"
 
@@ -810,7 +886,7 @@ class SepAEMetricHook(MetricHook):
         return (tgt_bleu, self_bleu, ibleu), output
 
     @abstractmethod
-    def eval_gen_codepred_diversity(
+    def eval_gen_codepred_topk(
         config,
         agent,
         test=False,
