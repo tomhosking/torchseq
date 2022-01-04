@@ -175,10 +175,6 @@ class SepAEMetricHook(MetricHook):
 
     @abstractmethod
     def eval_codepred_recall(config, agent, test=False):
-        if test:
-            logger.warn("Codepred recall evaluation isn't supported on test!")
-            return 0.0
-
         config_gen_noised = copy.deepcopy(config.data)
         config_gen_noised["dataset"] = "json"
         config_gen_noised["json_dataset"] = {
