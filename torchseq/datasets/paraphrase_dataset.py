@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 
 from torchseq.datasets.paraphrase_pair import ParaphrasePair
 from torchseq.utils.tokenizer import Tokenizer
-import torchseq.utils.tokenizer as tokenizer
 
 
 class ParaphraseDataset(Dataset):
@@ -24,10 +23,6 @@ class ParaphraseDataset(Dataset):
         self.exists = True
 
         self.length = 0
-
-        # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
-        tokenizer.DATA_PATH = config.env.data_path
-        Tokenizer(config.prepro.tokenizer)
 
         if test and not os.path.exists(os.path.join(self.path, "paraphrases.{:}.txt".format(self.variant))):
             self.exists = False

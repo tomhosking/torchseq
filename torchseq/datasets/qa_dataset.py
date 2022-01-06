@@ -9,16 +9,11 @@ from torch.utils.data import Dataset
 from torchseq.datasets.qa_triple import QATriple
 from torchseq.datasets.loaders import load_squad_triples
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
-import torchseq.utils.tokenizer as tokenizer
 
 
 class QADataset(Dataset):
     def __init__(self, config, path=None, samples=None, dev=False, test=False, length_limit=None):
         self.config = config
-
-        # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
-        tokenizer.DATA_PATH = config.env.data_path
-        Tokenizer(config.prepro.tokenizer)
 
         if samples is not None:
             self.samples = samples

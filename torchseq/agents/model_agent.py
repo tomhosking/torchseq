@@ -57,6 +57,7 @@ class ModelAgent(BaseAgent):
         config,
         run_id,
         output_path,
+        data_path,
         silent=False,
         training_mode=True,
         verbose=True,
@@ -69,7 +70,7 @@ class ModelAgent(BaseAgent):
         super().__init__(config)
 
         self.cache = None
-
+        self.data_path = data_path
         self.run_id = run_id
         self.silent = silent
         self.verbose = verbose
@@ -80,7 +81,7 @@ class ModelAgent(BaseAgent):
         set_seed(config.get("seed", 123))
 
         # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
-        tokenizer.DATA_PATH = config.env.data_path
+        tokenizer.DATA_PATH = data_path
         tokenizer.Tokenizer(config.prepro.tokenizer)
 
         # Slightly hacky way of allowing for inference-only use

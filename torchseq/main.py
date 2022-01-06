@@ -58,8 +58,6 @@ def main():
 
     with open(args.config) as f:
         cfg_dict = json.load(f)
-        if args.data_path is not None:
-            cfg_dict["env"]["data_path"] = args.data_path
 
     if args.patch is not None and len(args.patch) > 0:
         for mask_path in args.patch:
@@ -86,12 +84,13 @@ def main():
 
     logger.info("** Run ID is {:} **".format(run_id))
 
-    data_loader = dataloader_from_config(config)
+    data_loader = dataloader_from_config(config, data_path=args.data_path)
 
     agent = AGENT_TYPES[config.task](
         config,
         run_id,
         args.output_path,
+        data_path=args.data_path,
         silent=args.silent,
         verbose=args.verbose,
         training_mode=args.train,

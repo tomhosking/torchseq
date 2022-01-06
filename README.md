@@ -48,17 +48,16 @@ model_path = '../models/examples/20210223_191015_qg_bart/'
 # Load the config
 with open(model_path + 'config.json') as f:
     cfg_dict = json.load(f)
-cfg_dict["env"]["data_path"] = "../data/"
 
 config = Config(cfg_dict)
 
 # Load the model
-instance = AQAgent(config=config, run_id=None, output_path="./runs/examples/qg_bert_eval", silent=False, verbose=False)
+instance = AQAgent(config=config, run_id=None, output_path="./runs/examples/qg_bert_eval", data_path="../data/", silent=False, verbose=False)
 instance.load_checkpoint(model_path + 'model/checkpoint.pt')
 instance.model.eval()
 
 # Create a dataset
-data_loader = QADataLoader(config)
+data_loader = QADataLoader(config,  data_path="../data/")
 
 # Run inference on the test split
 test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = instance.inference(data_loader.test_loader, metric_hooks=[TextualMetricHook(config, 'c', 'q')])

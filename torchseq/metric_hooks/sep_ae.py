@@ -150,7 +150,7 @@ class SepAEMetricHook(MetricHook):
 
         with jsonlines.open(
             os.path.join(
-                config.env.data_path,
+                agent.data_path,
                 config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
@@ -204,7 +204,7 @@ class SepAEMetricHook(MetricHook):
         split = "test" if test else "dev"
 
         with jsonlines.open(
-            os.path.join(config.env.data_path, config.eval.metrics.sep_ae.eval_dataset, f"{split}.jsonl")
+            os.path.join(agent.data_path, config.eval.metrics.sep_ae.eval_dataset, f"{split}.jsonl")
         ) as f:
             rows = [x for x in f]
 
@@ -277,7 +277,7 @@ class SepAEMetricHook(MetricHook):
         if not skip_scores:
             with jsonlines.open(
                 os.path.join(
-                    config.env.data_path,
+                    agent.data_path,
                     config.eval.metrics.sep_ae.eval_dataset,
                     f"{split}.jsonl",
                 )
@@ -346,7 +346,7 @@ class SepAEMetricHook(MetricHook):
 
         with jsonlines.open(
             os.path.join(
-                config.env.data_path,
+                agent.data_path,
                 config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
@@ -421,7 +421,7 @@ class SepAEMetricHook(MetricHook):
 
             with jsonlines.open(
                 os.path.join(
-                    config.env.data_path,
+                    agent.data_path,
                     config.eval.metrics.sep_ae.eval_dataset,
                     f"{split}.jsonl",
                 )
@@ -487,9 +487,7 @@ class SepAEMetricHook(MetricHook):
 
         split = "test" if test else "dev"
 
-        with jsonlines.open(
-            os.path.join(config.env.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")
-        ) as f:
+        with jsonlines.open(os.path.join(agent.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
         refs = [q["paras"] for q in rows for _ in range(5)]
         inputs = [[q["sem_input"]] for q in rows for _ in range(5)]
@@ -527,7 +525,7 @@ class SepAEMetricHook(MetricHook):
         split = "test" if test else "dev"
         with jsonlines.open(
             os.path.join(
-                config.env.data_path,
+                agent.data_path,
                 config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
@@ -693,7 +691,7 @@ class SepAEMetricHook(MetricHook):
 
             X, y, X_dev, y_dev = SepAEMetricHook.populate_cache(config, agent, MAX_SAMPLES)
 
-            with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "train.jsonl")) as f:
+            with jsonlines.open(os.path.join(agent.data_path, dataset_clusters, "train.jsonl")) as f:
                 train_qs = [row for row in f]
             train_cluster_ixs = []
             ix = 0
@@ -711,7 +709,7 @@ class SepAEMetricHook(MetricHook):
                     train_cluster_ixs.append(cluster_ixs)
                 ix += clen
 
-            with jsonlines.open(os.path.join(config.env.data_path, dataset_clusters, "dev.jsonl")) as f:
+            with jsonlines.open(os.path.join(agent.data_path, dataset_clusters, "dev.jsonl")) as f:
                 dev_qs = [row for row in f]
             dev_cluster_ixs = []
             ix = 0
@@ -860,7 +858,7 @@ class SepAEMetricHook(MetricHook):
 
         with jsonlines.open(
             os.path.join(
-                config.env.data_path,
+                agent.data_path,
                 config.eval.metrics.sep_ae.eval_dataset,
                 f"{split}.jsonl",
             )
@@ -984,7 +982,7 @@ class SepAEMetricHook(MetricHook):
         if not skip_scores:
             with jsonlines.open(
                 os.path.join(
-                    config.env.data_path,
+                    agent.data_path,
                     config.eval.metrics.sep_ae.eval_dataset,
                     f"{split}.jsonl",
                 )
@@ -1067,9 +1065,7 @@ class SepAEMetricHook(MetricHook):
 
         split = "test" if test else "dev"
 
-        with jsonlines.open(
-            os.path.join(config.env.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")
-        ) as f:
+        with jsonlines.open(os.path.join(agent.data_path, f"wikianswers-para-splitforgeneval/{split}.jsonl")) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
 
         output = [q for beam in output for q in beam]

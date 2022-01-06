@@ -8,19 +8,23 @@ from torch.utils.data import DataLoader
 from torchseq.datasets.json_dataset import JsonDataset
 from torchseq.utils.seed import init_worker
 from torchseq.utils.tokenizer import Tokenizer
+import torchseq.utils.tokenizer as tokenizer
 
 
 class JsonDataLoader:
-    def __init__(self, config, train_samples=None, dev_samples=None, test_samples=None):
+    def __init__(self, config, data_path="./data", train_samples=None, dev_samples=None, test_samples=None):
         """
         :param config:
         """
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
+        tokenizer.DATA_PATH = data_path
+        Tokenizer(config.prepro.tokenizer)
+
         self._train = JsonDataset(
             config=config,
-            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
             samples=train_samples,
@@ -32,7 +36,7 @@ class JsonDataLoader:
         )
         self._valid = JsonDataset(
             config=config,
-            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
             samples=dev_samples,
@@ -43,7 +47,7 @@ class JsonDataLoader:
         )
         self._test = JsonDataset(
             config=config,
-            path=os.path.join(config.env.data_path, self.config.json_dataset.path)
+            path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
             samples=test_samples,
@@ -55,20 +59,6 @@ class JsonDataLoader:
 
         self.len_train_data = len(self._train)
         self.len_valid_data = len(self._valid)
-        # self.len_test_data = len(test)
-
-        # TODO: check whether running in silent mode
-        # self.logger.info(
-        #     "Loaded {:} training and {:} validation examples from {:}".format(
-        #         self.len_train_data,
-        #         self.len_valid_data,
-        #         os.path.join(config.env.data_path, self.config.json_dataset.path) if ,
-        #     )
-        # )
-
-        # self.train_iterations = (self.len_train_data + self.config.training.batch_size - 1) // self.config.training.batch_size
-        # self.valid_iterations = (self.len_valid_data + self.config.training.batch_size - 1) // self.config.training.batch_size
-        # self.test_iterations = (self.len_test_data + self.config.training.batch_size - 1) // self.config.training.batch_size
 
         if self._train.exists:
             self.train_loader = DataLoader(

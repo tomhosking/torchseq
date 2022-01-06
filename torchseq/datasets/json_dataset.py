@@ -10,7 +10,6 @@ from torch.utils.data import IterableDataset, Dataset
 import numpy as np
 
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
-import torchseq.utils.tokenizer as tokenizer
 
 
 class JsonDataset(Dataset):
@@ -39,10 +38,6 @@ class JsonDataset(Dataset):
         self.fields = self.config.json_dataset.data["field_map"]
 
         self.length = 0
-
-        # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
-        tokenizer.DATA_PATH = config.env.data_path
-        Tokenizer(config.prepro.tokenizer)
 
         if samples is not None:
             self.samples = samples

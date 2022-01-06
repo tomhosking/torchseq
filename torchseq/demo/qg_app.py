@@ -62,7 +62,6 @@ def init():
     #     # 'strategy': 'qa'
     #     "strategy": None
     # }
-    cfg_dict["env"]["data_path"] = "./data/"
 
     config = Config(cfg_dict)
 

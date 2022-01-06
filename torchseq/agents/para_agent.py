@@ -21,6 +21,7 @@ class ParaphraseAgent(ModelAgent):
         config,
         run_id,
         output_path,
+        data_path,
         silent=False,
         training_mode=True,
         verbose=True,
@@ -28,7 +29,7 @@ class ParaphraseAgent(ModelAgent):
         cache_root=None,
         use_cuda=True,
     ):
-        super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile, cache_root)
+        super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, profile, cache_root)
 
         self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
 

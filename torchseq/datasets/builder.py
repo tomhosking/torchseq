@@ -4,7 +4,7 @@ from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.datasets.lm_loader import LangmodellingDataLoader
 
 
-def dataloader_from_config(config):
+def dataloader_from_config(config, data_path="./data"):
     # define data_loader
     if config.training.dataset is None:
         data_loader = None
@@ -32,7 +32,7 @@ def dataloader_from_config(config):
         or config.training.dataset[:5] == "qdmr-"
         or "kaggle-" in config.training.dataset
     ):
-        data_loader = ParaphraseDataLoader(config=config)
+        data_loader = ParaphraseDataLoader(config=config, data_path=data_path)
     elif (
         config.training.dataset
         in [
@@ -47,13 +47,13 @@ def dataloader_from_config(config):
         ]
         or config.training.dataset[:5] == "squad"
     ):
-        data_loader = QADataLoader(config=config)
+        data_loader = QADataLoader(config=config, data_path=data_path)
     elif config.training.dataset in [
         "json",
     ]:
-        data_loader = JsonDataLoader(config=config)
+        data_loader = JsonDataLoader(config=config, data_path=data_path)
     elif config.training.dataset in ["ptb", "wikitext103"]:
-        data_loader = LangmodellingDataLoader(config=config)
+        data_loader = LangmodellingDataLoader(config=config, data_path=data_path)
     else:
         raise Exception("Unrecognised dataset: {:}".format(config.training.dataset))
 

@@ -33,8 +33,6 @@ def test_bert_embeds():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
 
@@ -43,11 +41,11 @@ def test_bert_embeds():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = dataloader_from_config(config)
+    data_loader = dataloader_from_config(config, DATA_PATH)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
@@ -80,8 +78,6 @@ def test_paraphrasing_vae():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
         cfg_dict["eval"]["vae_use_map"] = True
@@ -91,11 +87,11 @@ def test_paraphrasing_vae():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = dataloader_from_config(config)
+    data_loader = dataloader_from_config(config, DATA_PATH)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
@@ -128,9 +124,6 @@ def test_qg_transformer():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
-
         cfg_dict["eval"]["truncate_dataset"] = 100
 
         config = Config(cfg_dict)
@@ -138,11 +131,11 @@ def test_qg_transformer():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = dataloader_from_config(config)
+    data_loader = dataloader_from_config(config, DATA_PATH)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
@@ -170,8 +163,6 @@ def test_qg_transformer():
 
 #     with open(CONFIG) as f:
 #         cfg_dict = json.load(f)
-#         if DATA_PATH is not None:
-#             cfg_dict["env"]["data_path"] = DATA_PATH
 
 #         cfg_dict["eval"]["truncate_dataset"] = 100
 
@@ -219,8 +210,6 @@ def test_separator():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
         cfg_dict["eval"]["vae_use_map"] = True
@@ -231,11 +220,11 @@ def test_separator():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = JsonDataLoader(config, test_samples=examples)
+    data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
@@ -274,8 +263,6 @@ def test_hrq():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
         cfg_dict["eval"]["vae_use_map"] = True
@@ -287,11 +274,11 @@ def test_hrq():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = JsonDataLoader(config, test_samples=examples)
+    data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
@@ -326,8 +313,6 @@ def test_hrq_codepred():
 
     with open(CONFIG) as f:
         cfg_dict = json.load(f)
-        if DATA_PATH is not None:
-            cfg_dict["env"]["data_path"] = DATA_PATH
 
         cfg_dict["eval"]["truncate_dataset"] = 100
         cfg_dict["eval"]["vae_use_map"] = True
@@ -339,11 +324,11 @@ def test_hrq_codepred():
     set_seed(SEED)
 
     if config.task == "aq":
-        agent = AQAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True, training_mode=False)
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-    data_loader = JsonDataLoader(config, test_samples=examples)
+    data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()

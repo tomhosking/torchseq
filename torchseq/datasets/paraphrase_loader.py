@@ -7,20 +7,23 @@ from torch.utils.data import DataLoader
 from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
 from torchseq.utils.seed import init_worker
 from torchseq.utils.tokenizer import Tokenizer
-
+import torchseq.utils.tokenizer as tokenizer
 import logging
 
 
 class ParaphraseDataLoader:
-    def __init__(self, config):
+    def __init__(self, config, data_path):
         """
         :param config:
         """
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
+        tokenizer.DATA_PATH = data_path
+        Tokenizer(config.prepro.tokenizer)
+
         train = ParaphraseDataset(
-            os.path.join(config.env.data_path, self.config.training.dataset),
+            os.path.join(data_path, self.config.training.dataset),
             config=config,
             dev=False,
             test=False,
@@ -28,14 +31,14 @@ class ParaphraseDataLoader:
             length_limit=self.config.training.get("truncate_dataset", None),
         )
         valid = ParaphraseDataset(
-            os.path.join(config.env.data_path, self.config.training.dataset),
+            os.path.join(data_path, self.config.training.dataset),
             config=config,
             dev=True,
             test=False,
             length_limit=self.config.eval.get("truncate_dataset", None),
         )
         test = ParaphraseDataset(
-            os.path.join(config.env.data_path, self.config.training.dataset),
+            os.path.join(data_path, self.config.training.dataset),
             config=config,
             dev=False,
             test=True,
@@ -51,7 +54,7 @@ class ParaphraseDataLoader:
             "Loaded {:} training and {:} validation examples from {:}".format(
                 self.len_train_data,
                 self.len_valid_data,
-                os.path.join(config.env.data_path, self.config.training.dataset),
+                os.path.join(data_path, self.config.training.dataset),
             )
         )
 

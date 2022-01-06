@@ -32,6 +32,7 @@ class AQAgent(ModelAgent):
         config,
         run_id,
         output_path,
+        data_path,
         silent=False,
         training_mode=True,
         verbose=True,
@@ -39,7 +40,7 @@ class AQAgent(ModelAgent):
         cache_root=None,
         use_cuda=True,
     ):
-        super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile, cache_root)
+        super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, profile, cache_root)
 
         self.src_field = "c"
         self.tgt_field = "q"
