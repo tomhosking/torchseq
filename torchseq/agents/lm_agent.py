@@ -20,6 +20,7 @@ class LangModelAgent(ModelAgent):
         training_mode=True,
         verbose=True,
         cache_root=None,
+        use_cuda=True,
     ):
         super().__init__(config, run_id, output_path, silent, training_mode, verbose, cache_root)
 
@@ -41,6 +42,6 @@ class LangModelAgent(ModelAgent):
         if training_mode:
             self.create_optimizer()
 
-        self.set_device()
+        self.set_device(use_cuda)
 
         self.create_samplers()

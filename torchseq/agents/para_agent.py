@@ -26,6 +26,7 @@ class ParaphraseAgent(ModelAgent):
         verbose=True,
         profile=False,
         cache_root=None,
+        use_cuda=True,
     ):
         super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile, cache_root)
 
@@ -72,7 +73,7 @@ class ParaphraseAgent(ModelAgent):
         if training_mode:
             self.create_optimizer()
 
-        self.set_device()
+        self.set_device(use_cuda)
 
         self.create_samplers()
 

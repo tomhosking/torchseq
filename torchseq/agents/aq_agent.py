@@ -37,6 +37,7 @@ class AQAgent(ModelAgent):
         verbose=True,
         profile=False,
         cache_root=None,
+        use_cuda=True,
     ):
         super().__init__(config, run_id, output_path, silent, training_mode, verbose, profile, cache_root)
 
@@ -62,7 +63,7 @@ class AQAgent(ModelAgent):
         if training_mode:
             self.create_optimizer()
 
-        self.set_device()
+        self.set_device(use_cuda)
 
         if self.cuda:
             self.suppression_loss = self.suppression_loss.to(self.device)

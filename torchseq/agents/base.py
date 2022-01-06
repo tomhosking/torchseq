@@ -15,13 +15,17 @@ class BaseAgent:
         self.config = config
         self.logger = logging.getLogger("Agent")
 
-    def set_device(self):
+    def set_device(self, use_cuda=True):
         # set cuda flag
-        self.is_cuda = torch.cuda.is_available()
-        if self.is_cuda and not self.config.env.cuda:
-            self.logger.info("WARNING: You have a CUDA device, so you should probably enable CUDA")
+        self.cuda_available = torch.cuda.is_available()
+        if self.cuda_available and not use_cuda:
+            self.logger.warn("You have a CUDA device, so you should probably enable CUDA")
 
-        self.cuda = self.is_cuda & self.config.env.cuda
+        if use_cuda and not self.cuda_available:
+            self.logger.error("Use CUDA is set to true, but not CUDA devices were found!")
+            raise Exception("No CUDA devices found")
+
+        self.cuda = self.cuda_available & use_cuda
 
         if self.cuda:
             self.device = torch.device("cuda")

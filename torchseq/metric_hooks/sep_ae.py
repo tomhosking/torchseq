@@ -233,9 +233,9 @@ class SepAEMetricHook(MetricHook):
 
         recalls = [1 if tuple(pred) in gold else 0 for pred, gold in zip(pred_codes, gold_codes)]
 
-        logger.info("Codepred recall: {:0.3f}".format(np.mean(recalls)))
+        logger.info("Codepred recall: {:0.3f}".format(np.mean(recalls) * 100))
 
-        return np.mean(recalls)
+        return np.mean(recalls) * 100
 
     @abstractmethod
     def eval_gen_with_oracle_masked(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):

@@ -101,6 +101,7 @@ def main():
             if (args.load_chkpt is not None and not args.nocache)
             else None
         ),
+        use_cuda=(not args.cpu),
     )
 
     if args.load_chkpt is not None:

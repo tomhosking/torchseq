@@ -183,9 +183,11 @@ class VQCodePredictor(nn.Module):
 
                         seq_init = torch.zeros(1, 1, seq_dim).to(encoding.device)
                         seq_embedded = [
-                            embed(torch.tensor(x).to(encoding.device)).unsqueeze(0).unsqueeze(1).detach()
+                            embed(torch.tensor(x).to(encoding.device)).unsqueeze(0).unsqueeze(1)
                             for x, embed in zip(combo, self.embeddings)
                         ]
+                        if self.config.get("seq_stop_grad", True):
+                            seq_embedded = [x.detach() for x in seq_embedded]
                         seq = torch.cat([seq_init, *seq_embedded], dim=1)
                         if self.config.get("additive", False):
                             seq = torch.cumsum(seq, dim=1)
@@ -235,9 +237,11 @@ class VQCodePredictor(nn.Module):
             )
             seq_init = torch.zeros(encoding.shape[0], 1, seq_dim).to(encoding.device)
             seq_embedded = [
-                torch.matmul(code_mask[:, hix, :].float(), self.embeddings[hix].weight.detach()).unsqueeze(1)
+                torch.matmul(code_mask[:, hix, :].float(), self.embeddings[hix].weight).unsqueeze(1)
                 for hix in range(self.config.num_heads - 1)
             ]
+            if self.config.get("seq_stop_grad", True):
+                seq_embedded = [x.detach() for x in seq_embedded]
 
             seq = torch.cat([seq_init, *seq_embedded], dim=1)
             if self.config.get("additive", False):
