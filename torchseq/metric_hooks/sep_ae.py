@@ -233,7 +233,7 @@ class SepAEMetricHook(MetricHook):
 
         recalls = [1 if tuple(pred) in gold else 0 for pred, gold in zip(pred_codes, gold_codes)]
 
-        logger.info("Codepred recall: {:0.3f}".format(np.mean(recalls) * 100))
+        logger.info("Codepred recall: {:0.2f}".format(np.mean(recalls) * 100))
 
         return np.mean(recalls) * 100
 

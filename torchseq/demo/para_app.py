@@ -73,7 +73,6 @@ def init():
     with open(MODEL_PATH + "/config.json") as f:
         cfg_dict = json.load(f)
         # cfg_dict["task"] = "autoencoder"
-        cfg_dict["env"]["data_path"] = "./data/"
         cfg_dict["eval"]["sampler"] = "beam"
         cfg_dict["eval"]["topk"] = 1
         # cfg_dict["training"]["dataset"] = "squad"
