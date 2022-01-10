@@ -42,13 +42,6 @@ class SepAEMetricHook(MetricHook):
         sample_outputs = self.config.data["eval"].get("sample_outputs", True)
         self.config.eval.data["sample_outputs"] = True
 
-        if self.config.eval.metrics.sep_ae.get("run_codepred_recall", True):
-            logger.info("Running code predictor recall eval")
-            self.scores["sepae_codepred_recall"] = SepAEMetricHook.eval_codepred_recall(
-                self.config, agent, test=use_test
-            )
-            logger.info("...done")
-
         if (
             self.config.eval.metrics.sep_ae.get("run_codepred", False)
             and self.config.bottleneck.get("code_predictor", None) is not None
@@ -72,6 +65,13 @@ class SepAEMetricHook(MetricHook):
                 "w",
             ) as f:
                 f.write("\n".join(codepred_output))
+            logger.info("...done")
+
+        if self.config.eval.metrics.sep_ae.get("run_codepred_recall", True):
+            logger.info("Running code predictor recall eval")
+            self.scores["sepae_codepred_recall"] = SepAEMetricHook.eval_codepred_recall(
+                self.config, agent, test=use_test
+            )
             logger.info("...done")
 
         if self.config.eval.metrics.sep_ae.get("run_codepred_topk", False):
