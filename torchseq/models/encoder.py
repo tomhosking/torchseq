@@ -35,6 +35,8 @@ class SequenceEncoder(nn.Module):
                 bart_model = BartModel.from_pretrained(config.encdec.bert_model)
                 self.bert_encoder = bart_model.encoder
                 del bart_model.decoder
+            elif "roberta-" in config.encdec.bert_model:
+                self.bert_encoder = RobertaModel.from_pretrained(config.encdec.bert_model)
             else:
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
 
