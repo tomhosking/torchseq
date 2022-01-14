@@ -466,13 +466,14 @@ class VectorQuantizerMultiHead(nn.Module):
                 # print(head_mask.shape, quantized.shape)
                 quantized = quantized * head_mask.unsqueeze(-1)
 
+        if self._head_dropout is not None and self.training:
+            mask = self._head_dropout.sample(sample_shape=(*quantized.shape[:-1], 1))
+            if self._head_dropout_keep_first:
+                mask[:, 0, :] = 1.0
+            mask = torch.cumprod(mask, dim=1).to(quantized.device)
+            quantized = quantized * mask
+
         if self._additive:
-            if self._head_dropout is not None and self.training:
-                mask = self._head_dropout.sample(sample_shape=(*quantized.shape[:-1], 1))
-                if self._head_dropout_keep_first:
-                    mask[:, 0, :] = 1.0
-                mask = torch.cumprod(mask, dim=1).to(quantized.device)
-                quantized = quantized * mask
             quantized = torch.sum(quantized, dim=1)
         quantized = quantized.view(input_shape)
 
