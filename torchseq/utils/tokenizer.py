@@ -1,3 +1,4 @@
+import os
 import torch
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
@@ -101,8 +102,8 @@ class Tokenizer(metaclass=Singleton):
 
         elif "bart-" in model_slug or "roberta-" in model_slug:
             self.engine = ByteLevelBPETokenizer.from_file(
-                "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1]),
-                "{:}pretrained-vocabs/{:}-merges.txt".format(DATA_PATH, model_slug.split("/")[-1]),
+                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])),
+                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1])),
                 lowercase=False,
             )
 
@@ -117,7 +118,7 @@ class Tokenizer(metaclass=Singleton):
 
         elif "ptb" in model_slug:
             self.engine = WordLevelTokenizer.from_file(
-                "{:}pretrained-vocabs/{:}-vocab.json".format(DATA_PATH, model_slug.split("/")[-1])
+                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]))
             )
 
             self.pad_id = self.engine.token_to_id("<pad>")
@@ -129,7 +130,7 @@ class Tokenizer(metaclass=Singleton):
 
         else:
             self.engine = BertWordPieceTokenizer.from_file(
-                "{:}pretrained-vocabs/{:}-vocab.txt".format(DATA_PATH, model_slug.split("/")[-1]),
+                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1])),
                 lowercase=(model_slug[-8:] == "-uncased"),
             )
 
@@ -159,7 +160,9 @@ class Tokenizer(metaclass=Singleton):
         return Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
 
     def get_embeddings(self, model_slug):
-        return torch.load("{:}pretrained-vocabs/{:}.embeddings.pt".format(DATA_PATH, model_slug.split("/")[-1]))
+        return torch.load(
+            os.path.join(DATA_PATH, "pretrained-vocabs/{:}.embeddings.pt".format(model_slug.split("/")[-1]))
+        )
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
 
@@ -181,24 +184,6 @@ class Tokenizer(metaclass=Singleton):
 
         # mBART doesn't use bos tokens
         if "mbart-" in Tokenizer().model_slug:
-            # bos = (
-            #     [{"id": self.engine.lang_code_to_id[tgt_lang_code], "text": tgt_lang_code, "begin": 0, "end": 0}]
-            #     if tgt_lang_code is not None
-            #     else []
-            # ) + [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
-            # bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
-            # eos = (
-            #     [
-            #         {
-            #             "id": self.engine.lang_code_to_id[src_lang_code],
-            #             "text": src_lang_code,
-            #             "begin": len(text),
-            #             "end": len(text),
-            #         }
-            #     ]
-            #     if src_lang_code is not None
-            #     else []
-            # )
             eos = [{"id": Tokenizer().eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
             # bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
             bos = []

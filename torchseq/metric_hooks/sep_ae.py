@@ -137,8 +137,8 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_with_templ["eval"]["topk"] = 1
 
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
-        config.bottleneck.code_predictor.data["infer_codes"] = False
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = False
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
@@ -169,7 +169,7 @@ class SepAEMetricHook(MetricHook):
         alpha = config.eval.metrics.sep_ae.get("ibleu_alpha", 0.8)
         ibleu = alpha * tgt_bleu - (1 - alpha) * self_bleu
 
-        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
         return (tgt_bleu, self_bleu, ibleu)
 
@@ -189,7 +189,7 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
         agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
         sample_outputs = agent.config.eval.get("sample_outputs", True)
@@ -252,22 +252,24 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_with_templ["eval"]["topk"] = 1
 
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
-        config.bottleneck.code_predictor.data["infer_codes"] = False
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = False
 
         data_loader = JsonDataLoader(
             config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
         )
 
-        if config.bottleneck.get("quantizer_heads", None) is not None:
-            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        if agent.config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = agent.config.bottleneck.quantizer_heads - agent.config.bottleneck.get(
+                "quantizer_num_residual", 0
+            )
         else:
-            bneck_types = [x.type for x in config.bottleneck.modules]
+            bneck_types = [x.type for x in agent.config.bottleneck.modules]
             if "vqvae" not in bneck_types:
                 logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
                 return {}
             quantizer_index = bneck_types.index("vqvae")
-            num_heads = config.bottleneck.modules[quantizer_index].quantizer.num_heads
+            num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
         scores = {}
         outputs = {}
@@ -308,7 +310,7 @@ class SepAEMetricHook(MetricHook):
                 scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
             outputs[mask_length] = output
 
-        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
         return scores, outputs
 
@@ -326,18 +328,20 @@ class SepAEMetricHook(MetricHook):
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
-        config.bottleneck.code_predictor.data["infer_codes"] = True
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
         data_loader = JsonDataLoader(
             config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
         )
 
-        if config.bottleneck.get("quantizer_heads", None) is not None:
-            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        if agent.config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = agent.config.bottleneck.quantizer_heads - agent.config.bottleneck.get(
+                "quantizer_num_residual", 0
+            )
         else:
             # HACK
-            num_heads = config.bottleneck.modules[1].quantizer.num_heads
+            num_heads = agent.config.bottleneck.modules[1].quantizer.num_heads
 
         scores = {}
         outputs = {}
@@ -378,7 +382,7 @@ class SepAEMetricHook(MetricHook):
                 scores[mask_length] = (tgt_bleu, self_bleu, ibleu)
             outputs[mask_length] = output
 
-        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
 
         return scores, outputs
 
@@ -399,11 +403,13 @@ class SepAEMetricHook(MetricHook):
 
         data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
 
-        if config.bottleneck.get("quantizer_heads", None) is not None:
-            num_heads = config.bottleneck.quantizer_heads - config.bottleneck.get("quantizer_num_residual", 0)
+        if agent.config.bottleneck.get("quantizer_heads", None) is not None:
+            num_heads = agent.config.bottleneck.quantizer_heads - agent.config.bottleneck.get(
+                "quantizer_num_residual", 0
+            )
         else:
             # HACK
-            num_heads = config.bottleneck.modules[1].quantizer.num_heads
+            num_heads = agent.config.bottleneck.modules[1].quantizer.num_heads
 
         scores = {}
         outputs = {}
@@ -477,7 +483,7 @@ class SepAEMetricHook(MetricHook):
                 var1 = 0.0
                 var2 = noise_weight
             # TODO: This won't work with modular bottlenecks!
-            config.bottleneck.data["prior_var_weight"] = (
+            agent.config.bottleneck.data["prior_var_weight"] = (
                 [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
             )
 
@@ -532,8 +538,8 @@ class SepAEMetricHook(MetricHook):
         ) as f:
             rows = [row for row in f][: config_gen_noised["eval"].get("truncate_dataset", None)]
 
-        num_heads = config.bottleneck.code_predictor.num_heads
-        codebook_size = config.bottleneck.codebook_size
+        num_heads = agent.config.bottleneck.code_predictor.num_heads
+        codebook_size = agent.config.bottleneck.codebook_size
 
         rows = [{**row, "forced_codes": np.random.randint(0, codebook_size - 1, num_heads).tolist()} for row in rows]
 
@@ -560,8 +566,8 @@ class SepAEMetricHook(MetricHook):
 
         dataset_all = config.eval.metrics.sep_ae.flattened_dataset
 
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
-        config.bottleneck.code_predictor.data["infer_codes"] = False
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = False
 
         if agent.cache.load("codepred_cache_X") is not None:
             logger.info("Loading from cache")
@@ -592,7 +598,7 @@ class SepAEMetricHook(MetricHook):
             data_loader = JsonDataLoader(Config(cfg_dict))
 
             post_bottleneck = (
-                "_after_bottleneck" if config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
+                "_after_bottleneck" if agent.config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
             )
 
             _, _, _, memory_train = agent.inference(
@@ -604,7 +610,7 @@ class SepAEMetricHook(MetricHook):
                 ],
             )
 
-            if not config.bottleneck.code_predictor.get("sem_only", False):
+            if not agent.config.bottleneck.code_predictor.get("sem_only", False):
                 X = torch.cat(
                     [
                         memory_train[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
@@ -628,7 +634,7 @@ class SepAEMetricHook(MetricHook):
                 ],
             )
 
-            if not config.bottleneck.code_predictor.get("sem_only", False):
+            if not agent.config.bottleneck.code_predictor.get("sem_only", False):
                 X_dev = torch.cat(
                     [
                         memory_dev[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
@@ -650,7 +656,7 @@ class SepAEMetricHook(MetricHook):
 
             logger.info("Cache built")
 
-        config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = infer_codes
         return X, y, X_dev, y_dev
 
     @abstractmethod
@@ -672,9 +678,9 @@ class SepAEMetricHook(MetricHook):
             # Generate the training data
             # TODO: move these to the config
             # lr = 1e-4
-            bsz = config.bottleneck.code_predictor.bsz
-            num_steps = config.bottleneck.code_predictor.num_steps
-            MAX_SAMPLES = config.bottleneck.code_predictor.get("max_samples", 1e7)
+            bsz = agent.config.bottleneck.code_predictor.bsz
+            num_steps = agent.config.bottleneck.code_predictor.num_steps
+            MAX_SAMPLES = agent.config.bottleneck.code_predictor.get("max_samples", 1e7)
 
             logger.info("Generating encodings and vq codes to train code predictor")
 
@@ -744,7 +750,7 @@ class SepAEMetricHook(MetricHook):
                     torch.stack([X[ix] for ix in batch_ixs if len(train_cluster_ixs[ix]) > 0], dim=0)
                 ).cuda()
 
-                if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
+                if agent.config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                     tgt_ixs = [
                         np.random.choice(train_cluster_ixs[cix])
                         for cix in batch_ixs
@@ -784,7 +790,7 @@ class SepAEMetricHook(MetricHook):
                             continue
                         inputs = Variable(torch.stack([X_dev[x_ix]], dim=0)).cuda()
 
-                        if config.bottleneck.get("quantizer_transitions", False) or single_training_target:
+                        if agent.config.bottleneck.get("quantizer_transitions", False) or single_training_target:
                             tgt_ixs = [np.random.choice(dev_cluster_ixs[cix]) for cix in [x_ix]]
                             dev_tgt = torch.cat(
                                 [
@@ -832,15 +838,15 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_noised["eval"]["topk"] = 1
 
-        infer_codes = config.bottleneck.code_predictor.data.get("infer_codes", False)
-        config.bottleneck.code_predictor.data["infer_codes"] = True
+        infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
+        agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
         data_loader = JsonDataLoader(config=Config(config_gen_noised))
 
         agent.config.eval.data["sample_outputs"] = True
 
         if mask_length > 0:
-            num_heads = config.bottleneck.code_predictor.num_heads
+            num_heads = agent.config.bottleneck.code_predictor.num_heads
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
@@ -914,14 +920,16 @@ class SepAEMetricHook(MetricHook):
 
         config.eval.data["sample_outputs"] = False
 
-        post_bottleneck = "_after_bottleneck" if config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
+        post_bottleneck = (
+            "_after_bottleneck" if agent.config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
+        )
 
         _, _, (_, _, _), memory_eval = agent.inference(
             data_loader.test_loader if test else data_loader.valid_loader,
             memory_keys_to_return=[f"sep_encoding_1{post_bottleneck}", f"sep_encoding_2{post_bottleneck}", "vq_codes"],
         )
 
-        if not config.bottleneck.code_predictor.get("sem_only", False):
+        if not agent.config.bottleneck.code_predictor.get("sem_only", False):
             X_eval = torch.cat(
                 [
                     memory_eval[f"sep_encoding_1{post_bottleneck}"][:, 0, :],
