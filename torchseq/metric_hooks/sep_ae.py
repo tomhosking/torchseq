@@ -140,7 +140,7 @@ class SepAEMetricHook(MetricHook):
         infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
         agent.config.bottleneck.code_predictor.data["infer_codes"] = False
 
-        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_with_templ))
 
         _, _, (output, _, _), _ = agent.inference(
             data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=[]
@@ -187,7 +187,7 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_noised["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised))
 
         infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
         agent.config.bottleneck.code_predictor.data["infer_codes"] = True
@@ -212,7 +212,9 @@ class SepAEMetricHook(MetricHook):
 
         gold_samples = [{"sem_input": q} for q in gold_qs]
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised), dev_samples=gold_samples)
+        data_loader = JsonDataLoader(
+            data_path=agent.data_path, config=Config(config_gen_noised), dev_samples=gold_samples
+        )
 
         agent.config.bottleneck.code_predictor.data["infer_codes"] = False
         _, _, _, memory_gold = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
@@ -256,7 +258,10 @@ class SepAEMetricHook(MetricHook):
         agent.config.bottleneck.code_predictor.data["infer_codes"] = False
 
         data_loader = JsonDataLoader(
-            config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
+            data_path=agent.data_path,
+            config=Config(config_gen_with_templ),
+            dev_samples=dev_samples,
+            test_samples=test_samples,
         )
 
         if agent.config.bottleneck.get("quantizer_heads", None) is not None:
@@ -292,7 +297,9 @@ class SepAEMetricHook(MetricHook):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
-            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+            masked_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_gen_with_templ), dev_samples=samples
+            )
 
             _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
 
@@ -332,7 +339,10 @@ class SepAEMetricHook(MetricHook):
         agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
         data_loader = JsonDataLoader(
-            config=Config(config_gen_with_templ), dev_samples=dev_samples, test_samples=test_samples
+            data_path=agent.data_path,
+            config=Config(config_gen_with_templ),
+            dev_samples=dev_samples,
+            test_samples=test_samples,
         )
 
         if agent.config.bottleneck.get("quantizer_heads", None) is not None:
@@ -364,7 +374,9 @@ class SepAEMetricHook(MetricHook):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
-            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+            masked_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_gen_with_templ), dev_samples=samples
+            )
 
             _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
 
@@ -401,7 +413,7 @@ class SepAEMetricHook(MetricHook):
         }
         config_gen_with_templ["eval"]["topk"] = 1
 
-        data_loader = JsonDataLoader(config=Config(config_gen_with_templ))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_with_templ))
 
         if agent.config.bottleneck.get("quantizer_heads", None) is not None:
             num_heads = agent.config.bottleneck.quantizer_heads - agent.config.bottleneck.get(
@@ -419,7 +431,9 @@ class SepAEMetricHook(MetricHook):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
-            masked_loader = JsonDataLoader(config=Config(config_gen_with_templ), dev_samples=samples)
+            masked_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_gen_with_templ), dev_samples=samples
+            )
 
             _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
 
@@ -487,7 +501,7 @@ class SepAEMetricHook(MetricHook):
                 [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
             )
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised))
 
         _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 
@@ -543,7 +557,7 @@ class SepAEMetricHook(MetricHook):
 
         rows = [{**row, "forced_codes": np.random.randint(0, codebook_size - 1, num_heads).tolist()} for row in rows]
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised), test_samples=rows)
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised), test_samples=rows)
 
         _, _, (output, _, _), _ = agent.inference(data_loader.test_loader)
 
@@ -595,7 +609,7 @@ class SepAEMetricHook(MetricHook):
                 ],
             }
 
-            data_loader = JsonDataLoader(Config(cfg_dict))
+            data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(cfg_dict))
 
             post_bottleneck = (
                 "_after_bottleneck" if agent.config.bottleneck.code_predictor.get("post_bottleneck", False) else ""
@@ -841,7 +855,7 @@ class SepAEMetricHook(MetricHook):
         infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
         agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised))
 
         agent.config.eval.data["sample_outputs"] = True
 
@@ -850,7 +864,9 @@ class SepAEMetricHook(MetricHook):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask} for x in samples]
-            masked_loader = JsonDataLoader(config=Config(config_gen_noised), dev_samples=samples)
+            masked_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_gen_noised), dev_samples=samples
+            )
 
             _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
         else:
@@ -915,7 +931,10 @@ class SepAEMetricHook(MetricHook):
         config_gen_eval["eval"]["topk"] = 1
 
         data_loader = JsonDataLoader(
-            config=Config(config_gen_eval), dev_samples=dev_samples, test_samples=test_samples
+            data_path=agent.data_path,
+            config=Config(config_gen_eval),
+            dev_samples=dev_samples,
+            test_samples=test_samples,
         )
 
         config.eval.data["sample_outputs"] = False
@@ -980,7 +999,10 @@ class SepAEMetricHook(MetricHook):
         config_pred_diversity["eval"]["topk"] = 1
 
         data_loader = JsonDataLoader(
-            config=Config(config_pred_diversity), dev_samples=dev_samples, test_samples=test_samples
+            data_path=agent.data_path,
+            config=Config(config_pred_diversity),
+            dev_samples=dev_samples,
+            test_samples=test_samples,
         )
 
         config.eval.data["sample_outputs"] = True
@@ -1011,7 +1033,9 @@ class SepAEMetricHook(MetricHook):
 
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "forced_codes": pred_codes[i, k, :].tolist()} for i, x in enumerate(samples)]
-            forced_loader = JsonDataLoader(config=Config(config_pred_diversity), dev_samples=samples)
+            forced_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_pred_diversity), dev_samples=samples
+            )
 
             _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
 
@@ -1065,7 +1089,7 @@ class SepAEMetricHook(MetricHook):
         prev_topk = config.eval.get("topk", 1)
         config.eval.data["topk"] = 4
 
-        data_loader = JsonDataLoader(config=Config(config_gen_noised))
+        data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised))
 
         _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
 

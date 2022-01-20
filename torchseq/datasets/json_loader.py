@@ -60,6 +60,13 @@ class JsonDataLoader:
         self.len_train_data = len(self._train)
         self.len_valid_data = len(self._valid)
 
+        if not self._train.exists and not self._valid.exists and not self._test.exists:
+            raise Exception(
+                "No splits found for dataset at path {:} - ".format(
+                    os.path.join(data_path, self.config.json_dataset.path)
+                )
+            )
+
         if self._train.exists:
             self.train_loader = DataLoader(
                 self._train,
