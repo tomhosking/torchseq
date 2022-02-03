@@ -134,19 +134,20 @@ class VectorQuantizerMultiHead(nn.Module):
                 [nn.Embedding(self._num_embeddings ** (1 + h), self.dims[h]) for h in range(num_heads)]
             )
 
-            self._ema_w = nn.ParameterList(
-                [nn.Parameter(torch.Tensor(num_embeddings ** (1 + h), self.dims[h])) for h in range(num_heads)]
-            )
+            if self._ema:
+                self._ema_w = nn.ParameterList(
+                    [nn.Parameter(torch.Tensor(num_embeddings ** (1 + h), self.dims[h])) for h in range(num_heads)]
+                )
         else:
             self.dims = [self._embedding_dim] * self._num_heads
 
             self._embedding = nn.ModuleList(
                 [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
             )
-
-            self._ema_w = nn.ParameterList(
-                [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
-            )
+            if self._ema:
+                self._ema_w = nn.ParameterList(
+                    [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
+                )
         for hix, embedding in enumerate(self._embedding):
             torch.nn.init.xavier_uniform_(
                 embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
@@ -198,16 +199,19 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._commitment_cost = commitment_cost
 
-        for ix in range(self._num_heads):
-            power = (1 + ix) if self._hierarchical else 1
-            self.register_buffer("_ema_cluster_size" + str(ix), torch.zeros(num_embeddings**power))
-
-            self._ema_w[ix].data.normal_()
-
         self._decay = decay
         self._epsilon = epsilon
         self._residual = residual
-        self._alpha = nn.Parameter(torch.Tensor(num_heads))
+
+        if self._ema:
+            self._alpha = nn.Parameter(torch.Tensor(num_heads))
+
+            for ix in range(self._num_heads):
+                power = (1 + ix) if self._hierarchical else 1
+                self.register_buffer("_ema_cluster_size" + str(ix), torch.zeros(num_embeddings**power))
+
+                self._ema_w[ix].data.normal_()
+
         self._code_entropy_weight = code_entropy_weight
 
         self._init_decay_weight = init_decay_weight

@@ -350,7 +350,7 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+            test_loss, best_metrics, _, _ = self.validate(data_loader, save=True, training_loop=True)
 
             best_loss = test_loss
 
@@ -366,7 +366,7 @@ class ModelAgent(BaseAgent):
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True, training_loop=True)
                 self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
                 Logger().log_scalar("dev/loss", test_loss, self.global_step)
@@ -531,7 +531,7 @@ class ModelAgent(BaseAgent):
             memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
-    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False):
+    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False, training_loop=False):
         """
         Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
         """
@@ -560,7 +560,7 @@ class ModelAgent(BaseAgent):
                 this_loss, dev_output, dev_output_lens, dev_scores, logits, memory = self.step_validate(
                     batch,
                     self.tgt_field,
-                    sample_outputs=self.config.eval.data.get("sample_outputs", True),
+                    sample_outputs=self.config.eval.data.get("sample_outputs", True) and not training_loop,
                     reduce_outputs=(self.config.eval.data.get("topk", 1) == 1),
                 )
 
@@ -573,7 +573,11 @@ class ModelAgent(BaseAgent):
                 num_samples += curr_batch_size
 
                 #  Handle top-1 sampling
-                if self.config.eval.data.get("sample_outputs", True) and (self.config.eval.data.get("topk", 1) == 1):
+                if (
+                    self.config.eval.data.get("sample_outputs", True)
+                    and not training_loop
+                    and (self.config.eval.data.get("topk", 1) == 1)
+                ):
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(Tokenizer().decode(pred[: dev_output_lens[ix]]))
                     for ix, gold in enumerate(batch[self.tgt_field]):
@@ -589,8 +593,10 @@ class ModelAgent(BaseAgent):
                         self.logger.info(pred_output[-2:])
 
                 # Handle top-k sampling
-                if self.config.eval.data.get("sample_outputs", True) and not (
-                    self.config.eval.data.get("topk", 1) == 1
+                if (
+                    self.config.eval.data.get("sample_outputs", True)
+                    and not training_loop
+                    and not (self.config.eval.data.get("topk", 1) == 1)
                 ):
                     topk = self.config.eval.data.get("topk", 1)
                     for ix, pred in enumerate(dev_output.data):
@@ -634,6 +640,7 @@ class ModelAgent(BaseAgent):
         save_model=True,
         memory_keys_to_return=None,
         slow_metrics=False,
+        training_loop=False,
     ):
         """
         One cycle of model validation. This includes metrics, and is the entry point for eval using the CLI.
@@ -646,10 +653,12 @@ class ModelAgent(BaseAgent):
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()
 
+        slow_metrics = slow_metrics and self.config.eval.data.get("sample_outputs", True) and not training_loop
+
         # Register the metric hooks to be used
         metric_hooks = [DefaultMetricHook(self.config, self.src_field, self.tgt_field)]
 
-        if self.config.eval.data.get("sample_outputs", True):
+        if self.config.eval.data.get("sample_outputs", True) and not training_loop:
             metric_hooks += [TextualMetricHook(self.config, self.src_field, self.tgt_field)]
 
         if slow_metrics:
@@ -661,7 +670,11 @@ class ModelAgent(BaseAgent):
         if slow_metrics and "hrq_agg" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [HRQAggregationMetricHook(self.config, self.src_field, self.tgt_field)]
 
-        if "rouge" in self.config.eval.get("metrics", {}).keys():
+        if (
+            "rouge" in self.config.eval.get("metrics", {}).keys()
+            and self.config.eval.data.get("sample_outputs", True)
+            and not training_loop
+        ):
             metric_hooks += [RougeMetricHook(self.config, self.src_field, self.tgt_field)]
 
         self.vq_codes = defaultdict(lambda: [])
@@ -679,7 +692,7 @@ class ModelAgent(BaseAgent):
             valid_loader = data_loader.valid_loader
 
         test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = self.inference(
-            valid_loader, memory_keys_to_return, metric_hooks, use_test
+            valid_loader, memory_keys_to_return, metric_hooks, use_test, training_loop
         )
 
         # for h_ix, codes in self.vq_codes.items():

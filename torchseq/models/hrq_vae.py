@@ -5,52 +5,27 @@ import torch.nn as nn
 from math import e, floor, pow, exp
 
 
-# "quantizer": {
-#     "codebook_size": 64,
-#     "num_heads": 4,
-#     "residual": false,
-#     "use_gumbel": true,
-#     "use_straight_through": false,
-#     "separate_output_embedding": false,
-#     "use_code_classifier": false,
-#     "additive": true,
-#     "ema": false,
-#     "relative_error": true,
-#     "full_dim_input": true,
-#     "relative_error_cumulative": true,
-#     "head_dropout" : 0.1,
-#     "head_dropout_keep_first" : false,
-#     "init_decay_weight": 0.7,
-#     "init_scale": 1.0,
-#     "init_embeds_xavier": true,
-#     "gumbel_temp": 4.0,
-#     "temp_schedule": true,
-#     "temp_schedule_gamma": 10000,
-#     "temp_min": 0.5
-# }
-
-
 class HierarchicalRefinementQuantizer(nn.Module):
     def __init__(
         self,
         num_embeddings,
         embedding_dim,
-        num_heads=1,
+        num_heads=3,
         code_offset=0,
         warmup_steps=None,
         use_cosine_similarities=False,
-        gumbel_temp=1.0,
+        gumbel_temp=2.0,
         temp_min=0.5,
-        temp_schedule=False,
-        temp_schedule_gamma=1000,
+        temp_schedule=True,
+        temp_schedule_gamma=10000,
         norm_loss_weight=None,
-        init_decay_weight=1.0,
-        init_embeds_xavier=False,
+        init_decay_weight=0.5,
+        init_embeds_xavier=True,
         init_delay_steps=None,
         init_dynamic_var=False,
-        init_scale=0.5,
-        head_dropout=None,
-        head_dropout_keep_first=True,
+        init_scale=1.0,
+        head_dropout=0.3,
+        head_dropout_keep_first=False,
         learnable_priors=False,
     ):
 
@@ -83,10 +58,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         self._embedding = nn.ModuleList(
             [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
-        )
-
-        self._ema_w = nn.ParameterList(
-            [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
         )
 
         for hix, embedding in enumerate(self._embedding):

@@ -24,16 +24,16 @@ class TextualMetricHook(MetricHook):
         self.inputs = []
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-
-        if self.config.eval.data.get("topk", 1) > 1:
-            self.pred_targets.extend([x[0] for x in output])
-        else:
-            self.pred_targets.extend(output)
-        if "_refs_text" in batch:
-            self.gold_targets.extend(batch["_refs_text"])
-        else:
-            self.gold_targets.extend([[x] for x in batch[self.tgt_field + "_text"]])
-        self.inputs.extend(batch[self.src_field + "_text"])
+        if len(output) > 0:
+            if self.config.eval.data.get("topk", 1) > 1:
+                self.pred_targets.extend([x[0] for x in output])
+            else:
+                self.pred_targets.extend(output)
+            if "_refs_text" in batch:
+                self.gold_targets.extend(batch["_refs_text"])
+            else:
+                self.gold_targets.extend([[x] for x in batch[self.tgt_field + "_text"]])
+            self.inputs.extend(batch[self.src_field + "_text"])
 
     def on_end_epoch(self, _, use_test=False):
 
