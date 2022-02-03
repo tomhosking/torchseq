@@ -121,9 +121,9 @@ class vMF(torch.nn.Module):
         surface of the sphere.
         """
         dim = dim - 1  # since S^{n-1}
-        b = dim / (np.sqrt(4.0 * kappa ** 2 + dim ** 2) + 2 * kappa)  # b= 1/(sqrt(4.* kdiv**2 + 1) + 2 * kdiv)
+        b = dim / (np.sqrt(4.0 * kappa**2 + dim**2) + 2 * kappa)  # b= 1/(sqrt(4.* kdiv**2 + 1) + 2 * kdiv)
         x = (1.0 - b) / (1.0 + b)
-        c = kappa * x + dim * np.log(1 - x ** 2)  # dim * (kdiv *x + np.log(1-x**2))
+        c = kappa * x + dim * np.log(1 - x**2)  # dim * (kdiv *x + np.log(1-x**2))
 
         while True:
             z = np.random.beta(dim / 2.0, dim / 2.0)  # concentrates towards 0.5 as d-> inf

@@ -105,7 +105,7 @@ class VectorQuantizerMultiHeadLegacy(nn.Module):
                 # Calculate distances
                 distances = (
                     torch.sum(flat_input[:, head_ix, :] ** 2, dim=1, keepdim=True)
-                    + torch.sum(embedding.weight ** 2, dim=1)
+                    + torch.sum(embedding.weight**2, dim=1)
                     - 2 * torch.matmul(flat_input[:, head_ix, :], embedding.weight.t())
                 )
 

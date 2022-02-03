@@ -91,8 +91,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         for hix, embedding in enumerate(self._embedding):
             torch.nn.init.xavier_uniform_(
-                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight ** hix
-            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight ** hix)
+                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
+            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
 
         if learnable_priors:
             self._learnable_priors = nn.ParameterList(
@@ -131,12 +131,12 @@ class HierarchicalRefinementQuantizer(nn.Module):
             and global_step < self._init_delay_steps
         ):
             self._init_cumsum += inputs.squeeze(dim=1).sum(dim=0)
-            self._init_cumsquared += (inputs ** 2).squeeze(dim=1).sum(dim=0)
+            self._init_cumsquared += (inputs**2).squeeze(dim=1).sum(dim=0)
             self._init_samples += input_shape[0]
         elif self.training and not self._init_done and global_step >= self._init_delay_steps:
             init_mean = self._init_cumsum / float(self._init_samples)
             init_var = (
-                torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean ** 2)
+                torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean**2)
                 if self._init_dynamic_var
                 else torch.full_like(init_mean, 0.5)
             )
@@ -144,7 +144,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 this_mean = init_mean if hix == 0 else torch.zeros_like(init_mean)
                 self._embedding[hix].weight.data = torch.normal(
                     mean=this_mean.unsqueeze(0).expand(self._num_embeddings, -1),
-                    std=init_var.unsqueeze(0).expand(self._num_embeddings, -1) * self._init_decay_weight ** hix,
+                    std=init_var.unsqueeze(0).expand(self._num_embeddings, -1) * self._init_decay_weight**hix,
                 )
             self._init_done = True
 
@@ -168,7 +168,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                     distances += cos_sim(resid_error, self._embedding[head_ix].weight)
                 else:
                     distances += -1.0 * (
-                        torch.sum(resid_error ** 2, dim=1, keepdim=True)
+                        torch.sum(resid_error**2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
                     )
@@ -178,7 +178,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                     distances += cos_sim(this_input, self._embedding[head_ix].weight)
                 else:
                     distances += -1.0 * (
-                        torch.sum(this_input ** 2, dim=1, keepdim=True)
+                        torch.sum(this_input**2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(this_input, self._embedding[head_ix].weight.t())
                     )

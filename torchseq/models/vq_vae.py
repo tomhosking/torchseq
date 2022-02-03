@@ -122,7 +122,7 @@ class VectorQuantizerMultiHead(nn.Module):
         if hierarchical:
 
             if self._hierarchical_balance_dims:
-                dim_weights = [2 ** x for x in range(self._num_heads)]
+                dim_weights = [2**x for x in range(self._num_heads)]
                 total_dim = self._embedding_dim * self._num_heads
                 self.dims = [floor(x * total_dim / sum(dim_weights)) for x in dim_weights]
                 # Reset the smallest dim to account for rounding
@@ -149,8 +149,8 @@ class VectorQuantizerMultiHead(nn.Module):
             )
         for hix, embedding in enumerate(self._embedding):
             torch.nn.init.xavier_uniform_(
-                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight ** hix
-            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight ** hix)
+                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
+            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
 
         if separate_output_embedding:
             self._output_embedding = nn.ModuleList(
@@ -200,7 +200,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         for ix in range(self._num_heads):
             power = (1 + ix) if self._hierarchical else 1
-            self.register_buffer("_ema_cluster_size" + str(ix), torch.zeros(num_embeddings ** power))
+            self.register_buffer("_ema_cluster_size" + str(ix), torch.zeros(num_embeddings**power))
 
             self._ema_w[ix].data.normal_()
 
@@ -244,12 +244,12 @@ class VectorQuantizerMultiHead(nn.Module):
             and global_step < self._init_delay_steps
         ):
             self._init_cumsum += inputs.squeeze(dim=1).sum(dim=0)
-            self._init_cumsquared += (inputs ** 2).squeeze(dim=1).sum(dim=0)
+            self._init_cumsquared += (inputs**2).squeeze(dim=1).sum(dim=0)
             self._init_samples += input_shape[0]
         elif self.training and not self._init_done and global_step >= self._init_delay_steps:
             init_mean = self._init_cumsum / float(self._init_samples)
             init_var = (
-                torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean ** 2)
+                torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean**2)
                 if self._init_dynamic_var
                 else torch.full_like(init_mean, 0.5)
             )
@@ -257,7 +257,7 @@ class VectorQuantizerMultiHead(nn.Module):
                 this_mean = init_mean if hix == 0 else torch.zeros_like(init_mean)
                 self._embedding[hix].weight.data = torch.normal(
                     mean=this_mean.unsqueeze(0).expand(self._num_embeddings, -1),
-                    std=init_var.unsqueeze(0).expand(self._num_embeddings, -1) * self._init_decay_weight ** hix,
+                    std=init_var.unsqueeze(0).expand(self._num_embeddings, -1) * self._init_decay_weight**hix,
                 )
             self._init_done = True
 
@@ -295,7 +295,7 @@ class VectorQuantizerMultiHead(nn.Module):
                     distances += self._code_classifiers[head_ix](resid_error)
                 else:
                     distances += -1.0 * (
-                        torch.sum(resid_error ** 2, dim=1, keepdim=True)
+                        torch.sum(resid_error**2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
                     )
@@ -307,7 +307,7 @@ class VectorQuantizerMultiHead(nn.Module):
                     distances += self._code_classifiers[head_ix](this_input)
                 else:
                     distances += -1.0 * (
-                        torch.sum(this_input ** 2, dim=1, keepdim=True)
+                        torch.sum(this_input**2, dim=1, keepdim=True)
                         + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
                         - 2 * torch.matmul(this_input, self._embedding[head_ix].weight.t())
                     )

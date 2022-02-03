@@ -312,7 +312,7 @@ class BottleneckAutoencoderModel(nn.Module):
                                 encoding_pooled[:, :, self.sep_splice_ix :]
                                 - template_encoding_pooled[:, :, self.sep_splice_ix :]
                             )
-                            similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
+                            similarity_loss = (diff1**2).mean(dim=-1).mean(dim=-1)
 
                             diff2 = (
                                 encoding_pooled[:, :, : self.sep_splice_ix]
@@ -324,7 +324,7 @@ class BottleneckAutoencoderModel(nn.Module):
                                 encoding_pooled[:, :, : self.sep_splice_ix]
                                 - template_encoding_pooled[:, :, : self.sep_splice_ix]
                             )
-                            similarity_loss = (diff1 ** 2).mean(dim=-1).mean(dim=-1)
+                            similarity_loss = (diff1**2).mean(dim=-1).mean(dim=-1)
 
                             diff2 = (
                                 encoding_pooled[:, :, self.sep_splice_ix :]
