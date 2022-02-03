@@ -9,8 +9,6 @@ from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 
-import torch.autograd.profiler as profiler
-
 
 class ModularBottleneck(nn.Module):
     def __init__(self, config, embeddings=None):

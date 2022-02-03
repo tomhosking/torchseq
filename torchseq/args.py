@@ -47,7 +47,6 @@ def parse_args():
     # Runtime
     parser.add_argument("--cpu", action="store_true", help="Disable CUDA")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
-    parser.add_argument("--profile", action="store_true", help="Enable profiler")
 
     args = parser.parse_args()
 

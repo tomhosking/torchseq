@@ -43,8 +43,6 @@ from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 from torchseq.metric_hooks.hrq_agg import HRQAggregationMetricHook
 from torchseq.metric_hooks.rouge import RougeMetricHook
 
-import torch.autograd.profiler as profiler
-
 
 # Variable length sequences = worse performance if we try to optimise
 from torch.backends import cudnn
@@ -62,7 +60,6 @@ class ModelAgent(BaseAgent):
         silent=False,
         training_mode=True,
         verbose=True,
-        profile=False,
         cache_root=None,
     ):
         """
@@ -77,7 +74,6 @@ class ModelAgent(BaseAgent):
         self.verbose = verbose
 
         self.training_mode = training_mode
-        self.profile = profile
 
         set_seed(config.get("seed", 123))
 
@@ -383,48 +379,31 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            if self.profile:
-                with profiler.record_function("validate"):
-                    _ = self.validate(data_loader, save=True)
-                print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-            else:
-                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+            test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
 
-                best_loss = test_loss
+            best_loss = test_loss
 
-                self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
+            self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
-                Logger().log_scalar("dev/loss", test_loss, self.global_step)
+            Logger().log_scalar("dev/loss", test_loss, self.global_step)
 
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
 
-            if self.profile:
-                with profiler.record_function("train_one_epoch"):
-                    self.train_one_epoch(data_loader)
-
-                print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-
-            else:
-                self.train_one_epoch(data_loader)
+            self.train_one_epoch(data_loader)
 
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                if self.profile:
-                    with profiler.record_function("validate"):
-                        _ = self.validate(data_loader, save=True)
-                    print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-                else:
-                    test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
-                    self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
+                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True)
+                self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
-                    Logger().log_scalar("dev/loss", test_loss, self.global_step)
-                    if test_loss < best_loss:
-                        best_loss = test_loss
-                        epochs_without_improvement = 0
-                    else:
-                        epochs_without_improvement += 1
+                Logger().log_scalar("dev/loss", test_loss, self.global_step)
+                if test_loss < best_loss:
+                    best_loss = test_loss
+                    epochs_without_improvement = 0
+                else:
+                    epochs_without_improvement += 1
                 if epochs_without_improvement > self.config.training.get("early_stopping_patience", 3):
                     self.logger.info("No improvement in dev loss for 3 epochs - stopping early")
                     break
@@ -457,29 +436,11 @@ class ModelAgent(BaseAgent):
 
             curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
-            # self.global_step += curr_batch_size
-
-            # Weight the loss by the ratio of this batch to optimiser step size, so that LR is equivalent even when grad accumulation happens
-
-            #     tr.print_diff()
-            # with profiler.record_function("validate"):
-            #             _ = self.validate(data_loader, save=True)
-            #         print(self.profiler_instance.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-            if self.profile:
-                with profiler.profile(profile_memory=True) as prof:
-                    with profiler.record_function("train_step"):
-                        loss = (
-                            self.step_train(batch, self.tgt_field)
-                            * float(curr_batch_size)
-                            / float(self.config.training.optim_batch_size)
-                        )
-                print(prof.key_averages().table(sort_by="cpu_memory_usage", row_limit=10))
-            else:
-                loss = (
-                    self.step_train(batch, self.tgt_field)
-                    * float(curr_batch_size)
-                    / float(self.config.training.optim_batch_size)
-                )
+            loss = (
+                self.step_train(batch, self.tgt_field)
+                * float(curr_batch_size)
+                / float(self.config.training.optim_batch_size)
+            )
             if not self.silent:
                 pbar.set_postfix(
                     {
@@ -492,24 +453,9 @@ class ModelAgent(BaseAgent):
 
             loss.backward()
 
-            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[0].weight.grad.norm(dim=-1).max())
-            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[1].weight.grad.norm(dim=-1).max())
-            # print("q1 grad", self.model.bottleneck.module_list[1].quantizer._embedding[2].weight.grad.norm(dim=-1).max())
-            # exit()
-
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
-
-            # lr = get_lr(
-            #     self.config.training.lr,
-            #     self.global_step,
-            #     self.config.training.lr_schedule,
-            #     self.config.training.data.get("lr_warmup", True),
-            # )
-
-            # for param_group in self.optimizer.param_groups:
-            #     param_group["lr"] = lr
 
             # Gradient accumulation
             for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
@@ -540,10 +486,6 @@ class ModelAgent(BaseAgent):
                     self.logger.info(Tokenizer().decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
                     self.logger.info(Tokenizer().decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
                     self.logger.info(Tokenizer().decode(greedy_output.data[0][: output_lens[0]]))
-
-                    # if self.config.encdec.data.get("variational", False):
-                    #     print(self.model.mu)
-                    #     print(self.model.logvar)
 
                 torch.cuda.empty_cache()
 

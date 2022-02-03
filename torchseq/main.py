@@ -99,7 +99,6 @@ def main():
         silent=args.silent,
         verbose=args.verbose,
         training_mode=args.train,
-        profile=args.profile,
         cache_root=(
             args.load_chkpt.replace("model/checkpoint.pt", "")
             if (args.load_chkpt is not None and not args.nocache)
