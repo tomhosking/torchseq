@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 
 import torch
+from torchseq.utils.wandb import wandb_log
 
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.para_agent import ParaphraseAgent
@@ -13,6 +14,7 @@ from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.mckenzie import set_status_mckenzie
+from torchseq.utils.wandb import wandb_init
 
 from torchseq.datasets.builder import dataloader_from_config
 
@@ -84,6 +86,9 @@ def main():
 
     logger.info("** Run ID is {:} **".format(run_id))
 
+    wandb_init(config=config, run_id=run_id, path=os.path.join(args.output_path, config.tag, run_id))
+    # wandb_log({"status": "running"}, 0)
+
     data_loader = dataloader_from_config(config, data_path=args.data_path)
 
     agent = AGENT_TYPES[config.task](
@@ -109,9 +114,11 @@ def main():
         logger.info("...loaded!")
 
     if args.train:
+
         if data_loader.train_loader is None:
             raise Exception("Selected dataset does not include a training split - cannot train!")
         logger.info("Starting training...")
+        # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
         if config.get("bottleneck", {}).get("quantizer_gumbel", False):
@@ -131,6 +138,7 @@ def main():
             raise Exception("Selected dataset does not include a training split - cannot train!")
 
         set_status_mckenzie("validating")
+        # wandb_log({"status": "validating"}, step=agent.global_step)
         logger.info("Starting validation (on training set)...")
         _ = agent.validate(
             data_loader, save=False, force_save_output=True, use_train=True, save_model=False, slow_metrics=True
@@ -142,6 +150,7 @@ def main():
             raise Exception("Selected dataset does not include a dev split - cannot run validation!")
 
         set_status_mckenzie("validating")
+        # wandb_log({"status": "validating"}, step=agent.global_step)
         logger.info("Starting validation...")
         _ = agent.validate(data_loader, save=False, force_save_output=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
@@ -151,11 +160,14 @@ def main():
             raise Exception("Selected dataset does not include a test split - cannot run test evaluation!")
 
         set_status_mckenzie("validating")
+        # wandb_log({"status": "testing"}, step=agent.global_step)
         logger.info("Starting testing...")
         _ = agent.validate(
             data_loader, save=False, force_save_output=True, use_test=True, save_model=False, slow_metrics=True
         )
         logger.info("...testing done!")
+
+    # wandb_log({"status": "finished"}, step=agent.global_step)
 
 
 if __name__ == "__main__":

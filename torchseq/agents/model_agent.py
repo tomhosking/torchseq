@@ -5,6 +5,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 
+
 from collections import defaultdict
 from tqdm import tqdm
 
@@ -29,7 +30,7 @@ import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.cache import Cache
 from torchseq.utils.optimizer_group import OptimizerGroup, SchedulerGroup
-
+from torchseq.utils.wandb import wandb_log
 
 from torchseq.models.ranger import Ranger
 from torchseq.utils.loss_dropper import LossDropper
@@ -374,6 +375,7 @@ class ModelAgent(BaseAgent):
             )
 
         update_mckenzie(0, "-")
+        wandb_log({"progress": self.current_epoch / self.config.training.num_epochs * 100}, step=self.global_step)
 
         epochs_without_improvement = 0
         best_loss = 1e10
@@ -788,6 +790,8 @@ class ModelAgent(BaseAgent):
 
             self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
 
+            wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()}, step=self.global_step)
+
             if self.run_id is not None:
                 with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:
                     f.write("\n".join([json.dumps(pred) for pred in pred_output]))
@@ -827,11 +831,21 @@ class ModelAgent(BaseAgent):
         """
         Update McKenzie with the latest metric values
         """
+        wandb_log(
+            {
+                "bleu": self.all_metrics_at_best.get("bleu", None),
+                "nll": self.all_metrics_at_best.get("nll", None),
+            },
+            step=self.global_step,
+        )
+        wandb_log({"progress": self.current_epoch / self.config.training.num_epochs * 100}, step=self.global_step)
+
         if "bleu" in self.all_metrics_at_best:
             update_mckenzie(
                 self.current_epoch / self.config.training.num_epochs * 100,
                 "{:0.2f}".format(self.all_metrics_at_best[self.config.training.data.get("mckenzie_metric", "bleu")]),
             )
+
         elif "nll" in self.all_metrics_at_best:
             update_mckenzie(
                 self.current_epoch / self.config.training.num_epochs * 100,

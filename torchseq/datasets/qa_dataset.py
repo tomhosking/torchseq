@@ -17,7 +17,7 @@ class QADataset(Dataset):
 
         if samples is not None:
             self.samples = samples
-        elif config.training.dataset == "squad":
+        elif config.training.dataset == "squad" or config.training.dataset == "qa/squad":
             squad = load_squad_triples(path=path, dev=dev, test=test)
 
             self.samples = [

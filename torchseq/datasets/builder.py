@@ -46,6 +46,7 @@ def dataloader_from_config(config, data_path="./data"):
             "inquisitive",
         ]
         or config.training.dataset[:5] == "squad"
+        or config.training.dataset[:3] == "qa/"
     ):
         data_loader = QADataLoader(config=config, data_path=data_path)
     elif config.training.dataset in [

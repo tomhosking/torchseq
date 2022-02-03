@@ -2,6 +2,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from torchseq.utils.singleton import Singleton
 
+import os
 
 # writer = None
 
@@ -13,6 +14,8 @@ from torchseq.utils.singleton import Singleton
 #         writer = SummaryWriter(output_path + "/" + run_id + "/logs")
 
 #     writer.add_scalar(key, value, iteration)
+
+from torchseq.utils.wandb import wandb_log
 
 
 class Logger(metaclass=Singleton):
@@ -26,6 +29,7 @@ class Logger(metaclass=Singleton):
             self.writer = SummaryWriter(log_path)
 
     def log_scalar(self, key, value, iteration):
+        wandb_log({key: value}, step=iteration)
         if self.writer is not None:
             self.writer.add_scalar(key, value, iteration)
 
@@ -33,6 +37,6 @@ class Logger(metaclass=Singleton):
         if self.writer is not None:
             self.writer.add_histogram(key, value, iteration)
 
-    def log_test(self, key, value, iteration):
+    def log_text(self, key, value, iteration):
         if self.writer is not None:
             self.writer.add_text(key, value, iteration)

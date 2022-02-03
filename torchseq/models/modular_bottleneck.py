@@ -4,6 +4,7 @@ from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
+from torchseq.models.hrq_vae import HierarchicalRefinementQuantizer
 from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
@@ -125,39 +126,13 @@ class BottleneckPart(nn.Module):
             self.quantizer = VectorQuantizerMultiHead(
                 config.quantizer.codebook_size,
                 embedding_dim,
-                # commitment_cost=0.25,
-                # decay=0.99,
-                # num_heads=self.config.get("quantizer_heads", 1),
-                # residual=self.config.get("quantizer_residual", False),
-                # code_offset=self.config.get("code_offset", 0),
-                # soft_em=self.config.get("quantizer_soft", True),
-                # ema=self.config.get("quantizer_ema", True),
-                # use_gumbel=self.config.get("quantizer_gumbel", False),
-                # gumbel_temp=self.config.get("quantizer_gumbel_temp", 1.0),
-                # temp_schedule=self.config.get("quantizer_gumbel_temp_schedule", False),
-                # use_straight_through=self.config.get("quantizer_straight_through", True),
-                # warmup_steps=self.config.get("quantizer_warmup_steps", None),
-                # code_entropy_weight=self.config.get("quantizer_entropy_weight", 0),
-                # hierarchical=self.config.get("quantizer_hierarchical", False),
-                # hierarchical_balance_dims=self.config.get("hierarchical_balance_dims", False),
-                # transitions=self.config.get("quantizer_transitions", False),
-                # transitions_bias=self.config.get("quantizer_transitions_bias", False),
-                # transitions_embed=self.config.get("quantizer_transitions_embed", False),
-                # transitions_log=self.config.get("quantizer_transitions_log", False),
-                # relative_error=self.config.get("quantizer_relative_error", False),
-                # use_cosine_similarities=self.config.get("quantizer_cosine", False),
-                # separate_output_embedding=self.config.get("quantizer_separate_output_embedding", False),
-                # use_code_classifier=self.config.get("quantizer_classifier", False),
-                # additive=self.config.get("quantizer_additive", False),
-                # only_final=self.config.get("quantizer_only_final", False),
-                # norm_loss_weight=self.config.get("quantizer_norm_loss_weight", None),
                 **quantizer_kwargs,
             )
         # HRQ-VAE bottleneck
         if config.get("type", None) == "hrqvae":
             quantizer_kwargs = config.get("quantizer", {})
             quantizer_kwargs.pop("codebook_size")
-            self.quantizer = VectorQuantizerMultiHead(
+            self.quantizer = HierarchicalRefinementQuantizer(
                 config.quantizer.codebook_size,
                 embedding_dim,
                 **quantizer_kwargs,

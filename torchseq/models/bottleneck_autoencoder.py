@@ -109,7 +109,11 @@ class BottleneckAutoencoderModel(nn.Module):
             )
 
             encoding_pooled, memory = self.bottleneck(
-                encoding, memory, batch["_global_step"], head_mask=batch.get("head_mask", None)
+                encoding,
+                memory,
+                batch["_global_step"],
+                head_mask=batch.get("head_mask", None),
+                forced_codes=batch.get("forced_codes", None),
             )
 
             prebn_encoding_pooled = memory["encoding_pooled"]

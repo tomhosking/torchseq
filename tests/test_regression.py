@@ -237,8 +237,8 @@ def test_separator():
 @test_utils.slow
 def test_hrq():
 
-    CONFIG = "./models/hrqvae/20211008_173053_wa_base/config.json"
-    CHKPT = "./models/hrqvae/20211008_173053_wa_base/model/checkpoint.pt"
+    CONFIG = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
+    CHKPT = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -292,8 +292,8 @@ def test_hrq():
 @test_utils.slow
 def test_hrq_codepred():
 
-    CONFIG = "./models/hrqvae/20211008_173053_wa_base/config.json"
-    CHKPT = "./models/hrqvae/20211008_173053_wa_base/model/checkpoint.pt"
+    CONFIG = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
+    CHKPT = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123

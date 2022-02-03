@@ -26,7 +26,7 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.7.0',
-        'torch==1.10.1',
+        'torch==1.10.2',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
@@ -34,6 +34,7 @@ setuptools.setup(
         'tokenizers==0.10.3',
         'jsonlines>=2',
         'sacrebleu>=2.0',
-        'py-rouge'
+        'py-rouge',
+        'wandb==0.12.10'
     ],
 )
