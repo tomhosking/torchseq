@@ -18,7 +18,9 @@ from torchseq.utils.wandb import wandb_init
 
 from torchseq.datasets.builder import dataloader_from_config
 
+from pytorch_lightning.lite import LightningLite
 import transformers
+
 
 AGENT_TYPES = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
 
@@ -27,14 +29,15 @@ Entry point for torchseq CLI
 """
 
 
+# class TorchseqJob(LightningLite):
+#     def run(self, args):
 def main():
-
-    args = parse_args()
-
     logging.basicConfig(
         level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"
     )
     logger = logging.getLogger("CLI")
+
+    args = parse_args()
 
     if args.version:
         print("Torchseq: v0.0.1")
@@ -107,6 +110,18 @@ def main():
         use_cuda=(not args.cpu),
     )
 
+    # Setup Lightning
+    # for optimizer in agent.optimizers.optimizers:
+    #     agent.model, optimizer = self.setup(agent.model, optimizer)
+    # agent.backward = self.backward
+
+    # if data_loader._train.exists:
+    #     data_loader.train_loader = self.setup_dataloaders(data_loader.train_loader)
+    # if data_loader._valid.exists:
+    #     data_loader.valid_loader = self.setup_dataloaders(data_loader.valid_loader)
+    # if data_loader._test.exists:
+    #     data_loader.test_loader = self.setup_dataloaders(data_loader.test_loader)
+
     if args.load_chkpt is not None:
         logger.info("Loading from checkpoint...")
         agent.load_checkpoint(args.load_chkpt)
@@ -166,7 +181,22 @@ def main():
         )
         logger.info("...testing done!")
 
-    # wandb_log({"status": "finished"}, step=agent.global_step)
+
+# def main():
+#     logging.basicConfig(
+#         level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"
+#     )
+#     logger = logging.getLogger("CLI")
+
+#     args = parse_args()
+#     device = "cpu" if args.cpu else "gpu"
+#     if torch.cuda.device_count() > 1:
+#         logger.warn("Multiple ({:}) GPUs available:  not currently supported!!!".format(torch.cuda.device_count()))
+
+#     # num_devices = torch.cuda.device_count()
+
+#     job = TorchseqJob(accelerator=device, devices=1)  # , strategy="ddp"
+#     job.run(args)
 
 
 if __name__ == "__main__":

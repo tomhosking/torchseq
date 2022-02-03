@@ -32,9 +32,6 @@ class BaseAgent:
 
             self.logger.info("Program will run on *****GPU-CUDA***** ")
 
-            if torch.cuda.device_count() > 1:
-                self.logger.info("Multi GPU available: using {:} GPUs!".format(torch.cuda.device_count()))
-
             self.model.to(self.device)
             self.loss.to(self.device)
 

@@ -30,11 +30,12 @@ setuptools.setup(
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
-        'transformers==4.15.0',
+        'transformers==4.16.2',
         'tokenizers==0.10.3',
         'jsonlines>=2',
         'sacrebleu>=2.0',
         'py-rouge',
-        'wandb==0.12.10'
+        'wandb==0.12.10',
+        'pytorch-lightning==1.5.9'
     ],
 )

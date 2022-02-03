@@ -12,7 +12,7 @@ class DefaultMetricHook(MetricHook):
         super().__init__(config, src_field, tgt_field)
 
     def on_begin_epoch(self, use_test=False):
-        self.scores = {"ppl": [], "nll_ext": []}
+        self.scores = {"ppl": []}
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
 
@@ -24,6 +24,3 @@ class DefaultMetricHook(MetricHook):
                 ignore_index=Tokenizer().pad_id,
             ).tolist()
         )
-
-        # TODO: actually calculate this, and compare to the loss that comes from the teacher forced decoder!
-        self.scores["nll_ext"].extend([0] * len(batch[self.tgt_field]))

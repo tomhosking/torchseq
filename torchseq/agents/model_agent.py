@@ -423,6 +423,7 @@ class ModelAgent(BaseAgent):
                 )
 
             loss.backward()
+            # self.backward(loss)
 
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
