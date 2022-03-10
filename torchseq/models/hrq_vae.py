@@ -27,6 +27,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         head_dropout=0.3,
         head_dropout_keep_first=False,
         learnable_priors=False,
+        include_residual=False,
+        residual_penalty=0.0,
     ):
 
         super(HierarchicalRefinementQuantizer, self).__init__()
@@ -47,6 +49,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._cos_sim = use_cosine_similarities
 
         self._norm_loss_weight = norm_loss_weight
+
+        self._include_residual = include_residual
+        self._residual_penalty = residual_penalty
 
         if head_dropout is not None and head_dropout > 0:
             self._head_dropout = torch.distributions.Bernoulli(1 - head_dropout)
@@ -86,7 +91,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
     def encoding_to_logits(self, input, head_ix, prev_codes):
         pass
 
-    def forward(self, inputs, global_step=None, forced_codes=None, head_mask=None):
+    def forward(self, inputs, global_step=None, forced_codes=None, head_mask=None, residual_mask=None):
         input_shape = inputs.shape
 
         quantized_list = []
@@ -236,6 +241,11 @@ class HierarchicalRefinementQuantizer(nn.Module):
             quantized = quantized * mask
 
         quantized = torch.sum(quantized, dim=1)
+        if self._include_residual:
+            quantized += resid_error * (residual_mask if residual_mask is not None else 1.0)
+            if self._residual_penalty > 0:
+                loss += torch.linalg.norm(resid_error, dim=-1) * self._residual_penalty
+
         quantized = quantized.view(input_shape)
 
         return loss, quantized, vq_codes

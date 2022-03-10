@@ -180,10 +180,9 @@ class ContextAnswerEncoder(nn.Module):
             self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
-        if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
-            self.embedding_projection = nn.utils.weight_norm(
-                nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
-            )
+        self.embedding_projection = nn.utils.weight_norm(
+            nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+        )
 
         self.bert_embedding_projection = nn.utils.weight_norm(
             nn.Linear(

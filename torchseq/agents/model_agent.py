@@ -717,7 +717,7 @@ class ModelAgent(BaseAgent):
 
             self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
 
-            wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()}, step=self.global_step)
+            wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()})
 
             if self.run_id is not None:
                 with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:
@@ -758,13 +758,13 @@ class ModelAgent(BaseAgent):
         """
         Update McKenzie with the latest metric values
         """
-        wandb_log(
-            {
-                "bleu": self.all_metrics_at_best.get("bleu", None),
-                "nll": self.all_metrics_at_best.get("nll", None),
-            },
-            step=self.global_step,
-        )
+        # wandb_log(
+        #     {
+        #         "bleu": self.all_metrics_at_best.get("bleu", None),
+        #         "nll": self.all_metrics_at_best.get("nll", None),
+        #     },
+        #     step=self.global_step,
+        # )
         wandb_log({"progress": self.current_epoch / self.config.training.num_epochs * 100}, step=self.global_step)
 
         if "bleu" in self.all_metrics_at_best:

@@ -114,6 +114,7 @@ class BottleneckAutoencoderModel(nn.Module):
                 batch["_global_step"],
                 head_mask=batch.get("head_mask", None),
                 forced_codes=batch.get("forced_codes", None),
+                residual_mask=batch.get("residual_mask", None),
             )
 
             prebn_encoding_pooled = memory["encoding_pooled"]
@@ -147,6 +148,7 @@ class BottleneckAutoencoderModel(nn.Module):
                     batch["_global_step"],
                     forced_codes=batch.get("forced_codes", None),
                     head_mask=batch.get("head_mask", None),
+                    residual_mask=batch.get("residual_mask", None),
                 )
 
                 # TODO: Instead of 2x full size encoders + down projection, change to 2x half size encoders
@@ -177,6 +179,7 @@ class BottleneckAutoencoderModel(nn.Module):
                         batch["_global_step"],
                         forced_codes=batch.get("forced_codes", None),
                         head_mask=batch.get("head_mask", None),
+                        residual_mask=batch.get("residual_mask", None),
                     )
 
                 if "loss" in memory:

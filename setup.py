@@ -36,6 +36,6 @@ setuptools.setup(
         'sacrebleu>=2.0',
         'py-rouge',
         'wandb==0.12.10',
-        'pytorch-lightning==1.5.9'
+        # 'pytorch-lightning==1.5.9'
     ],
 )

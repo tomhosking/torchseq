@@ -31,7 +31,7 @@ class ModularBottleneck(nn.Module):
 
         self.module_list = nn.ModuleList(modules)
 
-    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
+    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
 
         # if head_mask is not None:
         #     print('hm in bottleneck')
@@ -50,7 +50,12 @@ class ModularBottleneck(nn.Module):
             any_pooled = any_pooled | module.config.get("pooling", False)
 
             sub_encoding_post, sub_encoding_pooled, memory = module(
-                sub_encoding_pre, memory, global_step, forced_codes=forced_codes, head_mask=head_mask
+                sub_encoding_pre,
+                memory,
+                global_step,
+                forced_codes=forced_codes,
+                head_mask=head_mask,
+                residual_mask=residual_mask,
             )
             encodings_post.append(sub_encoding_post)
             encodings_pooled.append(sub_encoding_pooled)
@@ -136,7 +141,7 @@ class BottleneckPart(nn.Module):
                 **quantizer_kwargs,
             )
 
-    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
+    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
         # if head_mask is not None:
         #     print('hm in bottleneck part')
 
@@ -152,9 +157,14 @@ class BottleneckPart(nn.Module):
         # Quantize
         if self.config.get("type", None) in ["vqvae", "hrqvae"]:
 
-            vq_loss, encoding_post, quantizer_indices = self.quantizer(
-                encoding_post, global_step, forced_codes, head_mask
-            )
+            if self.config.get("type", None) == "hrqvae":
+                vq_loss, encoding_post, quantizer_indices = self.quantizer(
+                    encoding_post, global_step, forced_codes, head_mask, residual_mask
+                )
+            else:
+                vq_loss, encoding_post, quantizer_indices = self.quantizer(
+                    encoding_post, global_step, forced_codes, head_mask
+                )
 
             if "loss" not in memory:
                 memory["loss"] = 0

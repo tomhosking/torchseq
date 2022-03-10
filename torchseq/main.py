@@ -18,7 +18,7 @@ from torchseq.utils.wandb import wandb_init
 
 from torchseq.datasets.builder import dataloader_from_config
 
-from pytorch_lightning.lite import LightningLite
+# from pytorch_lightning.lite import LightningLite
 import transformers
 
 

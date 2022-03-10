@@ -10,6 +10,7 @@ from collections import defaultdict, Counter
 from torchseq.metric_hooks.base import MetricHook
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
+import sacrebleu
 
 
 import logging
@@ -45,6 +46,15 @@ class HRQAggregationMetricHook(MetricHook):
         if self.config.eval.metrics.hrq_agg.get("run_generate_summaries", False):
             logger.info("Running generation using HRQ paths")
             self.scores["hrq_agg"], _ = HRQAggregationMetricHook.eval_generate_summaries(
+                self.config,
+                agent,
+                test=use_test,
+            )
+            logger.info("...done")
+
+        if self.config.eval.metrics.hrq_agg.get("run_masked_generation", False):
+            logger.info("Running generation with masking")
+            self.scores["hrq_agg"], _ = HRQAggregationMetricHook.eval_masked_generation(
                 self.config,
                 agent,
                 test=use_test,
@@ -143,3 +153,71 @@ class HRQAggregationMetricHook(MetricHook):
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
         return {}, output
+
+    @abstractmethod
+    def eval_masked_generation(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):
+        config_gen_masked = copy.deepcopy(config.data)
+        config_gen_masked["dataset"] = "json"
+        config_gen_masked["json_dataset"] = {
+            "path": config.eval.metrics.hrq_agg.dataset_all,
+            "filename": "space_reviews.{split}",
+            "field_map": [
+                {"type": "copy", "from": "sentence", "to": "s2"},
+                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "head_mask", "to": "head_mask"},
+                {"type": "copy", "from": "residual_mask", "to": "residual_mask"},
+            ],
+        }
+
+        data_loader = JsonDataLoader(
+            data_path=agent.data_path,
+            config=Config(config_gen_masked),
+            dev_samples=dev_samples,
+            test_samples=test_samples,
+        )
+
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        if "hrqvae" not in bneck_types:
+            logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
+            return {}
+        quantizer_index = bneck_types.index("hrqvae")
+        num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
+
+        scores = {}
+        outputs = {}
+
+        split = "test" if test else "dev"
+
+        if not skip_scores:
+            with jsonlines.open(
+                os.path.join(
+                    agent.data_path,
+                    config.eval.metrics.hrq_agg.dataset_all,
+                    f"space_reviews.{split}.jsonl",
+                )
+            ) as f:
+                rows = [row for row in f][: config_gen_masked["eval"].get("truncate_dataset", None)]
+            refs = [[q["sentence"]] for q in rows]
+
+        for mask_length in range(0, num_heads + 1):
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = (data_loader._test if test else data_loader._valid).samples
+            samples = [{**x, "head_mask": mask, "residual_mask": [0]} for x in samples]
+            masked_loader = JsonDataLoader(
+                data_path=agent.data_path, config=Config(config_gen_masked), dev_samples=samples
+            )
+
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+
+            if not skip_scores:
+                # refs = [x["paras"] for x in qs_by_para_split]
+                max_num_refs = max([len(x) for x in refs])
+                refs_padded = [x + [x[0]] * (max_num_refs - len(x)) for x in refs]
+
+                tgt_bleu = sacrebleu.corpus_bleu(output, list(zip(*refs_padded)), lowercase=True).score
+
+                scores[mask_length] = tgt_bleu
+
+            outputs[mask_length] = output
+
+        return scores, outputs

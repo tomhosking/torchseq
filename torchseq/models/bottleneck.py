@@ -88,7 +88,7 @@ class PoolingBottleneck(nn.Module):
                 **quantizer_kwargs,
             )
 
-    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None):
+    def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
 
         # Pool
         encoding_pooled = (
