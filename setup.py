@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchseq", # Replace with your own username
-    version="0.0.1",
+    version="2.4.1.dev",
     author="Tom Hosking",
     author_email="code@tomho.sk",
     description="A Seq2Seq framework for PyTorch",
@@ -26,7 +26,7 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.7.0',
-        'torch==1.10.2',
+        'torch==1.11.0',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',

@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 
 import torch
+import torchseq
 from torchseq.utils.wandb import wandb_log
 
 from torchseq.agents.aq_agent import AQAgent
@@ -40,7 +41,7 @@ def main():
     args = parse_args()
 
     if args.version:
-        print("Torchseq: v0.0.1")
+        print(torchseq.__version__)
         return
 
     if args.debug:
