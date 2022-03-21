@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchseq", # Replace with your own username
-    version="2.4.1.dev",
+    version="2.3.1.dev",
     author="Tom Hosking",
     author_email="code@tomho.sk",
     description="A Seq2Seq framework for PyTorch",
