@@ -12,7 +12,7 @@ sacrebleu>=2.0
 py-rouge
 
 
-wandb==0.12.10
+wandb==0.12.11
 
 pytest>=6.2
 pytest-cov>=2.12
