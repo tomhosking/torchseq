@@ -10,6 +10,7 @@ tokenizers==0.10.3
 jsonlines>=2
 sacrebleu>=2.0
 py-rouge
+rouge-score
 
 
 wandb==0.12.11

@@ -2,10 +2,6 @@ from transformers import BartModel, BertModel, BertTokenizer, RobertaModel, Bert
 
 
 mod = BartModel.from_pretrained('facebook/bart-large')
-
-mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX', tgt_lang='en_XX')
-mod = MBartModel.from_pretrained('facebook/mbart-large-50-many-to-many-mmt')
-
 mod = RobertaModel.from_pretrained('roberta-base')
 
 mod = BertModel.from_pretrained('bert-base-uncased')
@@ -20,3 +16,8 @@ mod = BertForQuestionAnswering.from_pretrained("bert-large-uncased-whole-word-ma
 import nltk
 nltk.download('punkt', force=True)
 nltk.download('wordnet', force=True)
+
+
+
+mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX', tgt_lang='en_XX')
+mod = MBartModel.from_pretrained('facebook/mbart-large-50-many-to-many-mmt')

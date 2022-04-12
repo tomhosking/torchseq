@@ -35,6 +35,7 @@ setuptools.setup(
         'jsonlines>=2',
         'sacrebleu>=2.0',
         'py-rouge',
+        'rouge-score',
         'wandb==0.12.11',
         # 'pytorch-lightning==1.5.9'
     ],
