@@ -10,11 +10,13 @@ but adds own implementation of multi-ref jackknifing.
 The Google implementation should be identical to Rouge-155 (except tokenization?),
 the jackknifing follows the description of the ROUGE paper.
 """
+
+
 def get_jackknife_rouge(predictions, references):
     rouge_types = ["rouge1", "rouge2", "rougeL", "rougeLsum"]
     rouge = rouge_scorer.RougeScorer(rouge_types=rouge_types, use_stemmer=True)
     score_list = []
-    
+
     for refs, pred in zip(
         references,
         predictions,
@@ -26,9 +28,7 @@ def get_jackknife_rouge(predictions, references):
             # get best score for all leave-one-out sets
             best_scores = []
             for leave in range(len(refs)):
-                cur_scores_leave_one = [
-                    cur_scores[s] for s in range(len(refs)) if s != leave
-                ]
+                cur_scores_leave_one = [cur_scores[s] for s in range(len(refs)) if s != leave]
                 best_scores.append(
                     {
                         rouge_type: max(
@@ -64,10 +64,4 @@ def get_jackknife_rouge(predictions, references):
 
     l1_keys = list(score_list[0].keys())
     # l2_keys = score_list[0][l1_keys[0]].keys()
-    return {
-        key1: round(
-                np.mean([score[key1]['fmeasure'] for score in score_list]), 5
-        )
-        
-        for key1 in l1_keys
-    }
+    return {key1: round(np.mean([score[key1]["fmeasure"] for score in score_list]), 5) for key1 in l1_keys}
