@@ -37,7 +37,8 @@ setuptools.setup(
         'py-rouge',
         'rouge-score',
         'wandb==0.12.11',
-        "matplotlib"
+        'matplotlib',
+        'opentsne'
         # 'pytorch-lightning==1.5.9'
     ],
 )

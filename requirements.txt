@@ -11,6 +11,7 @@ jsonlines>=2
 sacrebleu>=2.0
 py-rouge
 rouge-score
+opentsne
 
 matplotlib
 
