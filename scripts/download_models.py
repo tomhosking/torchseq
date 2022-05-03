@@ -17,6 +17,9 @@ import nltk
 nltk.download('punkt', force=True)
 nltk.download('wordnet', force=True)
 
+from transformers import AutoTokenizer, AutoModelForSequenceClassification
+tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-base-mnli")
+model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-base-mnli")
 
 
 mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX', tgt_lang='en_XX')
