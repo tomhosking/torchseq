@@ -30,13 +30,14 @@ setuptools.setup(
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
-        'transformers==4.16.2',
-        'tokenizers==0.10.3',
+        'transformers==4.18.0',
+        'tokenizers==0.12.1',
         'jsonlines>=2',
         'sacrebleu>=2.0',
         'py-rouge',
         'rouge-score',
         'wandb==0.12.11',
+        "matplotlib"
         # 'pytorch-lightning==1.5.9'
     ],
 )
