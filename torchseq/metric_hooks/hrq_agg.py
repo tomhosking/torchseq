@@ -473,6 +473,26 @@ class HRQAggregationMetricHook(MetricHook):
         return {}, []
 
     @abstractmethod
+    def get_feature_entropies(codes, features, num_heads):
+        entropies_by_depth = {}
+        for d in range(num_heads):
+
+            features_by_code = defaultdict(Counter)
+            for feature, code in zip(features, codes):
+                features_by_code[code[: (d + 1)]][feature] += 1
+
+            entropies = []
+            for code in features_by_code.keys():
+                denom = sum([x for x in features_by_code[code].values()])
+                distribution = [1.0 * x / denom for x in features_by_code[code].values()]
+
+                this_entropy = np.sum(-1.0 * np.log(distribution) * distribution)
+                entropies.append(this_entropy)
+            entropies_by_depth[d] = np.mean(entropies)
+
+        return entropies_by_depth
+
+    @abstractmethod
     def eval_specialisation(config, agent, test=False):
         sents_by_code, outputs_with_codes = HRQAggregationMetricHook.codes_from_cache(config, agent, test)
         split = "test" if test else "dev"
@@ -480,12 +500,39 @@ class HRQAggregationMetricHook(MetricHook):
         codes = [tuple(x) for x in outputs_with_codes["codes"]]
 
         num_heads = config.bottleneck.modules[0].quantizer.num_heads
-        # codebook_size = config.bottleneck.modules[0].quantizer.codebook_size
+        codebook_size = config.bottleneck.modules[0].quantizer.codebook_size
 
         with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
             entity_ids = [x["entity_id"] for x in f]
         with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
             review_ids = [x["review_id"] for x in f]
+        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+            inputs = [x["sentence"] for x in f]
+        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+            ratings = [x["rating"] for x in f]
+
+        # Get (weak) aspect labels
+        space_aspect_list = ["building", "cleanliness", "food", "location", "rooms", "service"]
+        aspect_keywords = defaultdict(list)
+        for aspect in space_aspect_list:
+            with open(agent.data_path + f"/opagg/aspect-seeds/{aspect}.txt") as f:
+                keywords = [line.strip().split()[1] for line in f.readlines()]
+            aspect_keywords[aspect] = keywords
+        keywords_to_aspect = {kw: aspect for aspect, kws in aspect_keywords.items() for kw in kws}
+        aspect_labels = []
+        for sentence in inputs:
+            labels = set()
+            for kw, aspect in keywords_to_aspect.items():
+                if kw in sentence.split():
+                    labels.add(aspect)
+            if len(labels) == 0:
+                labels.add("UNK")
+            aspect_labels.append(labels)
+
+        sentence_positions = [i - review_ids.index(review_id) for i, review_id in enumerate(review_ids)]
+        review_lengths = [review_ids.count(review_id) for i, review_id in enumerate(review_ids)]
+        sentence_pos_relative = [1.0 * pos / length for pos, length in zip(sentence_positions, review_lengths)]
+        sentence_pos_buckets = [0 if pos < 0.25 else (2 if pos >= 0.75 else 1) for pos in sentence_pos_relative]
 
         # Measures of tree concentration
 
@@ -516,7 +563,7 @@ class HRQAggregationMetricHook(MetricHook):
                     if len(k) == (h + 1):
                         trees_by_entity_probs[entity_id][k] = 1.0 * v / total
                 this_probs = [prob for k, prob in trees_by_entity_probs[entity_id].items() if len(k) == (h + 1)]
-                this_entropy = np.mean(-1.0 * np.log(this_probs) * this_probs)
+                this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
                 entropies_entity_by_head[h].append(this_entropy)
 
             entropies_entity_by_head[h] = np.mean(entropies_entity_by_head[h])
@@ -527,10 +574,16 @@ class HRQAggregationMetricHook(MetricHook):
                     if len(k) == (h + 1):
                         trees_by_review_probs[review_id][k] = 1.0 * v / total
                 this_probs = [prob for k, prob in trees_by_review_probs[review_id].items() if len(k) == (h + 1)]
-                this_entropy = np.mean(-1.0 * np.log(this_probs) * this_probs)
+                this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
                 entropies_review_by_head[h].append(this_entropy)
 
             entropies_review_by_head[h] = np.mean(entropies_review_by_head[h])
+
+        uniform_by_depth = {}
+        for d in range(num_heads):
+            uniform_prob = 1.0 / (codebook_size ** (d + 1))
+            uniform_entropy = -1.0 * (codebook_size ** (d + 1)) * (np.log(uniform_prob) * uniform_prob)
+            uniform_by_depth[d] = uniform_entropy
 
         # Measures of predictability
 
@@ -538,7 +591,26 @@ class HRQAggregationMetricHook(MetricHook):
         # entropy (rating | cluster)
         # entropy (sent position in review | cluster)
 
-        scores = {"entropy_entities": entropies_entity_by_head, "entropy_reviews": entropies_review_by_head}
+        scores = {
+            "entropy_uniform_codes": uniform_by_depth,
+            "entropy_codes_from_entities": entropies_entity_by_head,
+            "entropy_codes_from_reviews": entropies_review_by_head,
+            "entropy_aspects_from_codes": HRQAggregationMetricHook.get_feature_entropies(
+                codes,
+                [list(x)[0] for x in aspect_labels],
+                num_heads,
+            ),
+            "entropy_ratings_from_codes": HRQAggregationMetricHook.get_feature_entropies(
+                codes,
+                ratings,
+                num_heads,
+            ),
+            "entropy_positions_from_codes": HRQAggregationMetricHook.get_feature_entropies(
+                codes,
+                sentence_pos_buckets,
+                num_heads,
+            ),
+        }
 
         return scores
 
