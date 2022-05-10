@@ -120,9 +120,7 @@ class QADataset(Dataset):
                     # +
                 )
             else:
-                ctxt = torch.LongTensor(
-                    parsed_triple.ans_as_ids() + [tokenizer.eos_id] + parsed_triple.ctxt_as_ids()
-                )
+                ctxt = torch.LongTensor(parsed_triple.ans_as_ids() + [tokenizer.eos_id] + parsed_triple.ctxt_as_ids())
                 a_pos = (
                     [0 for i in range(len(parsed_triple._ans_doc))]
                     + [1]

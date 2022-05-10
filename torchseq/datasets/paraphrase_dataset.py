@@ -11,7 +11,6 @@ from torchseq.utils.tokenizer import Tokenizer
 
 class ParaphraseDataset(Dataset):
     def __init__(self, path, config, dev=False, test=False, repeat=False, length_limit=None):
-        
 
         self.config = config
 

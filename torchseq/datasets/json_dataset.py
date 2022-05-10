@@ -198,4 +198,3 @@ class JsonDataset(Dataset):
             return tensor_batch
 
         return _pad_and_order_sequences
-

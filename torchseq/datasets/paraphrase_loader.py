@@ -19,7 +19,7 @@ class ParaphraseDataLoader:
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
-        raise Exception('Paraphrase DataLoader is deprecated! Use JsonDataset instead')
+        raise Exception("Paraphrase DataLoader is deprecated! Use JsonDataset instead")
 
         tokenizer.DATA_PATH = data_path
         Tokenizer(config.prepro.tokenizer)
