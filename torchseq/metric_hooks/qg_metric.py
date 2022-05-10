@@ -8,8 +8,8 @@ class QGMetricHook(MetricHook):
 
     type = "slow"
 
-    def __init__(self, config, src_field=None, tgt_field=None):
-        super().__init__(config, src_field, tgt_field)
+    # def __init__(self, config, src_field=None, tgt_field=None):
+    #     super().__init__(config, src_field, tgt_field)
 
     def on_begin_epoch(self, use_test=False):
         self.scores = {"qg_metric": []}
@@ -25,7 +25,7 @@ class QGMetricHook(MetricHook):
             top_p = 0.9
 
         nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
-        gt_onehot = onehot(batch[self.tgt_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id)
+        gt_onehot = onehot(batch[self.tgt_field], N=self.config.prepro.vocab_size, ignore_index=self.tokenizer.pad_id)
         accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (
             batch[self.tgt_field + "_len"] - 1
         )

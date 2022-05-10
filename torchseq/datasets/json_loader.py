@@ -19,11 +19,18 @@ class JsonDataLoader:
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
-        tokenizer.DATA_PATH = data_path
-        Tokenizer(config.prepro.tokenizer)
+        self.input_tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
+        self.output_tokenizer = Tokenizer(config.prepro.get("output_tokenizer", config.prepro.tokenizer), data_path)
+
+        if self.input_tokenizer.pad_id != self.output_tokenizer.pad_id:
+            raise Exception(
+                "Input and output tokenizers are using pad tokens with different ids! This isn't currently supported :("
+            )
 
         self._train = JsonDataset(
             config=config,
+            input_tokenizer=self.input_tokenizer,
+            output_tokenizer=self.output_tokenizer,
             path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
@@ -36,6 +43,8 @@ class JsonDataLoader:
         )
         self._valid = JsonDataset(
             config=config,
+            input_tokenizer=self.input_tokenizer,
+            output_tokenizer=self.output_tokenizer,
             path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
@@ -47,6 +56,8 @@ class JsonDataLoader:
         )
         self._test = JsonDataset(
             config=config,
+            input_tokenizer=self.input_tokenizer,
+            output_tokenizer=self.output_tokenizer,
             path=os.path.join(data_path, self.config.json_dataset.path)
             if self.config.json_dataset.path is not None
             else None,
@@ -73,7 +84,7 @@ class JsonDataLoader:
                 batch_size=config.training.batch_size,
                 shuffle=self.config.training.data.get("shuffle_data", True),
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences,
+                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )
 
@@ -83,7 +94,7 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences,
+                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )
         if self._test.exists:
@@ -92,6 +103,6 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences,
+                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )

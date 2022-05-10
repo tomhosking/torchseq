@@ -31,7 +31,7 @@ class LangModelAgent(ModelAgent):
 
         # define loss
         self.loss = nn.CrossEntropyLoss(
-            ignore_index=Tokenizer().pad_id,
+            ignore_index=self.output_tokenizer.pad_id,
             reduction="none",
             label_smoothing=self.config.training.get("label_smoothing", 0.0),
         )

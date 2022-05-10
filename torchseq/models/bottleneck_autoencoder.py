@@ -13,9 +13,11 @@ from torchseq.models.pooling import MultiHeadedPooling
 
 
 class BottleneckAutoencoderModel(nn.Module):
-    def __init__(self, config, src_field="s1"):
+    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="s1"):
         super().__init__()
         self.config = config
+        self.input_tokenizer = input_tokenizer
+        self.output_tokenizer = output_tokenizer
 
         # TEMP: deprecation warning
         if self.config.bottleneck.get("num_similar_heads", None) is not None:
@@ -32,17 +34,17 @@ class BottleneckAutoencoderModel(nn.Module):
 
         self.src_field = src_field
 
-        self.seq_encoder = SequenceEncoder(config)
+        self.seq_encoder = SequenceEncoder(config, self.input_tokenizer)
 
         if config.bottleneck.get("modular", False):
             self.bottleneck = ModularBottleneck(config)
         else:
             self.bottleneck = PoolingBottleneck(config)
 
-        self.seq_decoder = SequenceDecoder(config, embeddings=self.seq_encoder.embeddings)
+        self.seq_decoder = SequenceDecoder(config, self.output_tokenizer)
 
         if self.config.bottleneck.get("split_encoder", False):
-            self.seq_encoder_2 = SequenceEncoder(config)
+            self.seq_encoder_2 = SequenceEncoder(config, self.input_tokenizer)
             self.bottleneck_2 = PoolingBottleneck(config)
 
             self.split_projection_1 = nn.utils.weight_norm(

@@ -5,10 +5,11 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class TeacherForcedSampler(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, tokenizer, device):
         super(TeacherForcedSampler, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
     def forward(self, model, batch, tgt_field):
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -26,7 +27,7 @@ class TeacherForcedSampler(nn.Module):
         if MBART_HACK:
             logits.scatter_(-1, batch["tgt_lang"].unsqueeze(1).unsqueeze(2), float("1e18"))
         else:
-            logits[:, :, Tokenizer().bos_id] = float("1e18")
+            logits[:, :, self.tokenizer.bos_id] = float("1e18")
 
         # With a transformer decoder, we can lean on the internal mask to ensure that the model can't see ahead
         # ..and then just do a single pass through the whole model using the gold output as input
@@ -35,21 +36,21 @@ class TeacherForcedSampler(nn.Module):
         if self.config.training.data.get("token_dropout", 0) > 0 and self.training:
             rand = torch.rand_like(output, dtype=torch.float)
 
-            masked = torch.full_like(output, Tokenizer().mask_id)
+            masked = torch.full_like(output, self.tokenizer.mask_id)
 
             output = torch.where(
                 torch.bitwise_and(
-                    rand < self.config.training.data.get("token_dropout", 0), output != Tokenizer().pad_id
+                    rand < self.config.training.data.get("token_dropout", 0), output != self.tokenizer.pad_id
                 ),
                 masked,
                 output,
             )
 
         if BART_HACK:
-            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
+            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.eos_id).to(self.device)
             output = torch.cat([dummy_token, output], dim=1)
         if MBART_HACK:
-            eos_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
+            eos_token = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.eos_id).to(self.device)
 
             # lang_token = batch["tgt_lang"].unsqueeze(-1)
 

@@ -8,10 +8,10 @@ def test_bert_uncased_basic():
 
     TEST_STRING = "This is a test sentence."
 
-    Tokenizer("bert-base-uncased").reload("bert-base-uncased")
+    tokenizer = Tokenizer("bert-base-uncased")
 
-    tokenized = Tokenizer().tokenise(TEST_STRING)
-    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = tokenizer.tokenise(TEST_STRING)
+    decoded = tokenizer.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         101,
@@ -30,10 +30,10 @@ def test_bert_cased_basic():
 
     TEST_STRING = "This is a test sentence."
 
-    Tokenizer("bert-base-cased").reload("bert-base-cased")
+    tokenizer = Tokenizer("bert-base-cased")
 
-    tokenized = Tokenizer().tokenise(TEST_STRING)
-    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = tokenizer.tokenise(TEST_STRING)
+    decoded = tokenizer.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         101,
@@ -49,12 +49,12 @@ def test_bert_cased_basic():
 
 
 def test_roberta_basic():
-    Tokenizer("roberta-base").reload("roberta-base")
+    tokenizer = Tokenizer("roberta-base")
 
     TEST_STRING = "This is a test sentence."
 
-    tokenized = Tokenizer().tokenise(TEST_STRING)
-    decoded = Tokenizer().decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+    tokenized = tokenizer.tokenise(TEST_STRING)
+    decoded = tokenizer.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
 
     assert [tok["id"] for tok in tokenized] == [
         0,

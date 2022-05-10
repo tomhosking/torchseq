@@ -53,16 +53,20 @@ class ParaphraseAgent(ModelAgent):
 
         # define loss
         self.loss = nn.CrossEntropyLoss(
-            ignore_index=Tokenizer().pad_id,
+            ignore_index=self.output_tokenizer.pad_id,
             reduction="none",
             label_smoothing=self.config.training.get("label_smoothing", 0.0),
         )
 
         # define model
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
-            self.model = PretrainedAdapterModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)
+            self.model = PretrainedAdapterModel(
+                self.config, self.output_tokenizer, src_field=self.src_field, tgt_field=self.tgt_field
+            )
         else:
-            self.model = BottleneckAutoencoderModel(self.config, src_field=self.src_field)
+            self.model = BottleneckAutoencoderModel(
+                self.config, self.input_tokenizer, self.output_tokenizer, src_field=self.src_field
+            )
 
         self.suppression_loss = SuppressionLoss(self.config)
 
@@ -91,7 +95,7 @@ class ParaphraseAgent(ModelAgent):
         if self.config.training.suppression_loss_weight > 0:
             this_loss += (
                 self.config.training.suppression_loss_weight
-                * self.suppression_loss(logits, batch["a"]).sum(dim=1)
+                * self.suppression_loss(logits, batch["a"], self.output_tokenizer.pad_id).sum(dim=1)
                 / (batch["q_len"] - 1).to(this_loss)
             )
 

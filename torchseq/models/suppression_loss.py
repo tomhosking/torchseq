@@ -12,9 +12,9 @@ class SuppressionLoss(nn.Module):
         super(SuppressionLoss, self).__init__()
         self.config = config
 
-    def forward(self, logits, penalty_sequence):
+    def forward(self, logits, penalty_sequence, pad_id):
 
-        penalty_onehot = onehot(penalty_sequence, N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id)
+        penalty_onehot = onehot(penalty_sequence, N=self.config.prepro.vocab_size, ignore_index=pad_id)
 
         penalty_mask = penalty_onehot.sum(dim=-2, keepdim=True)
         penalty_mask = torch.min(penalty_mask, torch.ones_like(penalty_mask))

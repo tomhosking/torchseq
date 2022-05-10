@@ -9,16 +9,17 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class SequenceDecoder(nn.Module):
-    def __init__(self, config, embeddings=None):
+    def __init__(self, config, tokenizer, embeddings=None):
         super().__init__()
         self.config = config
+        self.tokenizer = tokenizer
 
         # Embedding layers
         if embeddings is not None:
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
+            self.embeddings.weight.data = self.tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -32,7 +33,7 @@ class SequenceDecoder(nn.Module):
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
         if config.decoder.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
-            projection_init = Tokenizer().get_embeddings(config.prepro.tokenizer)
+            projection_init = self.tokenizer.get_embeddings()
         else:
             projection_init = None
 
@@ -74,7 +75,7 @@ class SequenceDecoder(nn.Module):
             tgt_mask = torch.tril(tgt_mask, diagonal=self.config.encdec.data.get("attention_limit", 0))
 
         # ie how many indices are non-pad
-        output_len = torch.sum(torch.ne(output_seq, Tokenizer().pad_id), dim=-1)
+        output_len = torch.sum(torch.ne(output_seq, self.tokenizer.pad_id), dim=-1)
 
         output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() >= output_len[:, None].cpu()).to(
             output_seq.device

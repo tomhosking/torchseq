@@ -77,11 +77,5 @@ class PretrainedLM:
 
         log_probs = torch.log(probs)
 
-        # print(loss)
-        # print(log_probs, mask_tensor)
-
-        # print(self.Tokenizer().decode(tokens_tensor[0].tolist()))
-        # print(self.Tokenizer().decode(tokens_tensor[1].tolist()))
-
         nll = -1 * torch.sum(log_probs * mask_tensor, -1) / torch.sum(mask_tensor, -1)
         return nll.tolist()

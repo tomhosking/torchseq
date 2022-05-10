@@ -6,7 +6,6 @@ from transformers import BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
-from torchseq.utils.tokenizer import Tokenizer
 import torchseq.models.transformer as custom_transformer
 from torchseq.models.lang_predict_loss import LangPredictLoss
 from torchseq.utils.functions import evaluating
@@ -43,9 +42,10 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
 
 
 class PretrainedAdapterModel(nn.Module):
-    def __init__(self, config, src_field="s1", tgt_field="s1"):
+    def __init__(self, config, output_tokenizer, src_field="s1", tgt_field="s1"):
         super().__init__()
         self.config = config
+        self.output_tokenizer = output_tokenizer
 
         self.src_field = src_field
         self.tgt_field = tgt_field
@@ -123,7 +123,7 @@ class PretrainedAdapterModel(nn.Module):
 
         # Get some sizes
         max_ctxt_len = batch[self.src_field].shape[1]
-        max_goal_len = batch[self.tgt_field].shape[1]
+        # max_goal_len = batch[self.tgt_field].shape[1]
         # max_q_len = torch.max(batch['q_len'])
         # curr_batch_size = batch[self.src_field].size()[0]
         output_max_len = output.size()[-1]
@@ -186,35 +186,6 @@ class PretrainedAdapterModel(nn.Module):
 
             memory["encoding"] = encoding
 
-            if self.config.encdec.get("adapter", False) and self.config.training.get("mse_loss_weight", 0) > 0:
-
-                # calculate loss
-                goal_pad_mask = (
-                    torch.arange(max(max_ctxt_len, max_goal_len))[None, :].cpu()
-                    >= batch[self.tgt_field + "_len"][:, None].cpu()
-                ).to(self.device)
-                # TODO: this will fail if the input is shorter than the tgt! eg for paraphrasing
-                if max_ctxt_len > max_goal_len:
-                    q_padding = torch.full(
-                        [batch[self.tgt_field].shape[0], max(max_ctxt_len - max_goal_len, 0)],
-                        Tokenizer().pad_id,
-                        dtype=torch.long,
-                        device=batch[self.tgt_field].device,
-                    )
-                    goal_padded = torch.cat([batch[self.tgt_field], q_padding], dim=-1)
-                else:
-                    goal_padded = batch[self.tgt_field]
-
-                goal_encoding = self.encoder(input_ids=goal_padded.to(self.device), attention_mask=~goal_pad_mask)[0]
-
-                if max_ctxt_len < max_goal_len:
-                    goal_encoding = goal_encoding[:, :max_ctxt_len, :]
-
-                this_mse_loss = self.mse_loss(encoding, goal_encoding).sum(dim=2) * (1.0 * ~goal_pad_mask)
-                this_mse_loss = this_mse_loss.sum(dim=1) / (batch[self.tgt_field + "_len"] - 1).to(encoding)
-
-                memory["loss"] += this_mse_loss * self.config.training.get("mse_loss_weight", 0)
-
             if self.config.training.get("lang_loss_weight", 0) > 0:
                 lang_loss_pos = self.lang_pred_loss(encoding.detach(), memory, batch["src_lang"])
                 with evaluating(self.lang_pred_loss):
@@ -228,7 +199,7 @@ class PretrainedAdapterModel(nn.Module):
         tgt_mask = torch.triu(tgt_mask, diagonal=1)
 
         # ie how many indices are non-pad
-        output_len = torch.sum(torch.ne(output, Tokenizer().pad_id), dim=-1)
+        output_len = torch.sum(torch.ne(output, self.output_tokenizer.pad_id), dim=-1)
 
         output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() >= output_len[:, None].cpu()).to(self.device)[
             :, :output_max_len

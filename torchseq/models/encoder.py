@@ -12,16 +12,17 @@ import torchseq.models.transformer as custom_transformer
 
 
 class SequenceEncoder(nn.Module):
-    def __init__(self, config, embeddings=None):
+    def __init__(self, config, tokenizer, embeddings=None):
         super().__init__()
         self.config = config
+        self.tokenizer = tokenizer
 
         # Embedding layers
         if embeddings is not None:
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
+            self.embeddings.weight.data = self.tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
@@ -114,7 +115,7 @@ class SequenceEncoder(nn.Module):
 
         input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
 
-        # print(include_position, Tokenizer().decode(input_seq[0]))
+        # print(include_position, self.tokenizer.decode(input_seq[0]))
         if include_position:
             input_embedded = self.positional_embeddings(input_embedded)
 
@@ -168,16 +169,17 @@ class SequenceEncoder(nn.Module):
 
 
 class ContextAnswerEncoder(nn.Module):
-    def __init__(self, config, embeddings=None):
+    def __init__(self, config, input_tokenizer, embeddings=None):
         super().__init__()
         self.config = config
+        self.input_tokenizer = input_tokenizer
 
         # Embedding layers
         if embeddings is not None:
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = Tokenizer().get_embeddings(config.prepro.tokenizer)
+            self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(

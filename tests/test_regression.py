@@ -9,11 +9,10 @@ from . import utils as test_utils
 
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.para_agent import ParaphraseAgent
-from torchseq.datasets import qa_triple, loaders
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
 from torchseq.utils.seed import set_seed
-from torchseq.utils.tokenizer import Tokenizer
+
 from torchseq.datasets.builder import dataloader_from_config
 
 

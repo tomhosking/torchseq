@@ -8,7 +8,7 @@ from transformers import MBartTokenizerFast
 from torchseq.utils.singleton import Singleton
 from torchseq.utils.tokenizer_wordlevel import WordLevelTokenizer
 
-DATA_PATH = "./data/"
+# self.data_path = "./data/"
 
 # FAIRSEQ_LANGUAGE_CODES = [
 #     "ar_AR",
@@ -67,9 +67,7 @@ FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
 }
 
 
-class Tokenizer(metaclass=Singleton):
-
-    # class __Tokenizer:
+class Tokenizer:
     pad_id = None
     embedding_dim = None
     bos_id = None
@@ -81,11 +79,12 @@ class Tokenizer(metaclass=Singleton):
 
     engine = None
 
-    def __init__(self, model_slug=None):
+    def __init__(self, model_slug, data_path="./data/"):
         if model_slug is None:
             raise Exception("Tokenizer needs to be initialized with a model name before use!")
 
         self.model_slug = model_slug
+        self.data_path = data_path
 
         if "mbart-" in model_slug:
             # self.engine = MBartTokenizerFast.from_pretrained("facebook/mbart-large-cc25")
@@ -102,8 +101,8 @@ class Tokenizer(metaclass=Singleton):
 
         elif "bart-" in model_slug or "roberta-" in model_slug:
             self.engine = ByteLevelBPETokenizer.from_file(
-                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])),
-                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1])),
+                os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])),
+                os.path.join(self.data_path, "pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1])),
                 lowercase=False,
             )
 
@@ -118,7 +117,7 @@ class Tokenizer(metaclass=Singleton):
 
         elif "ptb" in model_slug:
             self.engine = WordLevelTokenizer.from_file(
-                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]))
+                os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]))
             )
 
             self.pad_id = self.engine.token_to_id("<pad>")
@@ -130,7 +129,7 @@ class Tokenizer(metaclass=Singleton):
 
         else:
             self.engine = BertWordPieceTokenizer.from_file(
-                os.path.join(DATA_PATH, "pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1])),
+                os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1])),
                 lowercase=(model_slug[-8:] == "-uncased"),
             )
 
@@ -157,42 +156,42 @@ class Tokenizer(metaclass=Singleton):
         Tokenizer(model_slug)
 
     def decode(self, token_id_tensor):
-        return Tokenizer().engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
+        return self.engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
 
-    def get_embeddings(self, model_slug):
+    def get_embeddings(self):
         return torch.load(
-            os.path.join(DATA_PATH, "pretrained-vocabs/{:}.embeddings.pt".format(model_slug.split("/")[-1]))
+            os.path.join(self.data_path, "pretrained-vocabs/{:}.embeddings.pt".format(self.model_slug.split("/")[-1]))
         )
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
 
-        if "mbart-" in Tokenizer().model_slug:
-            output = Tokenizer().engine.encode_plus(text, return_offsets_mapping=True, add_special_tokens=False)
+        if "mbart-" in self.model_slug:
+            output = self.engine.encode_plus(text, return_offsets_mapping=True, add_special_tokens=False)
 
             token_ids = output["input_ids"]
             offsets = output["offset_mapping"]
             token_texts = ["[MBART]" for _ in range(len(token_ids))]
         else:
-            output = Tokenizer().engine.encode(text)
+            output = self.engine.encode(text)
 
             token_ids = output.ids
             offsets = output.offsets
             token_texts = output.tokens
 
-        bos_str = "[CLS]" if "bert" in Tokenizer().model_slug else "<s>"
-        eos_str = "[SEP]" if "bert" in Tokenizer().model_slug else "</s>"
+        bos_str = "[CLS]" if "bert" in self.model_slug else "<s>"
+        eos_str = "[SEP]" if "bert" in self.model_slug else "</s>"
 
         # mBART doesn't use bos tokens
-        if "mbart-" in Tokenizer().model_slug:
-            eos = [{"id": Tokenizer().eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
-            # bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
+        if "mbart-" in self.model_slug:
+            eos = [{"id": self.eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
+            # bos = [{"id": self.bos_id, "text": bos_str, "begin": 0, "end": 0}]
             bos = []
 
         else:
-            bos = [{"id": Tokenizer().bos_id, "text": bos_str, "begin": 0, "end": 0}]
-            eos = [{"id": Tokenizer().eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
+            bos = [{"id": self.bos_id, "text": bos_str, "begin": 0, "end": 0}]
+            eos = [{"id": self.eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
 
-        if "bert-" in Tokenizer().model_slug:
+        if "bert-" in self.model_slug:
             # NOTE: HF tokenizers automatically adds CLS/SEP tokens for BERT, so we have to fudge the indices to skip these
             tokenised = [
                 {"id": token_ids[ix], "text": token_texts[ix], "begin": offsets[ix][0], "end": offsets[ix][1]}

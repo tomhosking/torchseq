@@ -77,9 +77,8 @@ class ModelAgent(BaseAgent):
 
         set_seed(config.get("seed", 123))
 
-        # This is lovely and hacky isn't it. Could we maybe pass it in as an arg?
-        tokenizer.DATA_PATH = data_path
-        tokenizer.Tokenizer(config.prepro.tokenizer)
+        self.input_tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
+        self.output_tokenizer = Tokenizer(config.prepro.get("output_tokenizer", config.prepro.tokenizer), data_path)
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:
@@ -200,23 +199,27 @@ class ModelAgent(BaseAgent):
         """
         Initialise sampling methods for this agent
         """
-        self.decode_greedy = GreedySampler(self.config, self.device)
-        self.decode_beam = BeamSearchSampler(self.config, self.device)
-        self.decode_dbs = DiverseBeamSearchSampler(self.config, self.device)
-        self.decode_teacher_force = TeacherForcedSampler(self.config, self.device)
-        self.decode_nucleus = ParallelNucleusSampler(self.config, self.device)
+        self.decode_greedy = GreedySampler(self.config, self.output_tokenizer, self.device)
+        self.decode_beam = BeamSearchSampler(self.config, self.output_tokenizer, self.device)
+        self.decode_dbs = DiverseBeamSearchSampler(self.config, self.output_tokenizer, self.device)
+        self.decode_teacher_force = TeacherForcedSampler(self.config, self.output_tokenizer, self.device)
+        self.decode_nucleus = ParallelNucleusSampler(self.config, self.output_tokenizer, self.device)
 
         if self.config.data.get("reranker", None) is not None:
             if self.config.reranker.data.get("strategy", None) == "qa":
-                self.reranker = QaReranker(self.config, self.device)
+                self.reranker = QaReranker(self.config, self.output_tokenizer, self.device)
             elif self.config.reranker.data.get("strategy", None) == "ngram":
                 self.reranker = NgramReranker(self.config, self.device, self.src_field)
             elif self.config.reranker.data.get("strategy", None) == "backtranslate":
-                self.reranker = BacktranslateReranker(self.config, self.device, self.src_field, self.model)
+                self.reranker = BacktranslateReranker(
+                    self.config, self.output_tokenizer.pad_id, self.device, self.src_field, self.model
+                )
             elif self.config.reranker.data.get("strategy", None) == "combo":
-                self.reranker = CombinationReranker(self.config, self.device, self.src_field, self.model)
+                self.reranker = CombinationReranker(
+                    self.config, self.output_tokenizer, self.device, self.src_field, self.model
+                )
         else:
-            self.reranker = TopkReducer(self.config, self.device)
+            self.reranker = TopkReducer(self.config, self.output_tokenizer.pad_id, self.device)
 
     def load_checkpoint(self, file_name, write_pointer=True):
         """
@@ -455,9 +458,13 @@ class ModelAgent(BaseAgent):
                     with torch.no_grad():
                         greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
 
-                    self.logger.info(Tokenizer().decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]]))
-                    self.logger.info(Tokenizer().decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]]))
-                    self.logger.info(Tokenizer().decode(greedy_output.data[0][: output_lens[0]]))
+                    self.logger.info(
+                        self.output_tokenizer.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]])
+                    )
+                    self.logger.info(
+                        self.output_tokenizer.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]])
+                    )
+                    self.logger.info(self.output_tokenizer.decode(greedy_output.data[0][: output_lens[0]]))
 
                 torch.cuda.empty_cache()
 
@@ -580,12 +587,12 @@ class ModelAgent(BaseAgent):
                     and (self.config.eval.data.get("topk", 1) == 1)
                 ):
                     for ix, pred in enumerate(dev_output.data):
-                        pred_output.append(Tokenizer().decode(pred[: dev_output_lens[ix]]))
+                        pred_output.append(self.output_tokenizer.decode(pred[: dev_output_lens[ix]]))
                     for ix, gold in enumerate(batch[self.tgt_field]):
-                        # gold_output.append(Tokenizer().decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        # gold_output.append(self.output_tokenizer.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
                         gold_output.append(batch[self.tgt_field + "_text"][ix])
                     for ix, gold in enumerate(batch[self.src_field]):
-                        # gold_input.append(Tokenizer().decode(gold[: batch[self.src_field + "_len"][ix]]))
+                        # gold_input.append(self.input_tokenizer.decode(gold[: batch[self.src_field + "_len"][ix]]))
                         gold_input.append(batch[self.src_field + "_text"][ix])
 
                     if batch_idx % 200 == 0 and self.verbose:
@@ -603,12 +610,12 @@ class ModelAgent(BaseAgent):
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(
                             [
-                                Tokenizer().decode(pred[jx][: dev_output_lens[ix][jx]])
+                                self.output_tokenizer.decode(pred[jx][: dev_output_lens[ix][jx]])
                                 for jx in range(min(len(pred), topk))
                             ]
                         )
                     for ix, gold in enumerate(batch[self.tgt_field]):
-                        # gold_output.append(Tokenizer().decode(gold[: batch[self.tgt_field + "_len"][ix]]))
+                        # gold_output.append(self.output_tokenizer.decode(gold[: batch[self.tgt_field + "_len"][ix]]))
                         gold_output.append(batch[self.tgt_field + "_text"][ix])
 
                     # if batch_idx > 20:
@@ -657,26 +664,28 @@ class ModelAgent(BaseAgent):
         slow_metrics = slow_metrics and self.config.eval.data.get("sample_outputs", True) and not training_loop
 
         # Register the metric hooks to be used
-        metric_hooks = [DefaultMetricHook(self.config, self.src_field, self.tgt_field)]
+        metric_hooks = [DefaultMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if self.config.eval.data.get("sample_outputs", True) and not training_loop:
-            metric_hooks += [TextualMetricHook(self.config, self.src_field, self.tgt_field)]
+            metric_hooks += [TextualMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if slow_metrics:
-            metric_hooks += [QGMetricHook(self.config, self.src_field, self.tgt_field)]
+            metric_hooks += [QGMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
-            metric_hooks += [SepAEMetricHook(self.config, self.src_field, self.tgt_field)]
+            metric_hooks += [SepAEMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if slow_metrics and "hrq_agg" in self.config.eval.get("metrics", {}).keys():
-            metric_hooks += [HRQAggregationMetricHook(self.config, self.src_field, self.tgt_field)]
+            metric_hooks += [
+                HRQAggregationMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
+            ]
 
         if (
             "rouge" in self.config.eval.get("metrics", {}).keys()
             and self.config.eval.data.get("sample_outputs", True)
             and not training_loop
         ):
-            metric_hooks += [RougeMetricHook(self.config, self.src_field, self.tgt_field)]
+            metric_hooks += [RougeMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         self.vq_codes = defaultdict(lambda: [])
 

@@ -12,8 +12,9 @@ from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 
 
 class QADataset(Dataset):
-    def __init__(self, config, path=None, samples=None, dev=False, test=False, length_limit=None):
+    def __init__(self, config, tokenizer, path=None, samples=None, dev=False, test=False, length_limit=None):
         self.config = config
+        self.tokenizer = tokenizer
 
         if samples is not None:
             self.samples = samples
@@ -61,6 +62,7 @@ class QADataset(Dataset):
     def __getitem__(self, idx):
         return QADataset.to_tensor(
             self.samples[idx],
+            self.tokenizer,
             sent_window=self.config.prepro.sent_window,
             tok_window=self.config.prepro.tok_window,
             o_tag=2 if self.config.prepro.bio_tagging else 1,
@@ -72,6 +74,7 @@ class QADataset(Dataset):
     @staticmethod
     def to_tensor(
         x,
+        tokenizer,
         sent_window=0,
         tok_window=300,
         o_tag=2,
@@ -91,7 +94,8 @@ class QADataset(Dataset):
             x["c"],
             x["a"],
             x["a_pos"],
-            x.get("q", None),
+            tokenizer=tokenizer,
+            question=x.get("q", None),
             sent_window=sent_window,
             tok_window=tok_window,
             o_tag=o_tag,
@@ -104,7 +108,7 @@ class QADataset(Dataset):
                 ctxt = (
                     ([src_lang_token] if include_lang_codes else [])
                     + parsed_triple.ans_as_ids()
-                    + [Tokenizer().eos_id] * 1
+                    + [tokenizer.eos_id] * 1
                     + parsed_triple.ctxt_as_ids()
                 )
 
@@ -117,7 +121,7 @@ class QADataset(Dataset):
                 )
             else:
                 ctxt = torch.LongTensor(
-                    parsed_triple.ans_as_ids() + [Tokenizer().eos_id] + parsed_triple.ctxt_as_ids()
+                    parsed_triple.ans_as_ids() + [tokenizer.eos_id] + parsed_triple.ctxt_as_ids()
                 )
                 a_pos = (
                     [0 for i in range(len(parsed_triple._ans_doc))]
@@ -163,22 +167,25 @@ class QADataset(Dataset):
         return sample
 
     @staticmethod
-    def pad_and_order_sequences(batch):
-        keys = batch[0].keys()
-        max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
+    def pad_and_order_sequences(pad_id):
+        def _pad_and_order_sequences(batch):
+            keys = batch[0].keys()
+            max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
 
-        for x in batch:
+            for x in batch:
+                for k in keys:
+                    if k == "a_pos":
+                        x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=0)
+                    elif k[-5:] != "_text":
+                        x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=pad_id)
+
+            tensor_batch = {}
             for k in keys:
-                if k == "a_pos":
-                    x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=0)
-                elif k[-5:] != "_text":
-                    x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=Tokenizer().pad_id)
+                if k[-5:] != "_text":
+                    tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
+                else:
+                    tensor_batch[k] = [x[k] for x in batch]
 
-        tensor_batch = {}
-        for k in keys:
-            if k[-5:] != "_text":
-                tensor_batch[k] = torch.stack([x[k] for x in batch], 0).squeeze(1)
-            else:
-                tensor_batch[k] = [x[k] for x in batch]
+            return tensor_batch
 
-        return tensor_batch
+        return _pad_and_order_sequences

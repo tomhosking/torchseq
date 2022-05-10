@@ -13,8 +13,8 @@ class RougeMetricHook(MetricHook):
 
     type = "live"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
-    def __init__(self, config, src_field=None, tgt_field=None):
-        super().__init__(config, src_field, tgt_field)
+    # def __init__(self, config, src_field=None, tgt_field=None):
+    #     super().__init__(config, src_field, tgt_field)
 
     def on_begin_epoch(self, use_test=False):
         self.scores = {"rouge": {}}

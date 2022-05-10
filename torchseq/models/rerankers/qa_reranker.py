@@ -7,10 +7,11 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class QaReranker(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, tokenizer, device):
         super(QaReranker, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
         self.qa_model = PreTrainedQA(device=self.device)
 
@@ -18,13 +19,15 @@ class QaReranker(nn.Module):
 
         # First, stringify
         output_strings = [
-            [Tokenizer().decode(candidates.data[i][j][: lengths[i][j]]) for j in range(len(lengths[i]))]
+            [self.tokenizer.decode(candidates.data[i][j][: lengths[i][j]]) for j in range(len(lengths[i]))]
             for i in range(len(lengths))
         ]
 
         qa_scores = []
         for ix, q_batch in enumerate(output_strings):
-            contexts_cropped = [Tokenizer().decode(batch["c"][ix][: batch["c_len"][ix]]) for _ in range(len(q_batch))]
+            contexts_cropped = [
+                self.tokenizer.decode(batch["c"][ix][: batch["c_len"][ix]]) for _ in range(len(q_batch))
+            ]
             answers = self.qa_model.infer_batch(question_list=q_batch, context_list=contexts_cropped)
 
             # this_scores = [(0 if f1(batch["a_text"][ix], ans) > 0.75 else -100) for jx, ans in enumerate(answers)]
@@ -48,4 +51,4 @@ class QaReranker(nn.Module):
             else:
                 output = candidates[:, 0, :]
 
-        return output, torch.sum(output != Tokenizer().pad_id, dim=-1), scores
+        return output, torch.sum(output != self.tokenizer.pad_id, dim=-1), scores

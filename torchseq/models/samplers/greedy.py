@@ -5,10 +5,11 @@ from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 
 
 class GreedySampler(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, tokenizer, device):
         super(GreedySampler, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
     def forward(self, model, batch, tgt_field):
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -19,22 +20,22 @@ class GreedySampler(nn.Module):
         MBART_HACK = self.config.eval.data.get("prepend_langcode", False)
 
         # Create vector of SOS + placeholder for first prediction
-        output = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().bos_id).to(self.device)
+        output = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.bos_id).to(self.device)
         logits = (
             torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-inf")).to(self.device)
         )
-        logits[:, :, Tokenizer().bos_id] = float("inf")
+        logits[:, :, self.tokenizer.bos_id] = float("inf")
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size).fill_(Tokenizer().pad_id).to(self.device)
+        padding = torch.LongTensor(curr_batch_size).fill_(self.tokenizer.pad_id).to(self.device)
 
         if BART_HACK:
-            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
+            dummy_token = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.eos_id).to(self.device)
             output = torch.cat([dummy_token, output], dim=1)
 
         if MBART_HACK:
             lang_token = batch["tgt_lang"].unsqueeze(-1)
-            eos_token = torch.LongTensor(curr_batch_size, 1).fill_(Tokenizer().eos_id).to(self.device)
+            eos_token = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.eos_id).to(self.device)
             output = torch.cat([eos_token, lang_token], dim=-1)
 
         seq_ix = 0
@@ -52,14 +53,14 @@ class GreedySampler(nn.Module):
 
             logits = torch.cat([logits, new_logits[:, -1:, :]], dim=1)
 
-            output_done = output_done | (output[:, -1] == Tokenizer().eos_id)
+            output_done = output_done | (output[:, -1] == self.tokenizer.eos_id)
             seq_ix += 1
 
         # print(BART_HACK, MBART_HACK)
         # print(batch['c'][0])
         # print(batch['q'][0])
         # print(output[0])
-        # print(Tokenizer().decode(output[0]))
+        # print(self.tokenizer.decode(output[0]))
         # exit()
 
         if BART_HACK:
@@ -67,4 +68,4 @@ class GreedySampler(nn.Module):
         # if MBART_HACK:
         #     output = output[:, 2:]
 
-        return output, logits, torch.sum(output != Tokenizer().pad_id, dim=-1), memory
+        return output, logits, torch.sum(output != self.tokenizer.pad_id, dim=-1), memory

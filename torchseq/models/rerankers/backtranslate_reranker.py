@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 
-from torchseq.utils.tokenizer import Tokenizer
 
 from torchseq.models.samplers.teacher_force import TeacherForcedSampler
 
@@ -24,15 +23,16 @@ def pad_to_match(x1, x2, pad_id):
 
 
 class BacktranslateReranker(nn.Module):
-    def __init__(self, config, device, src_field, model):
+    def __init__(self, config, pad_id, device, src_field, model):
         super(BacktranslateReranker, self).__init__()
         self.config = config
         self.device = device
+        self.pad_id = pad_id
 
         self.src_field = src_field
         self.model = model
         self.decoder = TeacherForcedSampler(self.config, self.device)
-        self.loss = nn.CrossEntropyLoss(ignore_index=Tokenizer().pad_id, reduction="none")
+        self.loss = nn.CrossEntropyLoss(ignore_index=pad_id, reduction="none")
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
 
@@ -49,7 +49,7 @@ class BacktranslateReranker(nn.Module):
         if original_length > candidates_flattened.shape[1]:
             pad_toks = torch.full(
                 (candidates_flattened.shape[0], original_length - candidates_flattened.shape[1]),
-                Tokenizer().pad_id,
+                self.pad_id,
                 dtype=candidates_flattened.dtype,
                 device=candidates_flattened.device,
             )
@@ -96,4 +96,4 @@ class BacktranslateReranker(nn.Module):
             else:
                 output = candidates[:, 0, :]
 
-        return output, torch.sum(output != Tokenizer().pad_id, dim=-1), scores
+        return output, torch.sum(output != self.pad_id, dim=-1), scores

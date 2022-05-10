@@ -13,10 +13,11 @@ When extending each hypothesis, consider the predictions made by previous elemen
 
 
 class DiverseBeamSearchSampler(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, tokenizer, device):
         super(DiverseBeamSearchSampler, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
     def forward(self, model, batch, tgt_field):
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -37,23 +38,23 @@ class DiverseBeamSearchSampler(nn.Module):
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
 
         # Create vector of SOS + placeholder for first prediction
-        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().bos_id).to(self.device)
+        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(self.tokenizer.bos_id).to(self.device)
         scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(0).to(self.device)
 
         # seed with an extra eos token to mimic fairseq
         if BART_HACK:
-            dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().eos_id).to(self.device)
+            dummy_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(self.tokenizer.eos_id).to(self.device)
             output_seq = torch.cat([dummy_token, output_seq], dim=-1)
             scores = torch.cat([scores, scores], dim=-1)
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(Tokenizer().pad_id).to(self.device)
+        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.tokenizer.pad_id).to(self.device)
         pad_probs = (
             torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size)
             .fill_(float("-inf"))
             .to(self.device)
         )
-        pad_probs[:, :, Tokenizer().pad_id] = float("0")
+        pad_probs[:, :, self.tokenizer.pad_id] = float("0")
 
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
@@ -66,7 +67,9 @@ class DiverseBeamSearchSampler(nn.Module):
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
             new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
-            output_done = (output_seq[:, :, -1] == Tokenizer().pad_id) | (output_seq[:, :, -1] == Tokenizer().eos_id)
+            output_done = (output_seq[:, :, -1] == self.tokenizer.pad_id) | (
+                output_seq[:, :, -1] == self.tokenizer.eos_id
+            )
 
             if prevent_repetition:
                 one_hot_prev = onehot(output_seq[:, :, -1], N=self.config.prepro.vocab_size)
@@ -100,7 +103,7 @@ class DiverseBeamSearchSampler(nn.Module):
                         used_ids = torch.cat([seq[:, :, -1] for seq in new_output[:gix]], dim=1)
 
                         used_ids_onehot = onehot(
-                            used_ids, N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id
+                            used_ids, N=self.config.prepro.vocab_size, ignore_index=self.tokenizer.pad_id
                         )
 
                         # build a mask of the already used tokens
@@ -136,7 +139,7 @@ class DiverseBeamSearchSampler(nn.Module):
                     )
 
                     # Calculate length penalty
-                    hypothesis_len = torch.sum(expanded_beam_ixs != Tokenizer().pad_id, dim=-1)
+                    hypothesis_len = torch.sum(expanded_beam_ixs != self.tokenizer.pad_id, dim=-1)
                     len_alpha = self.config.diverse_beam.length_alpha
                     length_penalty = torch.pow((5 + hypothesis_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
 
@@ -163,8 +166,8 @@ class DiverseBeamSearchSampler(nn.Module):
                 scores = torch.cat(scores_by_group, dim=1)
 
                 # Use pad for the output for elements that have completed
-                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (
-                    new_output[:, :, -2] == Tokenizer().pad_id
+                output_done = (new_output[:, :, -2] == self.tokenizer.eos_id) | (
+                    new_output[:, :, -2] == self.tokenizer.pad_id
                 )
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
 
@@ -178,7 +181,7 @@ class DiverseBeamSearchSampler(nn.Module):
             scores = scores[:, :, 1:]
 
         # apply length penalty
-        output_len = torch.sum(output_seq != Tokenizer().pad_id, dim=-1)
+        output_len = torch.sum(output_seq != self.tokenizer.pad_id, dim=-1)
         length_penalty = torch.pow((5 + output_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
         beam_scores = torch.sum(scores, dim=-1) / length_penalty
 

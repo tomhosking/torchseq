@@ -24,9 +24,6 @@ class PreTrainedQA:
             "bert-large-uncased-whole-word-masking-finetuned-squad"
         ).to(self.device)
 
-        # self.tokenizer = DistilBertTokenizer().from_pretrained('distilbert-base-uncased')
-        # self.model = DistilBertForQuestionAnswering.from_pretrained('distilbert-base-uncased-distilled-squad')
-
     def infer_single(self, question, text):
         input_ids = self.tokenizer.encode(question, text)
         token_type_ids = [0 if i <= input_ids.index(102) else 1 for i in range(len(input_ids))]
@@ -70,7 +67,6 @@ class PreTrainedQA:
             end_scores.extend(res[1].detach().cpu())
             if bix % 16 == 0:
                 torch.cuda.empty_cache()
-        # all_tokens_batch = [self.Tokenizer().convert_ids_to_tokens(input_ids) for input_ids in tokenized["input_ids"]]
 
         all_answers = [
             self.extract_answer(

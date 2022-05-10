@@ -1,26 +1,27 @@
 import torch
 import torch.nn as nn
 
-from torchseq.utils.tokenizer import Tokenizer
 
 from torchseq.models.rerankers.qa_reranker import QaReranker
-from torchseq.models.rerankers.topk import TopkReducer
 from torchseq.models.rerankers.ngram_reranker import NgramReranker
 from torchseq.models.rerankers.backtranslate_reranker import BacktranslateReranker
 
 
 class CombinationReranker(nn.Module):
-    def __init__(self, config, device, src_field, model):
+    def __init__(self, config, tokenizer, device, src_field, model):
         super(CombinationReranker, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
         self.src_field = src_field
         self.model = model
 
-        self.qa_reranker = QaReranker(self.config, self.device)
-        self.ngram_reranker = NgramReranker(self.config, self.device, self.src_field)
-        self.backtranslate_reranker = BacktranslateReranker(self.config, self.device, self.src_field, self.model)
+        self.qa_reranker = QaReranker(self.config, tokenizer, self.device)
+        self.ngram_reranker = NgramReranker(self.config, tokenizer.pad_id, self.device, self.src_field)
+        self.backtranslate_reranker = BacktranslateReranker(
+            self.config, tokenizer.pad_id, self.device, self.src_field, self.model
+        )
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
 
@@ -55,4 +56,4 @@ class CombinationReranker(nn.Module):
             else:
                 output = sorted_seqs[:, 0, :]
 
-        return output, torch.sum(output != Tokenizer().pad_id, dim=-1), sorted_scores
+        return output, torch.sum(output != self.pad_id, dim=-1), sorted_scores

@@ -44,10 +44,11 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")
 
 
 class ParallelNucleusSampler(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, tokenizer, device):
         super(ParallelNucleusSampler, self).__init__()
         self.config = config
         self.device = device
+        self.tokenizer = tokenizer
 
     def forward(self, model, batch, tgt_field):
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -67,17 +68,17 @@ class ParallelNucleusSampler(nn.Module):
         prob_cutoff = self.config.nucleus_sampling.cutoff
 
         # Create vector of SOS + placeholder for first prediction
-        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(Tokenizer().bos_id).to(self.device)
+        output_seq = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(self.tokenizer.bos_id).to(self.device)
         scores = torch.FloatTensor(curr_batch_size, beam_width, 1).fill_(1).to(self.device)
 
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
-        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(Tokenizer().pad_id).to(self.device)
+        padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.tokenizer.pad_id).to(self.device)
         pad_probs = (
             torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size)
             .fill_(float("0"))
             .to(self.device)
         )
-        pad_probs[:, :, Tokenizer().pad_id] = float("1")
+        pad_probs[:, :, self.tokenizer.pad_id] = float("1")
 
         def _tile_batch(x):
             return x.repeat_interleave(beam_width, dim=0)
@@ -90,7 +91,9 @@ class ParallelNucleusSampler(nn.Module):
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
             new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
-            output_done = (output_seq[:, :, -1] == Tokenizer().pad_id) | (output_seq[:, :, -1] == Tokenizer().eos_id)
+            output_done = (output_seq[:, :, -1] == self.tokenizer.pad_id) | (
+                output_seq[:, :, -1] == self.tokenizer.eos_id
+            )
 
             new_logits = top_k_top_p_filtering(logits=new_logits, top_p=prob_cutoff)
 
@@ -115,8 +118,8 @@ class ParallelNucleusSampler(nn.Module):
 
             # Use pad for the output for elements that have completed
             if seq_ix > 0:
-                output_done = (new_output[:, :, -2] == Tokenizer().eos_id) | (
-                    new_output[:, :, -2] == Tokenizer().pad_id
+                output_done = (new_output[:, :, -2] == self.tokenizer.eos_id) | (
+                    new_output[:, :, -2] == self.tokenizer.pad_id
                 )
                 new_output[:, :, -1] = torch.where(output_done, padding, new_output[:, :, -1])
 
@@ -125,14 +128,16 @@ class ParallelNucleusSampler(nn.Module):
             seq_ix += 1
 
         # Take top-1 beam:
-        hypothesis_len = torch.sum(output_seq != Tokenizer().pad_id, dim=-1)
+        hypothesis_len = torch.sum(output_seq != self.tokenizer.pad_id, dim=-1)
 
         # Length penalty needs to be applied to *overall* score, not score for this token
         len_alpha = self.config.nucleus_sampling.length_alpha
         length_penalty = torch.pow((5 + hypothesis_len).float(), len_alpha) / pow(5.0 + 1.0, len_alpha)
 
         beam_scores = (
-            torch.log(scores).where(output_seq != Tokenizer().pad_id, torch.FloatTensor([0.0]).to(self.device)).sum(-1)
+            torch.log(scores)
+            .where(output_seq != self.tokenizer.pad_id, torch.FloatTensor([0.0]).to(self.device))
+            .sum(-1)
             / length_penalty
         )
 
@@ -142,4 +147,4 @@ class ParallelNucleusSampler(nn.Module):
 
         output = output_seq
 
-        return output, sorted_scores, torch.sum(output_seq != Tokenizer().pad_id, dim=-1), memory
+        return output, sorted_scores, torch.sum(output_seq != self.tokenizer.pad_id, dim=-1), memory

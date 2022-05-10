@@ -5,10 +5,11 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 class TopkReducer(nn.Module):
-    def __init__(self, config, device):
+    def __init__(self, config, pad_id, device):
         super(TopkReducer, self).__init__()
         self.config = config
         self.device = device
+        self.pad_id = pad_id
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
 
@@ -23,7 +24,7 @@ class TopkReducer(nn.Module):
         if top1:
             output = candidates[:, 0, :]
 
-            return output, torch.sum(output != Tokenizer().pad_id, dim=-1), scores
+            return output, torch.sum(output != self.pad_id, dim=-1), scores
 
         else:
-            return candidates, torch.sum(candidates != Tokenizer().pad_id, dim=-1), scores
+            return candidates, torch.sum(candidates != self.pad_id, dim=-1), scores

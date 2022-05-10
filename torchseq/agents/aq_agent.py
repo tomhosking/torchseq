@@ -12,18 +12,9 @@ from tqdm import tqdm
 
 from torchseq.agents.model_agent import ModelAgent
 
-from torchseq.datasets.qa_triple import QATriple
-
-
-from torchseq.datasets.qa_dataset import QADataset
-from torchseq.datasets.qa_loader import QADataLoader
 from torchseq.models.aq_transformer import TransformerAqModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
-
-from torchseq.utils.mckenzie import update_mckenzie
-from torchseq.utils.tokenizer import Tokenizer
-from torchseq.utils.loss_dropper import LossDropper
 
 
 class AQAgent(ModelAgent):
@@ -46,16 +37,24 @@ class AQAgent(ModelAgent):
 
         # define loss
         self.loss = nn.CrossEntropyLoss(
-            ignore_index=Tokenizer().pad_id,
+            ignore_index=self.output_tokenizer.pad_id,
             reduction="none",
             label_smoothing=self.config.training.get("label_smoothing", 0.0),
         )
 
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
-            self.model = PretrainedAdapterModel(self.config, src_field=self.src_field, tgt_field=self.tgt_field)
+            self.model = PretrainedAdapterModel(
+                self.config,
+                self.input_tokenizer,
+                self.output_tokenizer,
+                src_field=self.src_field,
+                tgt_field=self.tgt_field,
+            )
         else:
-            self.model = TransformerAqModel(self.config)  # , loss=self.loss
+            self.model = TransformerAqModel(
+                self.config, self.input_tokenizer, self.output_tokenizer
+            )  # , loss=self.loss
 
         self.suppression_loss = SuppressionLoss(self.config)
 
@@ -99,7 +98,7 @@ class AQAgent(ModelAgent):
         if self.config.training.suppression_loss_weight > 0:
             this_loss += (
                 self.config.training.suppression_loss_weight
-                * self.suppression_loss(logits, batch["a"]).sum(dim=1)
+                * self.suppression_loss(logits, batch["a"], self.output_tokenizer.pad_id).sum(dim=1)
                 / (batch["q_len"] - 1).to(this_loss)
             )
 

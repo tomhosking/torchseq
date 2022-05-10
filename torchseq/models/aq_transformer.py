@@ -8,14 +8,14 @@ from torchseq.models.decoder import SequenceDecoder
 
 
 class TransformerAqModel(nn.Module):
-    def __init__(self, config, loss=None):
+    def __init__(self, config, input_tokenizer, output_tokenizer, loss=None):
         super().__init__()
         self.config = config
 
         self.loss = loss
 
-        self.ctxt_ans_encoder = ContextAnswerEncoder(config)
-        self.seq_decoder = SequenceDecoder(config, embeddings=self.ctxt_ans_encoder.embeddings)
+        self.ctxt_ans_encoder = ContextAnswerEncoder(config, input_tokenizer)
+        self.seq_decoder = SequenceDecoder(config, output_tokenizer, embeddings=self.ctxt_ans_encoder.embeddings)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
         if memory is None:

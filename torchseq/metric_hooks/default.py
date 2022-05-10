@@ -8,8 +8,8 @@ class DefaultMetricHook(MetricHook):
 
     type = "live"
 
-    def __init__(self, config, src_field=None, tgt_field=None):
-        super().__init__(config, src_field, tgt_field)
+    # def __init__(self, config, tokenizer, src_field=None, tgt_field=None):
+    #     super().__init__(config, tokenizer, src_field, tgt_field)
 
     def on_begin_epoch(self, use_test=False):
         self.scores = {"ppl": []}
@@ -21,6 +21,6 @@ class DefaultMetricHook(MetricHook):
                 logits,
                 batch[self.tgt_field],
                 vocab_size=self.config.prepro.vocab_size,
-                ignore_index=Tokenizer().pad_id,
+                ignore_index=self.tokenizer.pad_id,
             ).tolist()
         )

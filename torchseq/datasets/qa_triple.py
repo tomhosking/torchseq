@@ -24,6 +24,7 @@ class QATriple:
         context,
         answer,
         a_pos,
+        tokenizer=None,
         question=None,
         sent_window=0,
         tok_window=300,
@@ -120,12 +121,12 @@ class QATriple:
 
             ctxt_char_offsets.append((sent_char_offset, sent_char_offset + len(sent)))  # .encode('utf8')
 
-        # self._ctxt_doc_uncrop = Tokenizer().tokenise(self.context_text)
-        ctxt_sent_toks = [Tokenizer().tokenise(sent) for sent in ctxt_sents]
+        # self._ctxt_doc_uncrop = tokenizer.tokenise(self.context_text)
+        ctxt_sent_toks = [tokenizer.tokenise(sent) for sent in ctxt_sents]
 
-        self._ans_doc = Tokenizer().tokenise(self.answer_text, src_lang=src_lang)
+        self._ans_doc = tokenizer.tokenise(self.answer_text, src_lang=src_lang)
         self._q_doc = (
-            Tokenizer().tokenise(self.question_text, add_bos_eos=True, tgt_lang=tgt_lang) if self.is_training else None
+            tokenizer.tokenise(self.question_text, add_bos_eos=True, tgt_lang=tgt_lang) if self.is_training else None
         )
 
         # Find the answer in the uncropped context

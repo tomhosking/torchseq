@@ -18,6 +18,10 @@ class QADataLoader:
         :param config:
         """
         self.config = config
+        self.tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
+        if config.prepro.get("output_tokenizer", None) != config.prepro.get("input_tokenizer", None):
+            raise Exception("QADataset doesnt support different input and output tokenizers!")
+
         self.logger = logging.getLogger("DataLoader")
 
         tokenizer.DATA_PATH = data_path
@@ -29,6 +33,7 @@ class QADataLoader:
             else None,
             samples=train_samples,
             config=config,
+            tokenizer=self.tokenizer,
             dev=False,
             test=False,
             length_limit=self.config.training.get("truncate_dataset", None),
@@ -39,6 +44,7 @@ class QADataLoader:
             else None,
             samples=dev_samples,
             config=config,
+            tokenizer=self.tokenizer,
             dev=True,
             test=False,
             length_limit=self.config.eval.get("truncate_dataset", None),
@@ -49,6 +55,7 @@ class QADataLoader:
             else None,
             samples=test_samples,
             config=config,
+            tokenizer=self.tokenizer,
             dev=False,
             test=True,
             length_limit=self.config.eval.get("truncate_dataset", None),
@@ -80,7 +87,7 @@ class QADataLoader:
             batch_size=config.training.batch_size,
             shuffle=self.config.training.data.get("shuffle_data", True),
             num_workers=4,
-            collate_fn=QADataset.pad_and_order_sequences,
+            collate_fn=QADataset.pad_and_order_sequences(self.tokenizer.pad_id),
             worker_init_fn=init_worker,
         )
 
@@ -89,7 +96,7 @@ class QADataLoader:
             batch_size=config.eval.eval_batch_size,
             shuffle=False,
             num_workers=4,
-            collate_fn=QADataset.pad_and_order_sequences,
+            collate_fn=QADataset.pad_and_order_sequences(self.tokenizer.pad_id),
             worker_init_fn=init_worker,
         )
 
@@ -98,6 +105,6 @@ class QADataLoader:
             batch_size=config.eval.eval_batch_size,
             shuffle=False,
             num_workers=4,
-            collate_fn=QADataset.pad_and_order_sequences,
+            collate_fn=QADataset.pad_and_order_sequences(self.tokenizer.pad_id),
             worker_init_fn=init_worker,
         )

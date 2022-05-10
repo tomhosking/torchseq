@@ -6,10 +6,11 @@ from torchseq.utils.functions import onehot
 
 
 class NgramReranker(nn.Module):
-    def __init__(self, config, device, src_field):
+    def __init__(self, config, pad_id, device, src_field):
         super(NgramReranker, self).__init__()
         self.config = config
         self.device = device
+        self.pad_id = pad_id
 
         self.src_field = src_field
 
@@ -18,15 +19,13 @@ class NgramReranker(nn.Module):
         # Get k-hot representations of the ref and candidate sequences
         # Also add in the "beam" dimension
         refs_k_hot = (
-            torch.sum(
-                onehot(batch[self.src_field], N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id), -2
-            )
+            torch.sum(onehot(batch[self.src_field], N=self.config.prepro.vocab_size, ignore_index=self.pad_id), -2)
             .float()
             .unsqueeze(1)
         )
 
         candidates_k_hot = torch.sum(
-            onehot(candidates, N=self.config.prepro.vocab_size, ignore_index=Tokenizer().pad_id), -2
+            onehot(candidates, N=self.config.prepro.vocab_size, ignore_index=self.pad_id), -2
         ).float()
 
         # print(self.src_field, batch[self.src_field].shape)
@@ -56,4 +55,4 @@ class NgramReranker(nn.Module):
             else:
                 output = candidates[:, 0, :]
 
-        return output, torch.sum(output != Tokenizer().pad_id, dim=-1), scores
+        return output, torch.sum(output != self.pad_id, dim=-1), scores

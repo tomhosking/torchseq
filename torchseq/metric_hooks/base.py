@@ -1,9 +1,13 @@
+from lib2to3.pgen2 import token
+
+
 class MetricHook:
 
     type = None  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
-    def __init__(self, config, src_field=None, tgt_field=None):
+    def __init__(self, config, tokenizer, src_field=None, tgt_field=None):
         self.config = config
+        self.tokenizer = tokenizer
         self.src_field = src_field
         self.tgt_field = tgt_field
 
