@@ -1,4 +1,4 @@
-tensorboard==2.7.0
+tensorboard==2.9.0
 torch==1.11.0
 tqdm>=4.62
 scipy>=1.5
@@ -12,6 +12,7 @@ sacrebleu>=2.0
 py-rouge
 rouge-score
 opentsne
+sentencepiece==0.1.95
 
 matplotlib
 
