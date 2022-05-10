@@ -42,9 +42,10 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
 
 
 class PretrainedAdapterModel(nn.Module):
-    def __init__(self, config, output_tokenizer, src_field="s1", tgt_field="s1"):
+    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="s1", tgt_field="s1"):
         super().__init__()
         self.config = config
+        self.input_tokenizer = input_tokenizer
         self.output_tokenizer = output_tokenizer
 
         self.src_field = src_field

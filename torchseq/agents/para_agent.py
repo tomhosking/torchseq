@@ -61,7 +61,11 @@ class ParaphraseAgent(ModelAgent):
         # define model
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
             self.model = PretrainedAdapterModel(
-                self.config, self.output_tokenizer, src_field=self.src_field, tgt_field=self.tgt_field
+                self.config,
+                self.input_tokenizer,
+                self.output_tokenizer,
+                src_field=self.src_field,
+                tgt_field=self.tgt_field,
             )
         else:
             self.model = BottleneckAutoencoderModel(

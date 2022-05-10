@@ -146,43 +146,43 @@ def test_qg_transformer():
     assert abs(metrics["bleu"] - 18.38744) < 1e-2, "BLEU score is different to expected!"
 
 
-# @test_utils.slow
-# def test_qg_bart():
+@test_utils.slow
+def test_qg_bart():
 
-#     CONFIG = "./models/examples/20210223_191015_qg_bart/config.json"
-#     CHKPT = "./models/examples/20210223_191015_qg_bart/model/checkpoint.pt"
-#     DATA_PATH = "./data/"
-#     OUTPUT_PATH = "./runs/"
-#     SEED = 123
+    CONFIG = "./models/examples/20210223_191015_qg_bart/config.json"
+    CHKPT = "./models/examples/20210223_191015_qg_bart/model/checkpoint.pt"
+    DATA_PATH = "./data/"
+    OUTPUT_PATH = "./runs/"
+    SEED = 123
 
-#     # Most of this is copied from main.py
-#     use_cuda = torch.cuda.is_available()
+    # Most of this is copied from main.py
+    use_cuda = torch.cuda.is_available()
 
-#     assert use_cuda, "This test needs to run on GPU!"
+    assert use_cuda, "This test needs to run on GPU!"
 
-#     with open(CONFIG) as f:
-#         cfg_dict = json.load(f)
+    with open(CONFIG) as f:
+        cfg_dict = json.load(f)
 
-#         cfg_dict["eval"]["truncate_dataset"] = 100
+        cfg_dict["eval"]["truncate_dataset"] = 100
 
-#         config = Config(cfg_dict)
+        config = Config(cfg_dict)
 
-#     set_seed(SEED)
+    set_seed(SEED)
 
-#     if config.task == "aq":
-#         agent = AQAgent(config, None, OUTPUT_PATH, silent=True)
-#     elif config.task in ["para", "autoencoder"]:
-#         agent = ParaphraseAgent(config, None, OUTPUT_PATH, silent=True)
+    if config.task == "aq":
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+    elif config.task in ["para", "autoencoder"]:
+        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
-#     data_loader = dataloader_from_config(config)
+    data_loader = dataloader_from_config(config, DATA_PATH)
 
-#     agent.load_checkpoint(CHKPT)
-#     loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
+    agent.load_checkpoint(CHKPT)
+    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
 
-#     # Now check the output (for first 100 samples)
-#     assert abs(loss.item() - 15.60321) < 1e-3, "Loss is different to expected!"
-#     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-#     assert abs(metrics["bleu"] - 33.8669) < 1e-2, "BLEU score is different to expected!"
+    # Now check the output (for first 100 samples)
+    assert abs(loss.item() - 15.60321) < 1e-3, "Loss is different to expected!"
+    assert "bleu" in metrics, "BLEU is missing from output metrics!"
+    assert abs(metrics["bleu"] - 33.8669) < 1e-2, "BLEU score is different to expected!"
 
 
 @test_utils.slow
