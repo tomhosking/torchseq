@@ -21,7 +21,9 @@ class TeacherForcedSampler(nn.Module):
         # Create vector of SOS + placeholder for first prediction
 
         logits = (
-            torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-1e18")).to(self.device)
+            torch.FloatTensor(curr_batch_size, 1, self.config.prepro.get_first(["output_vocab_size", "vocab_size"]))
+            .fill_(float("-1e18"))
+            .to(self.device)
         )
 
         if MBART_HACK:

@@ -86,6 +86,9 @@ class Tokenizer:
         self.model_slug = model_slug
         self.data_path = data_path
 
+        # Most tokenizers should come with pretrained embeddings
+        self.has_embeddings = True
+
         if "mbart-" in model_slug:
             # self.engine = MBartTokenizerFast.from_pretrained("facebook/mbart-large-cc25")
             self.engine = MBartTokenizerFast.from_pretrained(
@@ -116,7 +119,7 @@ class Tokenizer:
             self.eos_id = self.engine.token_to_id("</s>")
 
         elif "ptb" in model_slug:
-            self.engine = WordLevelTokenizer.from_file(
+            self.engine = WordLevelTokenizer(
                 os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1]))
             )
 
@@ -126,6 +129,21 @@ class Tokenizer:
 
             self.bos_id = self.engine.token_to_id("<s>")
             self.eos_id = self.engine.token_to_id("</s>")
+
+            self.has_embeddings = False
+
+        elif "wordlevel" in model_slug:
+            vocab_file = model_slug.replace("wordlevel:", "")
+            self.engine = WordLevelTokenizer(os.path.join(self.data_path, vocab_file))
+
+            self.pad_id = self.engine.token_to_id("<pad>")
+            self.mask_id = self.engine.token_to_id("<mask>")
+            self.unk_id = self.engine.token_to_id("<unk>")
+
+            self.bos_id = self.engine.token_to_id("<s>")
+            self.eos_id = self.engine.token_to_id("</s>")
+
+            self.has_embeddings = False
 
         else:
             self.engine = BertWordPieceTokenizer.from_file(

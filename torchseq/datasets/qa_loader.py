@@ -18,14 +18,11 @@ class QADataLoader:
         :param config:
         """
         self.config = config
-        self.tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
+        self.tokenizer = Tokenizer(config.prepro.get_first(["input_tokenizer", "tokenizer"]), data_path)
         if config.prepro.get("output_tokenizer", None) != config.prepro.get("input_tokenizer", None):
             raise Exception("QADataset doesnt support different input and output tokenizers!")
 
         self.logger = logging.getLogger("DataLoader")
-
-        tokenizer.DATA_PATH = data_path
-        Tokenizer(config.prepro.tokenizer)
 
         train = QADataset(
             path=os.path.join(data_path, config.training.dataset) + "/"

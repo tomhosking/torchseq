@@ -21,8 +21,11 @@ class SequenceEncoder(nn.Module):
         if embeddings is not None:
             self.embeddings = embeddings
         else:
-            self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = self.tokenizer.get_embeddings()
+            self.embeddings = nn.Embedding(
+                config.prepro.get_first(["input_vocab_size", "vocab_size"]), config.raw_embedding_dim
+            ).cpu()
+            if self.tokenizer.has_embeddings:
+                self.embeddings.weight.data = self.tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
@@ -178,8 +181,11 @@ class ContextAnswerEncoder(nn.Module):
         if embeddings is not None:
             self.embeddings = embeddings
         else:
-            self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
+            self.embeddings = nn.Embedding(
+                config.prepro.get_first(["input_vocab_size", "vocab_size"]), config.raw_embedding_dim
+            ).cpu()
+            if self.input_tokenizer.has_embeddings:
+                self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(

@@ -8,14 +8,16 @@ from torchseq.models.multihead_output import MultiHeadOutput
 
 
 class TransformerLanguageModel(nn.Module):
-    def __init__(self, config, src_field="s1"):
+    def __init__(self, config, src_field="source"):
         super().__init__()
         self.config = config
 
         self.src_field = src_field
 
         # Embedding layers
-        self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
+        self.embeddings = nn.Embedding(
+            config.prepro.get_first(["input_vocab_size", "vocab_size"]), config.raw_embedding_dim
+        ).cpu()
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
@@ -34,7 +36,7 @@ class TransformerLanguageModel(nn.Module):
         encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
         self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
 
-        # self.output_projection = nn.Linear(config.encoder.embedding_dim, config.prepro.vocab_size, bias=False).cpu()
+        # self.output_projection = nn.Linear(config.encoder.embedding_dim, config.prepro.get('input_vocab_size', config.prepro.vocab_size), bias=False).cpu()
         # # Init output projection layer with embedding matrix
         # if config.encoder.embedding_dim == config.raw_embedding_dim:
         #     self.output_projection.weight.data = self.embeddings.weight.data
@@ -46,7 +48,7 @@ class TransformerLanguageModel(nn.Module):
             projection_init = None
         self.output_projection = MultiHeadOutput(
             config.encoder.embedding_dim,
-            config.prepro.vocab_size,
+            config.prepro.get_first(["input_vocab_size", "vocab_size"]),
             num_heads=config.data.get("output_projection_heads", 1),
             projection_init=projection_init,
             freeze_projection=config.freeze_projection,

@@ -106,8 +106,8 @@ class HRQAggregationMetricHook(MetricHook):
                 "path": "opagg/space-filtered-all",
                 "filename": "space_reviews.{split}",
                 "field_map": [
-                    {"type": "copy", "from": "sentence", "to": "s2"},
-                    {"type": "copy", "from": "sentence", "to": "s1"},
+                    {"type": "copy", "from": "sentence", "to": "target"},
+                    {"type": "copy", "from": "sentence", "to": "source"},
                 ],
             }
 
@@ -124,7 +124,7 @@ class HRQAggregationMetricHook(MetricHook):
             config_forced = Config(cfg_dict)
 
             # checkpoint_path = path_to_model + "/model/checkpoint.pt"
-            # instance = ParaphraseAgent(config=config, run_id=None, output_path=None, data_path='../../data/', silent=False, verbose=False, training_mode=False)
+            # instance = Seq2SeqAgent(config=config, run_id=None, output_path=None, data_path='../../data/', silent=False, verbose=False, training_mode=False)
             # instance.load_checkpoint(checkpoint_path)
             # instance.model.eval()
 
@@ -168,8 +168,8 @@ class HRQAggregationMetricHook(MetricHook):
             "path": "opagg/space-filtered-all",
             "filename": "space_reviews.{split}",
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "s2"},
-                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
             ],
         }
 
@@ -188,7 +188,7 @@ class HRQAggregationMetricHook(MetricHook):
         data_loader = JsonDataLoader(config_nli, data_path=agent.data_path)
 
         # checkpoint_path = path_to_model + "/model/checkpoint.pt"
-        # instance = ParaphraseAgent(config=config, run_id=None, output_path=None, data_path='../../data/', silent=True, verbose=False, training_mode=False)
+        # instance = Seq2SeqAgent(config=config, run_id=None, output_path=None, data_path='../../data/', silent=True, verbose=False, training_mode=False)
         # instance.load_checkpoint(checkpoint_path)
         # instance.model.eval()
 
@@ -197,8 +197,8 @@ class HRQAggregationMetricHook(MetricHook):
         config_forced["json_dataset"] = {
             "path": config.eval.metrics.hrq_agg.dataset_all,
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "s2"},
-                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
         }
@@ -628,8 +628,8 @@ class HRQAggregationMetricHook(MetricHook):
             "path": config.eval.metrics.hrq_agg.dataset_all,
             "filename": "space_reviews.{split}",
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "s2"},
-                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
             ],
         }
 
@@ -688,8 +688,8 @@ class HRQAggregationMetricHook(MetricHook):
         config_forced["json_dataset"] = {
             "path": config.eval.metrics.hrq_agg.dataset_all,
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "s2"},
-                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
                 {"type": "copy", "from": "codes", "to": "forced_codes"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
@@ -713,8 +713,8 @@ class HRQAggregationMetricHook(MetricHook):
             "path": config.eval.metrics.hrq_agg.dataset_all,
             "filename": "space_reviews.{split}",
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "s2"},
-                {"type": "copy", "from": "sentence", "to": "s1"},
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
                 {"type": "copy", "from": "residual_mask", "to": "residual_mask"},
             ],

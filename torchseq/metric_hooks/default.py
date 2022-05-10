@@ -20,7 +20,7 @@ class DefaultMetricHook(MetricHook):
             get_perplexity(
                 logits,
                 batch[self.tgt_field],
-                vocab_size=self.config.prepro.vocab_size,
+                vocab_size=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
                 ignore_index=self.tokenizer.pad_id,
             ).tolist()
         )

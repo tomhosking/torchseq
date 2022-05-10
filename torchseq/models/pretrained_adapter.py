@@ -42,7 +42,7 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
 
 
 class PretrainedAdapterModel(nn.Module):
-    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="s1", tgt_field="s1"):
+    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="source", tgt_field="source"):
         super().__init__()
         self.config = config
         self.input_tokenizer = input_tokenizer
@@ -99,7 +99,9 @@ class PretrainedAdapterModel(nn.Module):
                 if p.dim() > 1:
                     nn.init.xavier_uniform_(p, gain=self.config.encdec.get("adapter_init_scale", 1e-1))
 
-        self.output_projection = nn.Linear(config.decoder.embedding_dim, config.prepro.vocab_size, bias=False)
+        self.output_projection = nn.Linear(
+            config.decoder.embedding_dim, config.prepro.get_first(["output_vocab_size", "vocab_size"]), bias=False
+        )
         if config.decoder.embedding_dim == config.raw_embedding_dim:
             self.output_projection.weight.data = bart_model.shared.weight.data
 

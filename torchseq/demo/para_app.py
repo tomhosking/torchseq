@@ -5,7 +5,7 @@ import sys
 
 from flask import Flask, Response, current_app, redirect, request
 
-from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.datasets.json_loader import JsonDataLoader
 
 from torchseq.utils.config import Config
@@ -33,7 +33,7 @@ def generate():
     # ctxt = request.args['ctxt']
     # ans = request.args['ans']
 
-    # query = {"s1": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "s2": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
+    # query = {"source": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "target": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
     query = {"sem_input": s1, "tgt": "", "syn_input": s1, "question": "?", "answer": s1}
     if "template" in request.args:
 
@@ -96,8 +96,8 @@ def init():
 
         # cfg_dict["json_dataset"]["field_map"] = [
         #     {"from": "syn_input", "to": "template"},
-        #     {"from": "tgt", "to": "s2"},
-        #     {"from": "sem_input", "to": "s1"},
+        #     {"from": "tgt", "to": "target"},
+        #     {"from": "sem_input", "to": "source"},
         # ]
         # if "bottleneck" in cfg_dict:
         #     cfg_dict["bottleneck"]["prior_var_weight"] = 0.0
@@ -111,7 +111,7 @@ def init():
     # checkpoint_path = './runs/paraphrase/20200110_112727_kaggle_3x3/model/checkpoint.pth.tar'
     checkpoint_path = MODEL_PATH + "/model/checkpoint.pt"
 
-    app.agent = ParaphraseAgent(
+    app.agent = Seq2SeqAgent(
         config=config, run_id=None, output_path="./runs/parademo/", silent=True, verbose=False, training_mode=False
     )
 

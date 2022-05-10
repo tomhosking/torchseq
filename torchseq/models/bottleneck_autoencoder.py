@@ -13,7 +13,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 
 
 class BottleneckAutoencoderModel(nn.Module):
-    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="s1"):
+    def __init__(self, config, input_tokenizer, output_tokenizer, src_field="source"):
         super().__init__()
         self.config = config
         self.input_tokenizer = input_tokenizer

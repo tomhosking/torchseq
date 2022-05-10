@@ -13,6 +13,13 @@ class Config(object):
     def get(self, key, default=None):
         return self.data.get(key, default)
 
+    def get_first(self, keys):
+        for key in keys:
+            if key in self.data:
+                return self.data[key]
+        else:
+            raise KeyError
+
 
 def merge_cfg_dicts(main_cfg, cfg_mask):
     for k, v in cfg_mask.items():

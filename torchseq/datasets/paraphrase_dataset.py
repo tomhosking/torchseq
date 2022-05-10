@@ -37,7 +37,7 @@ class ParaphraseDataset(Dataset):
                         print(line)
                         exit()
                     is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
-                    sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
+                    sample = {"source": x[0], "target": x[1], "is_para": is_para}
                     self.samples.append(sample)
 
             if length_limit is not None:
@@ -77,22 +77,26 @@ class ParaphraseDataset(Dataset):
     #                     print(line)
     #                     exit()
     #                 is_para = (True if int(x[2]) > 0 else False) if len(x) > 2 else True
-    #                 sample = {"s1": x[0], "s2": x[1], "is_para": is_para}
+    #                 sample = {"source": x[0], "target": x[1], "is_para": is_para}
     #                 yield self.to_tensor(sample, tok_window=self.config.prepro.tok_window)
 
     @staticmethod
     def to_tensor(x, tok_window=64):
         parsed_triple = ParaphrasePair(
-            x["s1"], x["s2"], x.get("template", None), is_paraphrase=x.get("is_para", True), tok_window=tok_window
+            x["source"],
+            x["target"],
+            x.get("template", None),
+            is_paraphrase=x.get("is_para", True),
+            tok_window=tok_window,
         )
 
         sample = {
-            "s1": torch.LongTensor(parsed_triple.s1_as_ids()),
-            "s2": torch.LongTensor(parsed_triple.s2_as_ids()),
+            "source": torch.LongTensor(parsed_triple.s1_as_ids()),
+            "target": torch.LongTensor(parsed_triple.s2_as_ids()),
             "s1_len": torch.LongTensor([len(parsed_triple._s1_doc)]),
             "s2_len": torch.LongTensor([len(parsed_triple._s2_doc)]),
-            "s1_text": x["s1"],
-            "s2_text": x["s2"],
+            "s1_text": x["source"],
+            "s2_text": x["target"],
             "is_paraphrase": torch.LongTensor([1 * parsed_triple.is_paraphrase]),
         }
 

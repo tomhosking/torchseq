@@ -15,7 +15,7 @@ from torchseq.datasets.qa_dataset import QADataset
 from torchseq.datasets.json_dataset import JsonDataset
 
 
-class ParaphraseAgent(ModelAgent):
+class Seq2SeqAgent(ModelAgent):
     def __init__(
         self,
         config,
@@ -30,10 +30,10 @@ class ParaphraseAgent(ModelAgent):
     ):
         super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, cache_root)
 
-        self.tgt_field = "s1" if self.config.training.data.get("flip_pairs", False) else "s2"
+        self.tgt_field = "target" if not self.config.training.data.get("flip_pairs", False) else "source"
 
         if self.config.training.dataset is None:
-            self.src_field = "s2"
+            self.src_field = "source"
         elif self.config.training.dataset in [
             "squad",
             "squad_nq_newsqa",
@@ -46,9 +46,9 @@ class ParaphraseAgent(ModelAgent):
             self.tgt_field = "q"
         else:
             self.src_field = (
-                "s2"
+                "target"
                 if (self.config.task == "autoencoder" or self.config.training.data.get("flip_pairs", False))
-                else "s1"
+                else "source"
             )
 
         # define loss
@@ -116,7 +116,7 @@ class ParaphraseAgent(ModelAgent):
 
     # def text_to_batch(self, x, device):
     #     if self.config.training.dataset in ["squad"]:
-    #         # x["s2"] = ""
+    #         # x["target"] = ""
 
     #         return {
     #             k: (v.to(self.device) if k[-5:] != "_text" else v)
@@ -127,8 +127,8 @@ class ParaphraseAgent(ModelAgent):
     #     elif self.config.training.dataset == "json":
     #         if self.tgt_field not in x:
     #             x[self.tgt_field] = ""
-    #         if "s1" not in x:
-    #             x["s1"] = ""
+    #         if "source" not in x:
+    #             x["source"] = ""
 
     #         fields = self.config.json_dataset.data["field_map"]
 
@@ -141,8 +141,8 @@ class ParaphraseAgent(ModelAgent):
     #     else:
     #         if self.tgt_field not in x:
     #             x[self.tgt_field] = ""
-    #         if "s1" not in x:
-    #             x["s1"] = ""
+    #         if "source" not in x:
+    #             x["source"] = ""
 
     #         return {
     #             k: (v.to(self.device) if k[-5:] != "_text" else v)

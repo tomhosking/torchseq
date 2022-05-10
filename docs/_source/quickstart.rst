@@ -53,7 +53,7 @@ Scripting
 You can also invoke TorchSeq from within a script, like this:
 
 ```
-from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.datasets.json_loader import JsonDataLoader
 
 from torchseq.utils.config import Config
@@ -67,7 +67,7 @@ data_loader = JsonDataLoader(config)
 
 checkpoint_path = path_to_model + "/model/checkpoint.pt"
 
-instance = ParaphraseAgent(config=config, run_id=None, output_path="./runs/demo/", silent=True, verbose=False)
+instance = Seq2SeqAgent(config=config, run_id=None, output_path="./runs/demo/", silent=True, verbose=False)
 
 instance.load_checkpoint(checkpoint_path)
 instance.model.eval()

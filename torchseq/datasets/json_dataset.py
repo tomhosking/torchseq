@@ -105,9 +105,9 @@ class JsonDataset(Dataset):
         batch = {k + "_text": v for k, v in transformed.items()}
         for f in fields:
             # HACK: this should be in a config somewhere...
-            if include_lang_codes and f["to"] == "s1":
+            if include_lang_codes and f["to"] == "source":
                 lang_tok = [src_lang_token]
-            elif include_lang_codes and f["to"] == "s2":
+            elif include_lang_codes and f["to"] == "target":
                 lang_tok = [tgt_lang_token]
             else:
                 lang_tok = []
@@ -134,7 +134,7 @@ class JsonDataset(Dataset):
                 batch[f["to"]] = field_values
 
             # HACK: hard coded field name!
-            if f["to"] == "s1" and mask_prob > 0:
+            if f["to"] == "source" and mask_prob > 0:
 
                 probs = torch.rand(*batch[f["to"]].shape, device=batch[f["to"]].device)
                 mask = torch.logical_and(

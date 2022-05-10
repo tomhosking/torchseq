@@ -10,7 +10,7 @@ import torchseq
 from torchseq.utils.wandb import wandb_log
 
 from torchseq.agents.aq_agent import AQAgent
-from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
@@ -23,7 +23,13 @@ from torchseq.datasets.builder import dataloader_from_config
 import transformers
 
 
-AGENT_TYPES = {"aq": AQAgent, "langmodel": LangModelAgent, "para": ParaphraseAgent, "autoencoder": ParaphraseAgent}
+AGENT_TYPES = {
+    "aq": AQAgent,
+    "langmodel": LangModelAgent,
+    "para": Seq2SeqAgent,
+    "seq2seq": Seq2SeqAgent,
+    "autoencoder": Seq2SeqAgent,
+}
 
 """
 Entry point for torchseq CLI

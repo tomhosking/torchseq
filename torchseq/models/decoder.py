@@ -18,8 +18,11 @@ class SequenceDecoder(nn.Module):
         if embeddings is not None:
             self.embeddings = embeddings
         else:
-            self.embeddings = nn.Embedding(config.prepro.vocab_size, config.raw_embedding_dim).cpu()
-            self.embeddings.weight.data = self.tokenizer.get_embeddings()
+            self.embeddings = nn.Embedding(
+                config.prepro.get_first(["output_vocab_size", "vocab_size"]), config.raw_embedding_dim
+            ).cpu()
+            if self.tokenizer.has_embeddings:
+                self.embeddings.weight.data = self.tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         decoder_layer = nn.TransformerDecoderLayer(
@@ -32,10 +35,13 @@ class SequenceDecoder(nn.Module):
         decoder_norm = nn.LayerNorm(config.decoder.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
 
-        if config.decoder.embedding_dim == config.raw_embedding_dim and config.data.get("init_projection", True):
+        projection_init = None
+        if (
+            config.decoder.embedding_dim == config.raw_embedding_dim
+            and config.data.get("init_projection", True)
+            and self.tokenizer.has_embeddings
+        ):
             projection_init = self.tokenizer.get_embeddings()
-        else:
-            projection_init = None
 
         if (
             config.data.get("output_projection_heads", 1) > 1
@@ -45,7 +51,7 @@ class SequenceDecoder(nn.Module):
         ):
             self.output_projection = MultiHeadOutput(
                 config.decoder.embedding_dim,
-                config.prepro.vocab_size,
+                config.prepro.get_first(["output_vocab_size", "vocab_size"]),
                 num_heads=config.data.get("output_projection_heads", 1),
                 num_projections=config.data.get("output_projection_embeddings", 1),
                 projection_init=projection_init,
@@ -55,7 +61,9 @@ class SequenceDecoder(nn.Module):
             ).cpu()
         else:
             self.output_projection = nn.Linear(
-                config.decoder.embedding_dim, config.prepro.vocab_size, bias=False
+                config.decoder.embedding_dim,
+                config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                bias=False,
             ).cpu()
             # Init output projection layer with embedding matrix
             if projection_init is not None:

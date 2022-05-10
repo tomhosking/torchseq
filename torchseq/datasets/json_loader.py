@@ -19,8 +19,8 @@ class JsonDataLoader:
         self.config = config
         self.logger = logging.getLogger("DataLoader")
 
-        self.input_tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
-        self.output_tokenizer = Tokenizer(config.prepro.get("output_tokenizer", config.prepro.tokenizer), data_path)
+        self.input_tokenizer = Tokenizer(config.prepro.get_first(["input_tokenizer", "tokenizer"]), data_path)
+        self.output_tokenizer = Tokenizer(config.prepro.get_first(["output_tokenizer", "tokenizer"]), data_path)
 
         if self.input_tokenizer.pad_id != self.output_tokenizer.pad_id:
             raise Exception(

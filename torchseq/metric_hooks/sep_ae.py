@@ -130,9 +130,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "tgt", "to": "target"},
                 {"type": "copy", "from": "syn_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
         config_gen_with_templ["eval"]["topk"] = 1
@@ -180,9 +180,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
         config_gen_noised["eval"]["topk"] = 1
@@ -246,9 +246,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "tgt", "to": "target"},
                 {"type": "copy", "from": "syn_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
         }
@@ -328,9 +328,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
         }
@@ -405,9 +405,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_with_templ["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
+                {"type": "copy", "from": "tgt", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
                 {"type": "copy", "from": "head_mask", "to": "head_mask"},
             ],
         }
@@ -472,8 +472,8 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["json_dataset"] = {
             "path": "wikianswers-para-splitforgeneval",
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "tgt", "to": "target"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
         config_gen_noised["eval"]["topk"] = 1
@@ -534,9 +534,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
                 {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
             ],
         }
@@ -604,8 +604,8 @@ class SepAEMetricHook(MetricHook):
             cfg_dict["json_dataset"] = {
                 "path": dataset_all,
                 "field_map": [
-                    {"type": "copy", "from": "q", "to": "s2"},
-                    {"type": "copy", "from": "q", "to": "s1"},
+                    {"type": "copy", "from": "q", "to": "target"},
+                    {"type": "copy", "from": "q", "to": "source"},
                 ],
             }
 
@@ -845,9 +845,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
         config_gen_noised["eval"]["topk"] = 1
@@ -923,9 +923,9 @@ class SepAEMetricHook(MetricHook):
         config_gen_eval["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
         config_gen_eval["eval"]["topk"] = 1
@@ -990,9 +990,9 @@ class SepAEMetricHook(MetricHook):
         config_pred_diversity["json_dataset"] = {
             "path": config.eval.metrics.sep_ae.eval_dataset,
             "field_map": [
-                {"type": "copy", "from": "sem_input", "to": "s2"},
+                {"type": "copy", "from": "sem_input", "to": "target"},
                 {"type": "copy", "from": "sem_input", "to": "template"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
                 {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
             ],
         }
@@ -1081,8 +1081,8 @@ class SepAEMetricHook(MetricHook):
         config_gen_noised["json_dataset"] = {
             "path": "wikianswers-para-splitforgeneval",
             "field_map": [
-                {"type": "copy", "from": "tgt", "to": "s2"},
-                {"type": "copy", "from": "sem_input", "to": "s1"},
+                {"type": "copy", "from": "tgt", "to": "target"},
+                {"type": "copy", "from": "sem_input", "to": "source"},
             ],
         }
 

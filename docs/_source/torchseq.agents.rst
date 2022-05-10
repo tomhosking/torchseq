@@ -39,7 +39,7 @@ torchseq.agents.model\_agent module
 torchseq.agents.para\_agent module
 ----------------------------------
 
-.. automodule:: torchseq.agents.para_agent
+.. automodule:: torchseq.agents.seq2seq_agent
    :members:
    :undoc-members:
    :show-inheritance:

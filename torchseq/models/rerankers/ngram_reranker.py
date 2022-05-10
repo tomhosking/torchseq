@@ -19,13 +19,25 @@ class NgramReranker(nn.Module):
         # Get k-hot representations of the ref and candidate sequences
         # Also add in the "beam" dimension
         refs_k_hot = (
-            torch.sum(onehot(batch[self.src_field], N=self.config.prepro.vocab_size, ignore_index=self.pad_id), -2)
+            torch.sum(
+                onehot(
+                    batch[self.src_field],
+                    N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                    ignore_index=self.pad_id,
+                ),
+                -2,
+            )
             .float()
             .unsqueeze(1)
         )
 
         candidates_k_hot = torch.sum(
-            onehot(candidates, N=self.config.prepro.vocab_size, ignore_index=self.pad_id), -2
+            onehot(
+                candidates,
+                N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                ignore_index=self.pad_id,
+            ),
+            -2,
         ).float()
 
         # print(self.src_field, batch[self.src_field].shape)

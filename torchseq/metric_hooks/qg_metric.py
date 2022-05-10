@@ -25,7 +25,11 @@ class QGMetricHook(MetricHook):
             top_p = 0.9
 
         nucleus_prob = torch.softmax(top_k_top_p_filtering(logits, top_p=top_p), dim=-1)
-        gt_onehot = onehot(batch[self.tgt_field], N=self.config.prepro.vocab_size, ignore_index=self.tokenizer.pad_id)
+        gt_onehot = onehot(
+            batch[self.tgt_field],
+            N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+            ignore_index=self.tokenizer.pad_id,
+        )
         accuracy = torch.sum(torch.sum(nucleus_prob * gt_onehot, dim=-1), dim=-1) / (
             batch[self.tgt_field + "_len"] - 1
         )

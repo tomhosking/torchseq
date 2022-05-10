@@ -24,7 +24,6 @@ class WordLevelTokenizer(BaseTokenizer):
         unicode_normalizer: Optional[str] = None,
     ):
         if vocab_file is not None:
-            print(vocab_file)
             tokenizer = Tokenizer(WordLevel(vocab_file))
         else:
             tokenizer = Tokenizer(WordLevel())

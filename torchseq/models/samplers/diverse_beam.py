@@ -50,7 +50,9 @@ class DiverseBeamSearchSampler(nn.Module):
         output_done = torch.BoolTensor(curr_batch_size, beam_width).fill_(False).to(self.device)
         padding = torch.LongTensor(curr_batch_size, beam_width).fill_(self.tokenizer.pad_id).to(self.device)
         pad_probs = (
-            torch.FloatTensor(curr_batch_size, beam_width, self.config.prepro.vocab_size)
+            torch.FloatTensor(
+                curr_batch_size, beam_width, self.config.prepro.get_first(["output_vocab_size", "vocab_size"])
+            )
             .fill_(float("-inf"))
             .to(self.device)
         )
@@ -66,13 +68,20 @@ class DiverseBeamSearchSampler(nn.Module):
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
-            new_logits = new_logits.view(curr_batch_size, beam_width, -1, self.config.prepro.vocab_size)
+            new_logits = new_logits.view(
+                curr_batch_size,
+                beam_width,
+                -1,
+                self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+            )
             output_done = (output_seq[:, :, -1] == self.tokenizer.pad_id) | (
                 output_seq[:, :, -1] == self.tokenizer.eos_id
             )
 
             if prevent_repetition:
-                one_hot_prev = onehot(output_seq[:, :, -1], N=self.config.prepro.vocab_size)
+                one_hot_prev = onehot(
+                    output_seq[:, :, -1], N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"])
+                )
                 new_logits[:, :, -1, :] = new_logits[:, :, -1, :] + (one_hot_prev * float("-1e-16"))
 
             new_log_probs = torch.where(
@@ -103,7 +112,9 @@ class DiverseBeamSearchSampler(nn.Module):
                         used_ids = torch.cat([seq[:, :, -1] for seq in new_output[:gix]], dim=1)
 
                         used_ids_onehot = onehot(
-                            used_ids, N=self.config.prepro.vocab_size, ignore_index=self.tokenizer.pad_id
+                            used_ids,
+                            N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                            ignore_index=self.tokenizer.pad_id,
                         )
 
                         # build a mask of the already used tokens

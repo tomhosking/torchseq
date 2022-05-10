@@ -22,7 +22,9 @@ class GreedySampler(nn.Module):
         # Create vector of SOS + placeholder for first prediction
         output = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.bos_id).to(self.device)
         logits = (
-            torch.FloatTensor(curr_batch_size, 1, self.config.prepro.vocab_size).fill_(float("-inf")).to(self.device)
+            torch.FloatTensor(curr_batch_size, 1, self.config.prepro.get_first(["output_vocab_size", "vocab_size"]))
+            .fill_(float("-inf"))
+            .to(self.device)
         )
         logits[:, :, self.tokenizer.bos_id] = float("inf")
 

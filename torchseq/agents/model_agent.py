@@ -77,8 +77,8 @@ class ModelAgent(BaseAgent):
 
         set_seed(config.get("seed", 123))
 
-        self.input_tokenizer = Tokenizer(config.prepro.get("input_tokenizer", config.prepro.tokenizer), data_path)
-        self.output_tokenizer = Tokenizer(config.prepro.get("output_tokenizer", config.prepro.tokenizer), data_path)
+        self.input_tokenizer = Tokenizer(config.prepro.get_first(["input_tokenizer", "tokenizer"]), data_path)
+        self.output_tokenizer = Tokenizer(config.prepro.get_first(["output_tokenizer", "tokenizer"]), data_path)
 
         # Slightly hacky way of allowing for inference-only use
         if run_id is not None:

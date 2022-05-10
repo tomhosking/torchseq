@@ -8,7 +8,7 @@ import torch
 from . import utils as test_utils
 
 from torchseq.agents.aq_agent import AQAgent
-from torchseq.agents.para_agent import ParaphraseAgent
+from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
 from torchseq.utils.seed import set_seed
@@ -42,7 +42,7 @@ def test_bert_embeds():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config, DATA_PATH)
 
@@ -88,7 +88,7 @@ def test_paraphrasing_vae():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config, DATA_PATH)
 
@@ -132,7 +132,7 @@ def test_qg_transformer():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config, DATA_PATH)
 
@@ -172,7 +172,7 @@ def test_qg_bart():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = dataloader_from_config(config, DATA_PATH)
 
@@ -221,7 +221,7 @@ def test_separator():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
@@ -236,8 +236,8 @@ def test_separator():
 @test_utils.slow
 def test_hrq():
 
-    CONFIG = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
-    CHKPT = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
+    CONFIG = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
+    CHKPT = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -275,7 +275,7 @@ def test_hrq():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
@@ -291,8 +291,8 @@ def test_hrq():
 @test_utils.slow
 def test_hrq_codepred():
 
-    CONFIG = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
-    CHKPT = "./models/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
+    CONFIG = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
+    CHKPT = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -325,7 +325,7 @@ def test_hrq_codepred():
     if config.task == "aq":
         agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
     elif config.task in ["para", "autoencoder"]:
-        agent = ParaphraseAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
 
     data_loader = JsonDataLoader(config, DATA_PATH, test_samples=examples)
 
