@@ -45,7 +45,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_nli", False):
             logger.info("Running NLI eval")
-            self.scores["hrq_agg"], _, _ = HRQAggregationMetricHook.eval_nli(
+            self.scores["hrq_agg_nli"], _, _ = HRQAggregationMetricHook.eval_nli(
                 self.config,
                 agent,
                 test=use_test,
@@ -54,7 +54,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_tsne", False):
             logger.info("Running tsne eval")
-            self.scores["hrq_agg"], _ = HRQAggregationMetricHook.eval_tsne(
+            _, _ = HRQAggregationMetricHook.eval_tsne(
                 self.config,
                 agent,
                 test=use_test,
@@ -63,7 +63,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_specialisation", False):
             logger.info("Running specialisation eval")
-            self.scores["hrq_agg"] = HRQAggregationMetricHook.eval_specialisation(
+            self.scores["hrq_agg_specialisation"] = HRQAggregationMetricHook.eval_specialisation(
                 self.config,
                 agent,
                 test=use_test,
@@ -72,7 +72,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_generate_summaries", False):
             logger.info("Running generation using HRQ paths")
-            self.scores["hrq_agg"], _ = HRQAggregationMetricHook.eval_generate_summaries(
+            self.scores["hrq_agg_generation"], _ = HRQAggregationMetricHook.eval_generate_summaries(
                 self.config,
                 agent,
                 test=use_test,
@@ -81,7 +81,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_masked_generation", False):
             logger.info("Running generation with masking")
-            self.scores["hrq_agg"], _ = HRQAggregationMetricHook.eval_masked_generation(
+            self.scores["hrq_agg_masking"], _ = HRQAggregationMetricHook.eval_masked_generation(
                 self.config,
                 agent,
                 test=use_test,
@@ -213,9 +213,11 @@ class HRQAggregationMetricHook(MetricHook):
 
         inputs = [x["sentence"] for x in samples]
 
-        tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-base-mnli")
+        # tokenizer = AutoTokenizer.from_pretrained("microsoft/deberta-base-mnli")
+        tokenizer = AutoTokenizer.from_pretrained("tomhosking/deberta-v3-base-debiased-nli")
 
-        model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-base-mnli").cuda()
+        # model = AutoModelForSequenceClassification.from_pretrained("microsoft/deberta-base-mnli").cuda()
+        model = AutoModelForSequenceClassification.from_pretrained("tomhosking/deberta-v3-base-debiased-nli").cuda()
 
         # from sentence_transformers import SentenceTransformer
 
@@ -247,6 +249,9 @@ class HRQAggregationMetricHook(MetricHook):
             #     probs_masked[mask_len] = np.mean(sims)
 
         print("Batched NLI")
+        ENTAILMENT_LABEL = (
+            model.label2id["ENTAILMENT"] if "ENTAILMENT" in model.label2id else model.label2id["entailment"]
+        )
         for tgt_mask_len in tqdm(range(0, num_heads)):
             probs_masked[tgt_mask_len] = {}
             preds_by_depth[tgt_mask_len] = {}
@@ -263,7 +268,7 @@ class HRQAggregationMetricHook(MetricHook):
                 torch.cuda.empty_cache()
 
             probs_masked[tgt_mask_len]["inputs"] = np.mean(
-                [(x == 2) * 1.0 for x in preds_by_depth[tgt_mask_len]["inputs"]], axis=0
+                [(x == ENTAILMENT_LABEL) * 1.0 for x in preds_by_depth[tgt_mask_len]["inputs"]], axis=0
             )
 
             for src_mask_len in range(0, num_heads):
@@ -279,7 +284,7 @@ class HRQAggregationMetricHook(MetricHook):
                     torch.cuda.empty_cache()
 
                 probs_masked[tgt_mask_len][src_mask_len] = np.mean(
-                    [(x == 2) * 1.0 for x in preds_by_depth[tgt_mask_len][src_mask_len]], axis=0
+                    [(x == ENTAILMENT_LABEL) * 1.0 for x in preds_by_depth[tgt_mask_len][src_mask_len]], axis=0
                 )
 
         y_labels = ["inputs"] + list(range(num_heads))

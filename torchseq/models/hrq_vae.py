@@ -29,6 +29,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         learnable_priors=False,
         include_residual=False,
         residual_penalty=0.0,
+        adaptive_depth=True,
+        adaptive_penalty_weight=0.0,
     ):
 
         super(HierarchicalRefinementQuantizer, self).__init__()
@@ -53,6 +55,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._include_residual = include_residual
         self._residual_penalty = residual_penalty
 
+        self._adaptive_depth = adaptive_depth
+        self._adaptive_penalty_weight = adaptive_penalty_weight
+
         if head_dropout is not None and head_dropout > 0:
             self._head_dropout = torch.distributions.Bernoulli(1 - head_dropout)
         else:
@@ -62,13 +67,20 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self.dims = [self._embedding_dim] * self._num_heads
 
         self._embedding = nn.ModuleList(
-            [nn.Embedding(self._num_embeddings, self._embedding_dim) for _ in range(num_heads)]
+            [
+                nn.Embedding(
+                    self._num_embeddings, self._embedding_dim, padding_idx=(0 if self._adaptive_depth else None)
+                )
+                for _ in range(num_heads)
+            ]
         )
 
         for hix, embedding in enumerate(self._embedding):
             torch.nn.init.xavier_uniform_(
-                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
-            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
+                embedding.weight.data[1:, :], gain=6.0 * init_scale * init_decay_weight**hix
+            ) if init_embeds_xavier else embedding.weight.data[1:, :].normal_(
+                std=init_scale * init_decay_weight**hix
+            )
 
         if learnable_priors:
             self._learnable_priors = nn.ParameterList(
@@ -247,5 +259,11 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 loss += torch.linalg.norm(resid_error, dim=-1) * self._residual_penalty
 
         quantized = quantized.view(input_shape)
+
+        if self._adaptive_depth and self._adaptive_penalty_weight > 0:
+            adaptive_penalty = (
+                torch.cat(all_probs, dim=1)[:, :, 1:].sum(dim=2).sum(dim=1) * self._adaptive_penalty_weight
+            )
+            loss += adaptive_penalty
 
         return loss, quantized, vq_codes
