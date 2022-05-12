@@ -22,15 +22,20 @@ class SequenceEncoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(
-                config.prepro.get_first(["input_vocab_size", "vocab_size"]), config.raw_embedding_dim
+                config.prepro.get_first(["input_vocab_size", "vocab_size"]),
+                config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
-        if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
+        if self.config.encoder.embedding_dim != config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]):
             self.embedding_projection = nn.utils.weight_norm(
-                nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+                nn.Linear(
+                    config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
+                    config.encoder.embedding_dim,
+                    bias=False,
+                )
             )
 
         # Encoder/decoders
@@ -51,10 +56,14 @@ class SequenceEncoder(nn.Module):
             )
         if self.config.encdec.get("pre_residual", False):
             # self.encoder_projection = nn.utils.weight_norm(
-            #     nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+            #     nn.Linear(config.get_first(['input_raw_embedding_dim', 'raw_embedding_dim']), config.encoder.embedding_dim, bias=False)
             # )
             self.token_projection = nn.utils.weight_norm(
-                nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+                nn.Linear(
+                    config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
+                    config.encoder.embedding_dim,
+                    bias=False,
+                )
             )
 
         if self.config.encdec.data.get("pre_ln", False):
@@ -113,7 +122,9 @@ class SequenceEncoder(nn.Module):
         # Embed the input
         input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
 
-        if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
+        if self.config.encoder.embedding_dim != self.config.get_first(
+            ["input_raw_embedding_dim", "raw_embedding_dim"]
+        ):
             input_toks_embedded = self.embedding_projection(input_toks_embedded)
 
         input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
@@ -182,14 +193,19 @@ class ContextAnswerEncoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(
-                config.prepro.get_first(["input_vocab_size", "vocab_size"]), config.raw_embedding_dim
+                config.prepro.get_first(["input_vocab_size", "vocab_size"]),
+                config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
             if self.input_tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
-            nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
+            nn.Linear(
+                config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
+                config.encoder.embedding_dim,
+                bias=False,
+            )
         )
 
         self.bert_embedding_projection = nn.utils.weight_norm(
@@ -330,7 +346,9 @@ class ContextAnswerEncoder(nn.Module):
             ctxt_ans_embedded = self.bio_embeddings(a_pos).to(ctxt_seq.device)
 
             # Build the context
-            if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
+            if self.config.encoder.embedding_dim != self.config.get_first(
+                ["input_raw_embedding_dim", "raw_embedding_dim"]
+            ):
                 ctxt_toks_embedded = self.embedding_projection(ctxt_toks_embedded)
 
             if self.config.encdec.bert_encoder:
@@ -371,7 +389,9 @@ class ContextAnswerEncoder(nn.Module):
                 if "bart" in self.config.encdec.bert_model:
                     self.bert_encoding = self.bert_encoding.permute(1, 0, 2)
 
-                if self.config.raw_embedding_dim != self.config.encoder.embedding_dim:
+                if self.config.encoder.embedding_dim != self.config.get_first(
+                    ["input_raw_embedding_dim", "raw_embedding_dim"]
+                ):
                     self.bert_encoding = self.embedding_projection(self.bert_encoding)
 
                 if self.config.encdec.num_encoder_layers > 0:

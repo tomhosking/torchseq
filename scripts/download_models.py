@@ -19,8 +19,8 @@ nltk.download('wordnet', force=True)
 
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
-tokenizer = AutoTokenizer.from_pretrained("tomhosking/deberta-v3-base")
-model = AutoModelForSequenceClassification.from_pretrained("tomhosking/deberta-v3-base")
+tokenizer = AutoTokenizer.from_pretrained("tomhosking/deberta-v3-base-debiased-nli")
+model = AutoModelForSequenceClassification.from_pretrained("tomhosking/deberta-v3-base-debiased-nli")
 
 
 mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX', tgt_lang='en_XX')

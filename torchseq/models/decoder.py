@@ -19,7 +19,8 @@ class SequenceDecoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(
-                config.prepro.get_first(["output_vocab_size", "vocab_size"]), config.raw_embedding_dim
+                config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
@@ -37,7 +38,7 @@ class SequenceDecoder(nn.Module):
 
         projection_init = None
         if (
-            config.decoder.embedding_dim == config.raw_embedding_dim
+            config.decoder.embedding_dim == config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"])
             and config.data.get("init_projection", True)
             and self.tokenizer.has_embeddings
         ):
