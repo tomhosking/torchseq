@@ -252,6 +252,14 @@ class HierarchicalRefinementQuantizer(nn.Module):
             mask = torch.cumprod(mask, dim=1).to(quantized.device)
             quantized = quantized * mask
 
+        if self._adaptive_depth:
+            # propagate null codes down to lower levels
+            mask = torch.where(torch.stack(vq_codes, dim=1) > 0, 1, 0)
+            mask = mask.cumprod(dim=1)
+
+            vq_codes = (torch.stack(vq_codes, dim=1) * mask).unbind(dim=1)
+            quantized = quantized * mask.unsqueeze(dim=2)
+
         quantized = torch.sum(quantized, dim=1)
         if self._include_residual:
             quantized += resid_error * (residual_mask if residual_mask is not None else 1.0)
@@ -262,7 +270,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         if self._adaptive_depth and self._adaptive_penalty_weight > 0:
             adaptive_penalty = (
-                torch.cat(all_probs, dim=1)[:, :, 1:].sum(dim=2).sum(dim=1) * self._adaptive_penalty_weight
+                torch.cat(all_probs, dim=1)[:, :, 1:].mean(dim=2).mean(dim=1) * self._adaptive_penalty_weight
             )
             loss += adaptive_penalty
 

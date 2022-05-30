@@ -250,7 +250,9 @@ class HRQAggregationMetricHook(MetricHook):
 
         print("Batched NLI")
         ENTAILMENT_LABEL = (
-            model.label2id["ENTAILMENT"] if "ENTAILMENT" in model.label2id else model.label2id["entailment"]
+            model.config.label2id["ENTAILMENT"]
+            if "ENTAILMENT" in model.config.label2id
+            else model.config.label2id["entailment"]
         )
         for tgt_mask_len in tqdm(range(0, num_heads)):
             probs_masked[tgt_mask_len] = {}

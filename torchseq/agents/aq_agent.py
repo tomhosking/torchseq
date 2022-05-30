@@ -84,7 +84,7 @@ class AQAgent(ModelAgent):
         if self.config.training.get("xe_loss", True):
             xe_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
             # Although the teacher force decoder already forces the first token, it's nice not to get crazy losses recorded
-            if self.config.training.get("loss_offset", 0) > 0:
+            if self.config.training.get("loss_offset", 1) > 0:
                 xe_offset = self.config.training.get("loss_offset", 0)
                 # xe_mask = torch.ones_like(xe_loss)
                 # xe_mask[:, :xe_offset] = 0

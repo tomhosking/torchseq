@@ -142,8 +142,10 @@ def main():
         # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
-        if config.get("bottleneck", {}).get("quantizer_gumbel", False):
-            torch.save(agent.model.bottleneck.quantizer._embedding, agent.run_output_path + "/vqembedsinit.pt")
+        if config.get("bottleneck", {"modules": [{}]})["modules"][0].get("type", "hrqvae"):
+            torch.save(
+                agent.model.bottleneck.module_list[0].quantizer._embedding, agent.run_output_path + "/vqembeds_pre.pt"
+            )
 
         agent.train(data_loader)
         logger.info("...training done!")
@@ -169,6 +171,12 @@ def main():
     if args.validate:
         if data_loader.valid_loader is None:
             raise Exception("Selected dataset does not include a dev split - cannot run validation!")
+
+        # TEMP: save out the VQ embeds *after* they've been trained, for debug
+        if config.get("bottleneck", {"modules": [{}]})["modules"][0].get("type", "hrqvae"):
+            torch.save(
+                agent.model.bottleneck.module_list[0].quantizer._embedding, agent.run_output_path + "/vqembeds_post.pt"
+            )
 
         set_status_mckenzie("validating")
         # wandb_log({"status": "validating"}, step=agent.global_step)

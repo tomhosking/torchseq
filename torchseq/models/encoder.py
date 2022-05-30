@@ -50,6 +50,9 @@ class SequenceEncoder(nn.Module):
             else:
                 self.bert_encoder = BertModel.from_pretrained(config.encdec.bert_model)
 
+            if config.encoder.get("freeze_pretrained", False):
+                self.bert_encoder.requires_grad = False
+
         if self.config.encdec.get("residual", False):
             self.encoder_projection = nn.utils.weight_norm(
                 nn.Linear(config.encoder.embedding_dim * 2, config.encoder.embedding_dim, bias=False)

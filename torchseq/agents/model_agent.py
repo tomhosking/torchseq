@@ -320,7 +320,7 @@ class ModelAgent(BaseAgent):
 
         if self.config.training.get("xe_loss", True):
             elementwise_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
-            this_loss += elementwise_loss.sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
+            this_loss += elementwise_loss[:, 1:].sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         if "loss" in memory:
             this_loss += memory["loss"]
@@ -522,7 +522,7 @@ class ModelAgent(BaseAgent):
             _, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
-            normed_loss = torch.sum(this_loss, dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
+            normed_loss = torch.sum(this_loss[:, 1:], dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
             if "loss" in memory:
                 normed_loss += memory["loss"]
@@ -724,7 +724,7 @@ class ModelAgent(BaseAgent):
             )
         ):
 
-            self.all_metrics_at_best = {"nll": test_loss.item(), **all_metrics}
+            self.all_metrics_at_best = {"nll": test_loss.item(), "epoch": self.current_epoch, **all_metrics}
 
             wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()})
 

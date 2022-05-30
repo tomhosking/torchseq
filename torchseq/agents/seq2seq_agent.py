@@ -94,7 +94,7 @@ class Seq2SeqAgent(ModelAgent):
 
         if self.config.training.get("xe_loss", True):
             elementwise_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
-            this_loss += elementwise_loss.sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
+            this_loss += elementwise_loss[:, 1:].sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         if self.config.training.suppression_loss_weight > 0:
             this_loss += (
