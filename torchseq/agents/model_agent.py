@@ -42,6 +42,7 @@ from torchseq.metric_hooks.default import DefaultMetricHook
 from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 from torchseq.metric_hooks.hrq_agg import HRQAggregationMetricHook
 from torchseq.metric_hooks.rouge import RougeMetricHook
+from torchseq.metric_hooks.semparse import SemanticParsingMetricHook
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -92,7 +93,7 @@ class ModelAgent(BaseAgent):
             with open(os.path.join(self.run_output_path, "config.json"), "w") as f:
                 json.dump(config.data, f, indent=4)
 
-            Logger(log_path=self.run_output_path + "/logs")
+            Logger(log_path=self.run_output_path + "/logs", interval=config.training.get("log_interval", 100))
 
             self.cache = Cache(cache_root if cache_root is not None else self.run_output_path)
 
@@ -240,8 +241,10 @@ class ModelAgent(BaseAgent):
             )
 
         if self.training_mode:
-            # self.optimizers.load_state_dict(checkpoint["optimizer_state_dict"])
-            # self.schedulers.load_state_dict(checkpoint["scheduler_state_dict"])
+            if "optimizer_state_dict" in checkpoint:
+                self.optimizers.load_state_dict(checkpoint["optimizer_state_dict"])
+            if "scheduler_state_dict" in checkpoint:
+                self.schedulers.load_state_dict(checkpoint["scheduler_state_dict"])
 
             if self.config.training.optimizer.type == "sgd":
                 # Insert meta params if not there already
@@ -393,12 +396,12 @@ class ModelAgent(BaseAgent):
         One epoch of training
         :return:
         """
-
-        self.model.train()
-
         self.logger.info("## Training epoch {:}".format(self.current_epoch))
 
+        self.model.train()
         self.optimizers.zero_grad()
+
+        # Keep track of how many steps have accumulated for each optimizer
         steps_accum = [0 for _ in self.optimizers]
 
         start_step = self.global_step
@@ -406,6 +409,7 @@ class ModelAgent(BaseAgent):
         pbar = tqdm(data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
 
         for batch_idx, batch in enumerate(pbar):
+            # TRAIN STEP BEGINS
             batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
             curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -430,7 +434,7 @@ class ModelAgent(BaseAgent):
 
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.clip_gradient)
+            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.get("clip_gradient", 1e6))
 
             # Gradient accumulation
             for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
@@ -442,6 +446,8 @@ class ModelAgent(BaseAgent):
                     # If this is the default opt, update the global step param
                     if ix == len(self.optimizers) - 1:
                         self.global_step += 1
+
+            # TRAIN STEP ENDS
 
             if self.global_step % self.config.training.log_interval == 0:
                 # Loss is weighted for grad accumulation - unweight it for reporting
@@ -466,7 +472,7 @@ class ModelAgent(BaseAgent):
                     )
                     self.logger.info(self.output_tokenizer.decode(greedy_output.data[0][: output_lens[0]]))
 
-                torch.cuda.empty_cache()
+                # torch.cuda.empty_cache()
 
             if (
                 self.config.training.get("epoch_steps", 0) > 0
@@ -478,6 +484,9 @@ class ModelAgent(BaseAgent):
                     )
                 )
                 break
+
+        # Is this needed? empty cache at end of training loop just in case
+        torch.cuda.empty_cache()
 
     def step_validate(self, batch, tgt_field, sample_outputs=True, calculate_loss=True, reduce_outputs=True):
         """
@@ -529,9 +538,9 @@ class ModelAgent(BaseAgent):
 
             normed_loss = torch.mean(normed_loss, dim=0)
 
-            # if self.config.encdec.get("vector_quantized", False):
-            #     for h_ix in range(memory["vq_codes"].shape[1]):
-            #         self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix, :].tolist())
+            if "vq_codes" in memory:
+                for h_ix in range(memory["vq_codes"].shape[1]):
+                    self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix].tolist())
 
         else:
             logits = None
@@ -550,6 +559,8 @@ class ModelAgent(BaseAgent):
         gold_input = []  # needed for SARI
 
         memory_values_to_return = defaultdict(lambda: [])
+
+        self.vq_codes = defaultdict(lambda: [])
 
         self.model.eval()
 
@@ -675,6 +686,11 @@ class ModelAgent(BaseAgent):
         if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [SepAEMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
+        if slow_metrics and "semparse" in self.config.eval.get("metrics", {}).keys():
+            metric_hooks += [
+                SemanticParsingMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
+            ]
+
         if slow_metrics and "hrq_agg" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [
                 HRQAggregationMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
@@ -686,8 +702,6 @@ class ModelAgent(BaseAgent):
             and not training_loop
         ):
             metric_hooks += [RougeMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
-
-        self.vq_codes = defaultdict(lambda: [])
 
         if use_test:
             split_slug = "test"
@@ -705,8 +719,9 @@ class ModelAgent(BaseAgent):
             valid_loader, memory_keys_to_return, metric_hooks, use_test, training_loop
         )
 
-        # for h_ix, codes in self.vq_codes.items():
-        #     Logger().log_histogram("vq_codes/h" + str(h_ix), torch.Tensor(codes), self.global_step)
+        for h_ix, codes in self.vq_codes.items():
+            if len(codes) > 0:
+                Logger().log_histogram("vq_codes/h" + str(h_ix), codes, self.global_step)
 
         # if len(self.vq_codes) > 0 and self.run_id is not None:
         #     with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:
@@ -726,7 +741,7 @@ class ModelAgent(BaseAgent):
 
             self.all_metrics_at_best = {"nll": test_loss.item(), "epoch": self.current_epoch, **all_metrics}
 
-            wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()})
+            wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()}, step=self.global_step)
 
             if self.run_id is not None:
                 with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:

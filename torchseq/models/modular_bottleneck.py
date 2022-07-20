@@ -31,10 +31,25 @@ class ModularBottleneck(nn.Module):
 
         self.module_list = nn.ModuleList(modules)
 
+        if config.bottleneck.get("input_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
+            self.input_projection = nn.Linear(config.bottleneck.input_dim, config.bottleneck.embedding_dim, bias=False)
+        else:
+            self.input_projection = None
+
+        if config.bottleneck.get("output_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
+            self.output_projection = nn.Linear(
+                config.bottleneck.embedding_dim, config.bottleneck.output_dim, bias=False
+            )
+        else:
+            self.output_projection = None
+
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
 
         # if head_mask is not None:
         #     print('hm in bottleneck')
+
+        if self.input_projection is not None:
+            encoding = self.input_projection(encoding)
 
         encodings_post = []
         encodings_pooled = []
@@ -72,6 +87,10 @@ class ModularBottleneck(nn.Module):
         memory["encoding_pooled"] = torch.cat(encodings_pooled, dim=-1).detach()
         full_encoding_post = torch.cat(encodings_post, dim=-1)
 
+        if self.output_projection is not None:
+            memory["encoding_pooled"] = self.output_projection(memory["encoding_pooled"])
+            full_encoding_post = self.output_projection(full_encoding_post)
+
         return full_encoding_post, memory
 
 
@@ -85,7 +104,6 @@ class BottleneckPart(nn.Module):
         # print('building part, dim=',embedding_dim)
 
         if config.get("pooling", False):
-
             self.pooling = MultiHeadedPooling(
                 num_heads,
                 self.embedding_dim,
@@ -95,7 +113,11 @@ class BottleneckPart(nn.Module):
             )
             # print('built pooling, dim=', self.embedding_dim)
 
-        if config.get("type", None) == "vae":
+        if config.get("freeze_pooling", False):
+            for p in self.pooling.parameters():
+                p.requires_grad = False
+
+        if self.config.get("variational", False) or self.config.get("type", None) == "vae":
             # Extra modules for a variational bottleneck
             self.logvar_pooling = MultiHeadedPooling(
                 num_heads,

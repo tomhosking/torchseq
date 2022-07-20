@@ -408,7 +408,7 @@ class HRQAggregationMetricHook(MetricHook):
         colors = list(mcolors.XKCD_COLORS.values())
         np.random.shuffle(colors)
 
-        color_labels = [colors[x[0]] for x in codes]
+        color_labels = [colors[x[0] % len(colors)] for x in codes]
 
         marker_types = [
             "o",
@@ -448,8 +448,16 @@ class HRQAggregationMetricHook(MetricHook):
 
         unique_entities = list(set(entity_ids))
 
-        markers = [marker_types[codes[1] % len(marker_types)] for codes in codes]
-        patterns = [pattern_types[codes[2] % len(pattern_types)] for codes in codes]
+        if len(codes[0]) > 1:
+            markers = [marker_types[x[1] % len(marker_types)] for x in codes]
+        else:
+            markers = [marker_types[0] for x in codes]
+
+        if len(codes[0]) > 2:
+            patterns = [pattern_types[x[2] % len(pattern_types)] for x in codes]
+        else:
+            patterns = [pattern_types[0] for x in codes]
+
         for i, (x, y, c, m, p) in enumerate(
             zip(X_full_embedded.T[0], X_full_embedded.T[1], color_labels, markers, patterns)
         ):
@@ -463,15 +471,16 @@ class HRQAggregationMetricHook(MetricHook):
 
         plt.title(agent.run_id)
 
-        for hix in range(0, 2):
-            for i in range(LIMIT):
-                if unique_entities.index(entity_ids[i]) > 2 or unique_entities.index(entity_ids[i]) < 1:
-                    continue
-                from_coords = X_byhead_embedded[i : (i + 1), hix, :]
-                to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
-                ab_pairs = np.c_[from_coords, to_coords]
-                ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
-                ax.plot(*ab_args, c=entitycols[i], linewidth=3, alpha=0.05)
+        if num_heads > 1:
+            for hix in range(max(num_heads - 1, 0)):
+                for i in range(LIMIT):
+                    if unique_entities.index(entity_ids[i]) > 2 or unique_entities.index(entity_ids[i]) < 1:
+                        continue
+                    from_coords = X_byhead_embedded[i : (i + 1), hix, :]
+                    to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
+                    ab_pairs = np.c_[from_coords, to_coords]
+                    ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
+                    ax.plot(*ab_args, c=entitycols[i], linewidth=3, alpha=0.05)
         plt.savefig(agent.run_output_path + "/tsne_entity_overlay.pdf", bbox_inches="tight")
 
         if show_plot:
@@ -677,9 +686,9 @@ class HRQAggregationMetricHook(MetricHook):
 
         filtered_examples = []
         for entity, counter in codes_by_entity.items():
-            for codes, count in counter.most_common(5):
+            for x, count in counter.most_common(5):
                 filtered_examples.append(
-                    {"entity_id": entity, "codes": list(codes) + [0] * MASK_LENGTH, "sentence": "", "head_mask": mask}
+                    {"entity_id": entity, "codes": list(x) + [0] * MASK_LENGTH, "sentence": "", "head_mask": mask}
                 )
 
         # Generate!

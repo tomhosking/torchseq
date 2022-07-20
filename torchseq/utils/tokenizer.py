@@ -158,6 +158,8 @@ class Tokenizer:
             self.bos_id = self.engine.token_to_id("[CLS]")
             self.eos_id = self.engine.token_to_id("[SEP]")
 
+        self.vocab_size = self.engine.get_vocab_size()
+
     # instance = None
     # def __init__(self, model_slug=None):
     #     if not Tokenizer.instance and model_slug is not None:

@@ -142,9 +142,16 @@ def main():
         # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
-        if config.get("bottleneck", {"modules": [{}]})["modules"][0].get("type", "hrqvae"):
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        quantizer_index = None
+        if "vqvae" in bneck_types:
+            quantizer_index = bneck_types.index("vqvae")
+        if "hrqvae" in bneck_types:
+            quantizer_index = bneck_types.index("hrqvae")
+        if quantizer_index is not None:
             torch.save(
-                agent.model.bottleneck.module_list[0].quantizer._embedding, agent.run_output_path + "/vqembeds_pre.pt"
+                agent.model.bottleneck.module_list[quantizer_index].quantizer._embedding,
+                agent.run_output_path + "/vqembeds_pre.pt",
             )
 
         agent.train(data_loader)
@@ -173,9 +180,16 @@ def main():
             raise Exception("Selected dataset does not include a dev split - cannot run validation!")
 
         # TEMP: save out the VQ embeds *after* they've been trained, for debug
-        if config.get("bottleneck", {"modules": [{}]})["modules"][0].get("type", "hrqvae"):
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        quantizer_index = None
+        if "vqvae" in bneck_types:
+            quantizer_index = bneck_types.index("vqvae")
+        if "hrqvae" in bneck_types:
+            quantizer_index = bneck_types.index("hrqvae")
+        if quantizer_index is not None:
             torch.save(
-                agent.model.bottleneck.module_list[0].quantizer._embedding, agent.run_output_path + "/vqembeds_post.pt"
+                agent.model.bottleneck.module_list[quantizer_index].quantizer._embedding,
+                agent.run_output_path + "/vqembeds_post.pt",
             )
 
         set_status_mckenzie("validating")

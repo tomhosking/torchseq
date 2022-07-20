@@ -1,3 +1,4 @@
+from gc import freeze
 import torch
 import torch.nn as nn
 
@@ -34,7 +35,11 @@ class BottleneckAutoencoderModel(nn.Module):
 
         self.src_field = src_field
 
-        self.seq_encoder = SequenceEncoder(config, self.input_tokenizer)
+        self.seq_encoder = SequenceEncoder(
+            config,
+            self.input_tokenizer,
+            freeze_embeddings=config.encoder.get("freeze_embeddings", config.get("freeze_embeddings", False)),
+        )
 
         if config.bottleneck.get("modular", False):
             self.bottleneck = ModularBottleneck(config)
@@ -44,15 +49,30 @@ class BottleneckAutoencoderModel(nn.Module):
         self.seq_decoder = SequenceDecoder(config, self.output_tokenizer)
 
         if self.config.bottleneck.get("split_encoder", False):
-            self.seq_encoder_2 = SequenceEncoder(config, self.input_tokenizer)
-            self.bottleneck_2 = PoolingBottleneck(config)
+            self.seq_encoder_2 = SequenceEncoder(
+                config,
+                self.output_tokenizer
+                if self.config.bottleneck.get("template_tokenizer", "input") == "output"
+                else self.input_tokenizer,
+                freeze_embeddings=config.encoder2.get("freeze_embeddings", config.get("freeze_embeddings", False))
+                if "encoder2" in config.data
+                else config.freeze_embeddings,
+            )
+            # self.bottleneck_2 = PoolingBottleneck(config)
 
-            self.split_projection_1 = nn.utils.weight_norm(
-                nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
-            )
-            self.split_projection_2 = nn.utils.weight_norm(
-                nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
-            )
+            # self.split_projection_1 = nn.utils.weight_norm(
+            #     nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
+            # )
+            # self.split_projection_2 = nn.utils.weight_norm(
+            #     nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
+            # )
+
+        if self.config.encoder.get("freeze", False):
+            for p in self.seq_encoder.parameters():
+                p.requires_grad = False
+        if self.config.decoder.get("freeze", False):
+            for p in self.seq_decoder.parameters():
+                p.requires_grad = False
 
         if self.config.bottleneck.get("code_predictor", None) is not None:
             pred_config = self.config.bottleneck.code_predictor
@@ -142,33 +162,41 @@ class BottleneckAutoencoderModel(nn.Module):
                 )
                 batch["forced_codes"] = pred_codes
 
-            if self.config.bottleneck.get("split_encoder", False):
-                encoding2, memory = self.seq_encoder(batch[self.src_field], batch[self.src_field + "_len"], memory)
-                encoding_pooled2, memory = self.bottleneck(
-                    encoding2,
-                    memory,
-                    batch["_global_step"],
-                    forced_codes=batch.get("forced_codes", None),
-                    head_mask=batch.get("head_mask", None),
-                    residual_mask=batch.get("residual_mask", None),
-                )
+            # if self.config.bottleneck.get("split_encoder", False):
+            #     encoding2, memory = self.seq_encoder_2(batch[self.src_field], batch[self.src_field + "_len"], memory)
+            #     encoding_pooled2, memory = self.bottleneck(
+            #         encoding2,
+            #         memory,
+            #         batch["_global_step"],
+            #         forced_codes=batch.get("forced_codes", None),
+            #         head_mask=batch.get("head_mask", None),
+            #         residual_mask=batch.get("residual_mask", None),
+            #     )
 
-                # TODO: Instead of 2x full size encoders + down projection, change to 2x half size encoders
-                if self.config.encoder.embedding_dim != self.config.decoder.embedding_dim:
-                    encoding_pooled = torch.cat(
-                        [self.split_projection_1(encoding_pooled), self.split_projection_2(encoding_pooled2)], -1
-                    )
-                else:
-                    encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
+            #     # TODO: Instead of 2x full size encoders + down projection, change to 2x half size encoders
+            #     if self.config.encoder.embedding_dim != self.config.decoder.embedding_dim:
+            #         encoding_pooled = torch.cat(
+            #             [self.split_projection_1(encoding_pooled), self.split_projection_2(encoding_pooled2)], -1
+            #         )
+            #     else:
+            #         encoding_pooled = torch.cat([encoding_pooled, encoding_pooled2], -1)
 
             if "template" in batch:
                 template_memory = {}
-                template_encoding, template_memory = self.seq_encoder(
-                    batch["template"],
-                    batch["template_len"],
-                    template_memory,
-                    include_position=self.config.encoder.get("template_position_embeddings", True),
-                )
+                if self.config.bottleneck.get("split_encoder", False):
+                    template_encoding, template_memory = self.seq_encoder_2(
+                        batch["template"],
+                        batch["template_len"],
+                        template_memory,
+                        include_position=self.config.encoder.get("template_position_embeddings", True),
+                    )
+                else:
+                    template_encoding, template_memory = self.seq_encoder(
+                        batch["template"],
+                        batch["template_len"],
+                        template_memory,
+                        include_position=self.config.encoder.get("template_position_embeddings", True),
+                    )
 
                 if "forced_templ_encoding" in batch:
                     # print(batch["forced_templ_encoding"].shape, template_encoding)
@@ -187,23 +215,23 @@ class BottleneckAutoencoderModel(nn.Module):
                 if "loss" in memory:
                     memory["loss"] += template_memory["loss"]
 
-                if self.config.bottleneck.get("split_encoder", False):
-                    template_encoding2, memory = self.seq_encoder(
-                        batch["template"], batch["template_len"], template_memory
-                    )
-                    template_encoding_pooled2, memory = self.bottleneck(
-                        template_encoding2, template_memory, batch["_global_step"]
-                    )
+                # if self.config.bottleneck.get("split_encoder", False):
+                #     template_encoding2, memory = self.seq_encoder_2(
+                #         batch["template"], batch["template_len"], template_memory
+                #     )
+                #     template_encoding_pooled2, memory = self.bottleneck(
+                #         template_encoding2, template_memory, batch["_global_step"]
+                #     )
 
-                    template_encoding_pooled_joint = torch.cat(
-                        [
-                            self.split_projection_1(template_encoding_pooled),
-                            self.split_projection_2(template_encoding_pooled2),
-                        ],
-                        -1,
-                    )
+                #     template_encoding_pooled_joint = torch.cat(
+                #         [
+                #             self.split_projection_1(template_encoding_pooled),
+                #             self.split_projection_2(template_encoding_pooled2),
+                #         ],
+                #         -1,
+                #     )
 
-                    template_encoding_pooled = template_encoding_pooled_joint
+                #     template_encoding_pooled = template_encoding_pooled_joint
 
                 if self.config.bottleneck.get("use_templ_encoding", False):
                     if "vq_codes" in template_memory:

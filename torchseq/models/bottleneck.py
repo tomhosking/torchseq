@@ -1,3 +1,4 @@
+from audioop import bias
 import torch
 import torch.nn as nn
 from transformers import BartModel, BertModel
@@ -15,6 +16,18 @@ class PoolingBottleneck(nn.Module):
     def __init__(self, config, embeddings=None):
         super().__init__()
         self.config = config
+
+        if config.bottleneck.get("input_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
+            self.input_projection = nn.Linear(config.bottleneck.input_dim, config.bottleneck.embedding_dim, bias=False)
+        else:
+            self.input_projection = None
+
+        if config.bottleneck.get("output_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
+            self.output_projection = nn.Linear(
+                config.bottleneck.embedding_dim, config.bottleneck.output_dim, bias=False
+            )
+        else:
+            self.output_projection = None
 
         self.encoder_pooling = MultiHeadedPooling(
             config.encdec.num_heads,
@@ -89,6 +102,9 @@ class PoolingBottleneck(nn.Module):
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
+
+        if self.input_projection is not None:
+            encoding = self.input_projection(encoding)
 
         # Pool
         encoding_pooled = (
@@ -239,5 +255,8 @@ class PoolingBottleneck(nn.Module):
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += kl_loss * kl_weight
+
+        if self.output_projection is not None:
+            encoding_pooled = self.output_projection(encoding_pooled)
 
         return encoding_pooled, memory

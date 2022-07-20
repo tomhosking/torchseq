@@ -270,10 +270,14 @@ class SepAEMetricHook(MetricHook):
             )
         else:
             bneck_types = [x.type for x in agent.config.bottleneck.modules]
-            if "vqvae" not in bneck_types:
+            if "vqvae" in bneck_types:
+                quantizer_index = bneck_types.index("vqvae")
+            elif "hrqvae" in bneck_types:
+                quantizer_index = bneck_types.index("hrqvae")
+            else:
                 logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
-                return {}
-            quantizer_index = bneck_types.index("vqvae")
+                return {}, None
+
             num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
         scores = {}
@@ -685,7 +689,6 @@ class SepAEMetricHook(MetricHook):
         enforce_unique_codes=False,
         mask_length=0,
     ):
-        logger = logging.getLogger("SepAEMetric")
         sample_outputs = config.data["eval"].get("sample_outputs", True)
 
         if train_code_predictor:

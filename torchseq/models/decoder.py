@@ -6,6 +6,7 @@ import torch.nn as nn
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.functions import initialize_truncated_normal_
 
 
 class SequenceDecoder(nn.Module):
@@ -19,12 +20,19 @@ class SequenceDecoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(
-                config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                tokenizer.vocab_size,
                 config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
-            self.embeddings.weight.requires_grad = not config.freeze_embeddings
+            else:
+                torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
+                # initialize_truncated_normal_(self.embeddings.weight.data, std=0.02)
+            self.embeddings.weight.requires_grad = not (
+                config.decoder.get("freeze_embeddings", config.get("freeze_embeddings", False))
+                if "decoder" in config.data
+                else config.get("freeze_embeddings", False)
+            )
 
         decoder_layer = nn.TransformerDecoderLayer(
             config.decoder.embedding_dim,

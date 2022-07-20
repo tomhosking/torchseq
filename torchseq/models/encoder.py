@@ -9,10 +9,11 @@ from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.utils.tokenizer import Tokenizer
 
 import torchseq.models.transformer as custom_transformer
+from torchseq.utils.functions import initialize_truncated_normal_
 
 
 class SequenceEncoder(nn.Module):
-    def __init__(self, config, tokenizer, embeddings=None):
+    def __init__(self, config, tokenizer, embeddings=None, freeze_embeddings=False):
         super().__init__()
         self.config = config
         self.tokenizer = tokenizer
@@ -22,12 +23,15 @@ class SequenceEncoder(nn.Module):
             self.embeddings = embeddings
         else:
             self.embeddings = nn.Embedding(
-                config.prepro.get_first(["input_vocab_size", "vocab_size"]),
+                tokenizer.vocab_size,
                 config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
-            self.embeddings.weight.requires_grad = not config.freeze_embeddings
+            else:
+                torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
+                # initialize_truncated_normal_(self.embeddings.weight.data, std=0.02)
+            self.embeddings.weight.requires_grad = not freeze_embeddings
 
         if self.config.encoder.embedding_dim != config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]):
             self.embedding_projection = nn.utils.weight_norm(
@@ -186,7 +190,7 @@ class SequenceEncoder(nn.Module):
 
 
 class ContextAnswerEncoder(nn.Module):
-    def __init__(self, config, input_tokenizer, embeddings=None):
+    def __init__(self, config, input_tokenizer, embeddings=None, freeze_embeddings=False):
         super().__init__()
         self.config = config
         self.input_tokenizer = input_tokenizer
@@ -201,7 +205,7 @@ class ContextAnswerEncoder(nn.Module):
             ).cpu()
             if self.input_tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
-            self.embeddings.weight.requires_grad = not config.freeze_embeddings
+            self.embeddings.weight.requires_grad = not freeze_embeddings
 
         self.embedding_projection = nn.utils.weight_norm(
             nn.Linear(

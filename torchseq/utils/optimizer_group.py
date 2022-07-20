@@ -10,7 +10,8 @@ class OptimizerGroup:
         if not isinstance(state_dict_arr, list):
             state_dict_arr = [state_dict_arr]
         for ix, opt in enumerate(self.optimizers):
-            opt.load_state_dict(state_dict_arr[ix])
+            if state_dict_arr[ix] is not None:
+                opt.load_state_dict(state_dict_arr[ix])
 
     def state_dict(self):
         return [opt.state_dict() for opt in self.optimizers]
@@ -42,7 +43,8 @@ class SchedulerGroup:
         if not isinstance(state_dict_arr, list):
             state_dict_arr = [state_dict_arr]
         for ix, sched in enumerate(self.schedulers):
-            sched.load_state_dict(state_dict_arr[ix])
+            if state_dict_arr[ix] is not None:
+                sched.load_state_dict(state_dict_arr[ix])
 
     def state_dict(self):
         return [sched.state_dict() for sched in self.schedulers]

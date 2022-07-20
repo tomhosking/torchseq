@@ -26,7 +26,7 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.9.0',
-        'torch==1.11.0',
+        'torch==1.12.0',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
@@ -39,7 +39,8 @@ setuptools.setup(
         'wandb==0.12.11',
         'matplotlib',
         'opentsne',
-        'sentencepiece==0.1.95'
+        'sentencepiece==0.1.95',
+        'protobuf<4'
         # 'pytorch-lightning==1.5.9'
     ],
 )

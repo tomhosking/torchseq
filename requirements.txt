@@ -1,5 +1,5 @@
 tensorboard==2.9.0
-torch==1.11.0
+torch==1.12.0
 tqdm>=4.62
 scipy>=1.5
 # pytorch-lightning==1.5.9
@@ -17,6 +17,7 @@ sentencepiece==0.1.95
 matplotlib
 
 wandb==0.12.11
+protobuf<4
 
 pytest>=6.2
 pytest-cov>=2.12

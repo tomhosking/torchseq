@@ -1,8 +1,14 @@
-from torchseq.utils.functions import cos_sim, onehot
+from turtle import pos
+from torchseq.utils.functions import cos_sim, onehot, initialize_truncated_normal_, initialize_polar_normal_
 import torch
 import torch.nn as nn
 
-from math import e, floor, pow, exp
+from sklearn.cluster import KMeans
+
+
+from math import e, floor, pow, exp, sqrt
+
+from torchseq.utils.logging import Logger
 
 
 class HierarchicalRefinementQuantizer(nn.Module):
@@ -21,6 +27,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
         norm_loss_weight=None,
         init_decay_weight=0.5,
         init_embeds_xavier=True,
+        init_embeds_truncnorm=False,
+        init_embeds_uniform=False,
+        init_embeds_polar=False,
         init_delay_steps=None,
         init_dynamic_var=False,
         init_scale=1.0,
@@ -29,11 +38,33 @@ class HierarchicalRefinementQuantizer(nn.Module):
         learnable_priors=False,
         include_residual=False,
         residual_penalty=0.0,
-        adaptive_depth=True,
+        adaptive_depth=False,
         adaptive_penalty_weight=0.0,
+        residual_warmup_steps=0,
+        residual_dropout_steps=0,
+        kmeans_delay=0,
+        kl_weight=0.0,
+        pre_norm=False,
+        post_linear=False,
+        init_sphere=False,
+        soft_gumbel=False,
+        output_seq=False,
+        output_cumsum=False,
+        simple_norm=False,
+        logits_warmup_steps=0,
+        sqrt_distances=False,
+        learned_cluster_variances=False,
+        kl_warmup_steps=0,
+        commitment_weight=0,
+        freeze_embeddings=False,
+        detach=False,
+        debug={},
     ):
 
         super(HierarchicalRefinementQuantizer, self).__init__()
+
+        self._detach = detach
+        self._debug = debug
 
         self._num_embeddings = num_embeddings
         self._num_heads = num_heads
@@ -45,18 +76,34 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._temp_min = temp_min
         self._temp_schedule = temp_schedule
         self._temp_schedule_gamma = temp_schedule_gamma
+        self._soft_gumbel = soft_gumbel
 
         self._warmup_steps = warmup_steps
 
         self._cos_sim = use_cosine_similarities
 
         self._norm_loss_weight = norm_loss_weight
+        self._commitment_weight = commitment_weight
 
         self._include_residual = include_residual
         self._residual_penalty = residual_penalty
 
+        self._residual_warmup_steps = residual_warmup_steps
+        self._residual_dropout_steps = residual_dropout_steps
+
         self._adaptive_depth = adaptive_depth
         self._adaptive_penalty_weight = adaptive_penalty_weight
+
+        self._kmeans_delay = kmeans_delay
+
+        self._output_seq = output_seq
+        self._output_cumsum = output_cumsum
+
+        self._simple_norm = simple_norm
+
+        self._logits_warmup_steps = logits_warmup_steps
+
+        self._sqrt_distances = sqrt_distances
 
         if head_dropout is not None and head_dropout > 0:
             self._head_dropout = torch.distributions.Bernoulli(1 - head_dropout)
@@ -75,12 +122,45 @@ class HierarchicalRefinementQuantizer(nn.Module):
             ]
         )
 
+        if freeze_embeddings:
+            for p in self._embedding:
+                p.weight.requires_grad = False
+
+        if learned_cluster_variances:
+            self._cluster_variances = nn.Parameter(torch.ones(num_heads, num_embeddings))
+        else:
+            self._cluster_variances = None
+
+        init_ix = 1 if self._adaptive_depth else 0
         for hix, embedding in enumerate(self._embedding):
-            torch.nn.init.xavier_uniform_(
-                embedding.weight.data[1:, :], gain=6.0 * init_scale * init_decay_weight**hix
-            ) if init_embeds_xavier else embedding.weight.data[1:, :].normal_(
-                std=init_scale * init_decay_weight**hix
-            )
+            if init_embeds_xavier:
+                torch.nn.init.xavier_uniform_(
+                    embedding.weight.data[init_ix:, :], gain=6.0 * init_scale * init_decay_weight**hix
+                )
+            elif init_embeds_truncnorm:
+                initialize_truncated_normal_(
+                    embedding.weight.data[init_ix:, :], std=init_scale * init_decay_weight**hix
+                )  # / sqrt(self._embedding_dim)
+            elif init_embeds_uniform:
+                scale = init_scale * init_decay_weight**hix
+                embedding.weight.data[init_ix:, :].uniform_(-1.0 * scale, scale)
+            elif init_embeds_polar:
+                initialize_polar_normal_(
+                    embedding.weight.data[init_ix:, :], scale=init_scale * init_decay_weight**hix
+                )  # / sqrt(self._embedding_dim)
+            else:
+                embedding.weight.data[init_ix:, :].normal_(std=init_scale * init_decay_weight**hix)
+
+        if init_sphere:
+            for hix, embedding in enumerate(self._embedding):
+                embedding.weight.data[init_ix:, :] = (
+                    embedding.weight.data[init_ix:, :]
+                    / torch.linalg.vector_norm(embedding.weight[init_ix:, :], dim=1, keepdim=True)
+                    * torch.linalg.vector_norm(embedding.weight[init_ix:, :], dim=1).mean()
+                )
+
+        self._kl_weight = kl_weight
+        self._kl_warmup_steps = kl_warmup_steps
 
         if learnable_priors:
             self._learnable_priors = nn.ParameterList(
@@ -97,11 +177,36 @@ class HierarchicalRefinementQuantizer(nn.Module):
             self.register_buffer("_init_cumsquared", torch.zeros(embedding_dim))
             self._init_samples = 0
             self._init_done = False
+        elif self._kmeans_delay > 0:
+            self.register_buffer("_kmeans_history", torch.zeros(1, embedding_dim))
+            self._init_done = False
         else:
             self._init_done = True
 
-    def encoding_to_logits(self, input, head_ix, prev_codes):
-        pass
+        if pre_norm:
+            self._pre_norm = nn.BatchNorm1d(embedding_dim, affine=False)
+        else:
+            self._pre_norm = None
+
+        if post_linear:
+            self._post_linear = nn.Linear(embedding_dim, embedding_dim)
+        else:
+            self._post_linear = None
+
+        if simple_norm:
+            self._simple_norm_weight = nn.Parameter(torch.FloatTensor([1.0]))
+            self._simple_norm_bias = nn.Parameter(torch.zeros(embedding_dim))
+
+        # def bwd_debug(mod, grad_in, grad_out):
+        #     print(grad_in[0].shape)
+        #     print(grad_out[1].shape)
+        #     print(torch.linalg.norm(grad_in[0].squeeze(1), dim=1).abs().mean())
+        #     print(torch.linalg.norm(grad_in[0].squeeze(1), dim=1).abs().mean())
+        #     print(torch.linalg.norm(mod._embedding[0].weight.grad, dim=1).abs().mean())
+        #     print(torch.linalg.norm(mod._embedding[1].weight.grad, dim=1).abs().mean())
+        #     print(torch.linalg.norm(mod._embedding[2].weight.grad, dim=1).abs().mean())
+        #     exit()
+        # self.register_full_backward_hook(bwd_debug)
 
     def forward(self, inputs, global_step=None, forced_codes=None, head_mask=None, residual_mask=None):
         input_shape = inputs.shape
@@ -112,6 +217,14 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         loss = torch.zeros(input_shape[0]).to(inputs.device)
 
+        this_input = inputs[:, 0, :]
+
+        if self._pre_norm is not None:
+            this_input = self._pre_norm(this_input)
+
+        if self._simple_norm:
+            this_input = this_input / self._simple_norm_weight - self._simple_norm_bias
+
         if (
             self.training
             and not self._init_done
@@ -121,7 +234,12 @@ class HierarchicalRefinementQuantizer(nn.Module):
             self._init_cumsum += inputs.squeeze(dim=1).sum(dim=0)
             self._init_cumsquared += (inputs**2).squeeze(dim=1).sum(dim=0)
             self._init_samples += input_shape[0]
-        elif self.training and not self._init_done and global_step >= self._init_delay_steps:
+        elif (
+            self.training
+            and not self._init_done
+            and self._init_delay_steps is not None
+            and global_step >= self._init_delay_steps
+        ):
             init_mean = self._init_cumsum / float(self._init_samples)
             init_var = (
                 torch.sqrt(self._init_cumsquared / float(self._init_samples) - init_mean**2)
@@ -136,21 +254,36 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 )
             self._init_done = True
 
+        if self.training and not self._init_done and self._kmeans_delay > 0 and global_step < self._kmeans_delay:
+            # add to embedding history
+            self._kmeans_history = torch.cat([self._kmeans_history.cpu(), inputs[:, 0, :].detach().cpu()], dim=0)
+        elif (
+            self.training
+            and not self._init_done
+            and self._kmeans_delay is not None
+            and global_step >= self._kmeans_delay
+        ):
+            kmeans = KMeans(n_clusters=self._num_embeddings, random_state=0).fit(self._kmeans_history[1:, :].numpy())
+            centroids = kmeans.cluster_centers_
+            self._embedding[0].weight.data = torch.from_numpy(centroids).to(self._embedding[0].weight)
+            self._init_done = True
+            self._kmeans_history = None
+
         for head_ix, embedding in enumerate(self._embedding):
 
-            this_input = inputs[:, 0, :]
-
             distances = torch.zeros(input_shape[0], embedding.weight.shape[0]).to(this_input.device)
-            if self._learnable_priors is not None:
+            if self._learnable_priors is not None and head_ix == 0:
                 distances += self._learnable_priors[head_ix]
 
+            resid_error = this_input
             # Calculate distances
             if len(all_probs) > 0:
-                resid_error = this_input
                 for hix in range(head_ix):
                     resid_error = resid_error - torch.matmul(
                         all_probs[hix], self._embedding[hix].weight  # .detach()
                     ).squeeze(1)
+
+                # resid_error = resid_error.detach()
 
                 if self._cos_sim:
                     distances += cos_sim(resid_error, self._embedding[head_ix].weight)
@@ -165,33 +298,98 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 if self._cos_sim:
                     distances += cos_sim(this_input, self._embedding[head_ix].weight)
                 else:
+                    embed = (
+                        self._embedding[head_ix].weight.detach() if self._detach else self._embedding[head_ix].weight
+                    )
                     distances += -1.0 * (
                         torch.sum(this_input**2, dim=1, keepdim=True)
-                        + torch.sum(self._embedding[head_ix].weight ** 2, dim=1)
-                        - 2 * torch.matmul(this_input, self._embedding[head_ix].weight.t())
+                        + torch.sum(embed**2, dim=1)
+                        - 2 * torch.matmul(this_input, embed.t())
                     )
 
             # Convert distances into log probs
-            logits = distances
+            logits = -1.0 * torch.sqrt(-1.0 * distances) if self._sqrt_distances else distances
 
-            if self._learnable_priors is not None:
-                prior = torch.softmax(self._learnable_priors[head_ix], dim=-1)
-                posterior = torch.softmax(logits, dim=-1)
-                kl_loss = torch.nn.KLDivLoss(reduction="none")
-                loss += kl_loss(posterior, prior).sum(dim=-1)
+            if self._cluster_variances is not None:
+                logits = logits / self._cluster_variances[head_ix, :]
+
+            if self._logits_warmup_steps > 0:
+                logits_weight = min(float(global_step) / float(self._logits_warmup_steps), 1.0)
+                logits = logits * logits_weight
 
             if self.training:
 
                 gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
                 gumbel_temp = (
-                    self._gumbel_temp * max(gumbel_sched_weight, self._temp_min)
+                    max(self._gumbel_temp * gumbel_sched_weight, self._temp_min)
                     if self._temp_schedule
                     else self._gumbel_temp
                 )
-                probs = torch.nn.functional.gumbel_softmax(logits, tau=gumbel_temp, hard=True, dim=-1)
+                probs = torch.nn.functional.gumbel_softmax(
+                    logits, tau=gumbel_temp, hard=(not self._soft_gumbel), dim=-1
+                )
             else:
+                gumbel_temp = self._gumbel_temp
                 indices = torch.argmax(logits, dim=-1)
                 probs = onehot(indices, N=logits.shape[-1])
+
+            # Prior should only be included (if at all) for first head - others are dependent on previous levels
+            # posterior = torch.softmax(logits, dim=-1)
+            posterior = torch.nn.functional.gumbel_softmax(logits, tau=gumbel_temp, hard=False, dim=-1)
+            # if head_ix == 0:
+            #     print(posterior.max(dim=1).indices, posterior.min(dim=1).indices, posterior.mean(dim=1))
+            kl_loss = torch.nn.KLDivLoss(reduction="none")
+            if self._learnable_priors is not None and head_ix == 0:
+                prior = (
+                    torch.softmax(self._learnable_priors[head_ix], dim=-1).unsqueeze(0).expand(posterior.shape[0], -1)
+                )
+            else:
+                prior = torch.ones_like(posterior).detach() / self._num_embeddings
+
+            dev_str = "train" if self.training else "dev"
+
+            kl_warmup_weight = (
+                min(float(global_step) / float(self._kl_warmup_steps), 1.0) if self._kl_warmup_steps > 0 else 1.0
+            )
+            kl = kl_loss(nn.functional.log_softmax(logits / gumbel_temp, dim=-1), prior).sum(dim=-1)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/kl", kl.mean(), global_step)
+            if self._kl_weight > 0:
+                loss += kl * self._kl_weight * kl_warmup_weight
+
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/temp", gumbel_temp, global_step)
+
+            Logger().log_scalar(
+                f"hrq_{dev_str}/{head_ix}/probs_ent",
+                -1.0 * torch.sum(posterior * torch.log(posterior + 1e-10), dim=1).mean(),
+                global_step,
+            )
+            Logger().log_scalar(
+                f"hrq_{dev_str}/{head_ix}/probs_ent_batch",
+                -1.0
+                * torch.sum(
+                    posterior
+                    / torch.sum(posterior, dim=0)
+                    * torch.log(posterior / torch.sum(posterior, dim=0) + 1e-10),
+                    dim=0,
+                ).mean(),
+                global_step,
+            )
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/probs_min", torch.min(posterior), global_step)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/probs_max", torch.max(posterior), global_step)
+            # Logger().log_histogram(f"hrq_{dev_str}/probs_hist_" + str(head_ix), probs.cpu().detach().tolist(), global_step)
+            Logger().log_scalar(
+                f"hrq_{dev_str}/{head_ix}/norm_input", torch.linalg.vector_norm(resid_error, dim=1).mean(), global_step
+            )
+            Logger().log_scalar(
+                f"hrq_{dev_str}/{head_ix}/norm_meaninput",
+                torch.linalg.vector_norm(resid_error.mean(dim=0)),
+                global_step,
+            )
+            Logger().log_scalar(
+                f"hrq_{dev_str}/{head_ix}/norm_embed",
+                torch.linalg.vector_norm(embedding.weight, dim=1).mean(),
+                global_step,
+            )
 
             all_probs.append(probs.unsqueeze(1))
 
@@ -255,23 +453,67 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._adaptive_depth:
             # propagate null codes down to lower levels
             mask = torch.where(torch.stack(vq_codes, dim=1) > 0, 1, 0)
+            mask[:, 0] = 1
             mask = mask.cumprod(dim=1)
 
-            vq_codes = (torch.stack(vq_codes, dim=1) * mask).unbind(dim=1)
+            # right shift the mask, to allow grad to propagate through the first zero index
+            mask_codes = torch.cat([torch.ones_like(mask)[:, :1], mask[:, :-1]], dim=1)
+
+            vq_codes = (torch.stack(vq_codes, dim=1) * mask_codes).unbind(dim=1)
             quantized = quantized * mask.unsqueeze(dim=2)
 
-        quantized = torch.sum(quantized, dim=1)
+        if self._output_cumsum:
+            quantized = torch.cumsum(quantized, dim=1)
+        elif not self._output_seq:
+            quantized = torch.sum(quantized, dim=1)
+
         if self._include_residual:
             quantized += resid_error * (residual_mask if residual_mask is not None else 1.0)
             if self._residual_penalty > 0:
                 loss += torch.linalg.norm(resid_error, dim=-1) * self._residual_penalty
 
-        quantized = quantized.view(input_shape)
+        if not self._output_seq and not self._output_cumsum:
+            quantized = quantized.view(input_shape)
+
+        if self._residual_warmup_steps > 0 and self.training:
+            residual_alpha = max(1.0 - 1.0 * float(global_step) / float(self._residual_warmup_steps), 0.0)
+            quantized = (1 - residual_alpha) * quantized + residual_alpha * inputs
+
+        if self._residual_dropout_steps > 0 and self.training:
+            resid_drop_rate = max(1.0 - 1.0 * float(global_step) / float(self._residual_dropout_steps), 0.0)
+            dropper = torch.distributions.Bernoulli(1 - resid_drop_rate)
+            mask = dropper.sample(sample_shape=(quantized.shape)).to(quantized.device)
+            quantized = quantized * mask + inputs * (1 - mask)
 
         if self._adaptive_depth and self._adaptive_penalty_weight > 0:
+            # penalize non-zero code indices, after the first level
             adaptive_penalty = (
-                torch.cat(all_probs, dim=1)[:, :, 1:].mean(dim=2).mean(dim=1) * self._adaptive_penalty_weight
+                torch.cat(all_probs, dim=1)[:, 1:, 1:].mean(dim=2).sum(dim=1) * self._adaptive_penalty_weight
             )
             loss += adaptive_penalty
+
+        if self._simple_norm:
+            quantized = quantized * self._simple_norm_weight + self._simple_norm_bias
+
+        if self._post_linear is not None:
+            quantized = self._post_linear(quantized)
+
+        commitment_loss = torch.sqrt(
+            nn.functional.mse_loss(this_input, quantized.squeeze(), reduction="none").sum(dim=-1)
+        )
+        Logger().log_scalar(f"hrq_{dev_str}/commitment_loss", commitment_loss.mean(), global_step)
+        if self._commitment_weight > 0:
+            loss += commitment_loss * self._commitment_weight
+
+        Logger().log_scalar(
+            f"hrq_{dev_str}/{head_ix}/norm_output",
+            torch.linalg.vector_norm(quantized.squeeze(), dim=1).mean(),
+            global_step,
+        )
+
+        if self._debug.get("bypass", False):
+            if self._debug.get("round_digits", None) is not None:
+                inputs = torch.round(inputs, decimals=self._debug.get("round_digits", None))
+            return 0.0, inputs, vq_codes
 
         return loss, quantized, vq_codes

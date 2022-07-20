@@ -93,3 +93,20 @@ def batchify(input, batch_size=1, shuffle=False):
     for bix in range(math.ceil((1.0 * len(input)) / batch_size)):
         batch = input[bix * batch_size : (bix + 1) * batch_size]
         yield bix, batch
+
+
+def initialize_truncated_normal_(tensor, mean=0, std=1):
+    size = tensor.shape
+    tmp = tensor.new_empty(size + (4,)).normal_()
+    valid = (tmp < 2) & (tmp > -2)
+    ind = valid.max(-1, keepdim=True)[1]
+    tensor.data.copy_(tmp.gather(-1, ind).squeeze(-1))
+    tensor.data.mul_(std).add_(mean)
+
+
+# https://benanne.github.io/2020/09/01/typicality-addendum.html
+def initialize_polar_normal_(tensor, mean=0, scale=1):
+    direction = tensor.new_empty(tensor.shape).normal_()
+    direction /= torch.sqrt(torch.sum(direction**2, dim=-1, keepdim=True))
+    distance = tensor.new_empty(tensor.shape[:-1]).normal_(mean=0, std=np.sqrt(tensor.shape[-1]) * scale).unsqueeze(-1)
+    tensor.data.copy_(distance * direction + mean)
