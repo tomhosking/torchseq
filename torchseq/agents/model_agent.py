@@ -11,7 +11,7 @@ from tqdm import tqdm
 
 from torchseq.agents.base import BaseAgent
 
-from torchseq.models.lr_schedule import get_lr, get_scheduler
+from torchseq.models.lr_schedule import get_scheduler
 from torchseq.models.samplers.beam_search import BeamSearchSampler
 from torchseq.models.samplers.diverse_beam import DiverseBeamSearchSampler
 from torchseq.models.samplers.greedy import GreedySampler
@@ -24,9 +24,6 @@ from torchseq.models.rerankers.combo import CombinationReranker
 from torchseq.models.samplers.teacher_force import TeacherForcedSampler
 from torchseq.utils.logging import Logger
 from torchseq.utils.mckenzie import update_mckenzie
-from torchseq.utils.metrics import bleu_corpus, meteor_corpus
-from torchseq.utils.sari import SARIsent
-import torchseq.utils.tokenizer as tokenizer
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.cache import Cache
 from torchseq.utils.optimizer_group import OptimizerGroup, SchedulerGroup

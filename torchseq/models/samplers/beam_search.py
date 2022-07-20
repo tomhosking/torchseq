@@ -16,7 +16,6 @@ class BeamSearchSampler(nn.Module):
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
         max_output_len = self.config.eval.data.get("max_out_len", 32)
 
-        # TODO: move to config
         beam_width = self.config.beam_search.beam_width  # number of total hypotheses to maintain
         beam_expansion = (
             self.config.beam_search.beam_expansion

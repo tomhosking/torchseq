@@ -12,6 +12,7 @@ from torchseq.utils.wandb import wandb_log
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.agents.lm_agent import LangModelAgent
+from torchseq.agents.meta_learning_agent import MetaLearningAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.mckenzie import set_status_mckenzie
@@ -29,6 +30,7 @@ AGENT_TYPES = {
     "para": Seq2SeqAgent,
     "seq2seq": Seq2SeqAgent,
     "autoencoder": Seq2SeqAgent,
+    "metalearning": MetaLearningAgent,
 }
 
 """

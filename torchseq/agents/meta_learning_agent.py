@@ -4,6 +4,7 @@ import os
 import numpy as np
 import torch
 import torch.optim as optim
+import torch.nn as nn
 
 
 from collections import defaultdict
@@ -11,6 +12,9 @@ from tqdm import tqdm
 
 from torchseq.agents.model_agent import ModelAgent
 from torchseq.utils.logging import Logger
+
+from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
+from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 
 
 """
@@ -29,11 +33,44 @@ class MetaLearningAgent(ModelAgent):
         training_mode=True,
         verbose=True,
         cache_root=None,
+        use_cuda=True,
     ):
         """
         Main constructor for an Agent
         """
         super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, cache_root)
+
+        self.tgt_field = "target"
+        self.src_field = "source"
+
+        # define loss
+        self.loss = nn.CrossEntropyLoss(
+            ignore_index=self.output_tokenizer.pad_id,
+            reduction="none",
+            label_smoothing=self.config.training.get("label_smoothing", 0.0),
+        )
+
+        # define model
+        if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
+            self.model = PretrainedAdapterModel(
+                self.config,
+                self.input_tokenizer,
+                self.output_tokenizer,
+                src_field=self.src_field,
+                tgt_field=self.tgt_field,
+            )
+        else:
+            self.model = BottleneckAutoencoderModel(
+                self.config, self.input_tokenizer, self.output_tokenizer, src_field=self.src_field
+            )
+
+        # define optimizer
+        if training_mode:
+            self.create_optimizer()
+
+        self.set_device(use_cuda)
+
+        self.create_samplers()
 
     def step_train(self, batch, tgt_field):
         """

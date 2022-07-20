@@ -7,8 +7,6 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-from torch.autograd import Variable
-from tqdm import tqdm
 
 from torchseq.agents.model_agent import ModelAgent
 

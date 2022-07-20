@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="torchseq", # Replace with your own username
+    name="torchseq",
     version="2.3.1.dev",
     author="Tom Hosking",
     author_email="code@tomho.sk",

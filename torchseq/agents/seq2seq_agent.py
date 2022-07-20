@@ -7,12 +7,7 @@ from torchseq.agents.model_agent import ModelAgent
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
 from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
-from torchseq.utils.tokenizer import Tokenizer
-from torchseq.utils.logging import Logger
 from torchseq.utils.loss_dropper import LossDropper
-from torchseq.datasets.paraphrase_dataset import ParaphraseDataset
-from torchseq.datasets.qa_dataset import QADataset
-from torchseq.datasets.json_dataset import JsonDataset
 
 
 class Seq2SeqAgent(ModelAgent):
@@ -113,40 +108,3 @@ class Seq2SeqAgent(ModelAgent):
         this_loss = torch.mean(this_loss, dim=0)
 
         return this_loss
-
-    # def text_to_batch(self, x, device):
-    #     if self.config.training.dataset in ["squad"]:
-    #         # x["target"] = ""
-
-    #         return {
-    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
-    #             for k, v in QADataset.pad_and_order_sequences(
-    #                 [QADataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
-    #             ).items()
-    #         }
-    #     elif self.config.training.dataset == "json":
-    #         if self.tgt_field not in x:
-    #             x[self.tgt_field] = ""
-    #         if "source" not in x:
-    #             x["source"] = ""
-
-    #         fields = self.config.json_dataset.data["field_map"]
-
-    #         return {
-    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
-    #             for k, v in JsonDataset.pad_and_order_sequences(
-    #                 [JsonDataset.to_tensor(x, tok_window=self.config.prepro.tok_window, fields=fields)]
-    #             ).items()
-    #         }
-    #     else:
-    #         if self.tgt_field not in x:
-    #             x[self.tgt_field] = ""
-    #         if "source" not in x:
-    #             x["source"] = ""
-
-    #         return {
-    #             k: (v.to(self.device) if k[-5:] != "_text" else v)
-    #             for k, v in ParaphraseDataset.pad_and_order_sequences(
-    #                 [ParaphraseDataset.to_tensor(x, tok_window=self.config.prepro.tok_window)]
-    #             ).items()
-    #         }
