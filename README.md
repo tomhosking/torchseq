@@ -119,12 +119,33 @@ Separator for Paralex and QQP
 If you find TorchSeq useful, please cite one of my papers!
 
 ```
-@misc{hosking2021factorising,
-      title={Factorising Meaning and Form for Intent-Preserving Paraphrasing}, 
-      author={Tom Hosking and Mirella Lapata},
-      year={2021},
-      eprint={2105.15053},
-      archivePrefix={arXiv},
-      primaryClass={cs.CL}
+@inproceedings{hosking-lapata-2021-factorising,
+    title = "Factorising Meaning and Form for Intent-Preserving Paraphrasing",
+    author = "Hosking, Tom  and
+      Lapata, Mirella",
+    booktitle = "Proceedings of the 59th Annual Meeting of the Association for Computational Linguistics and the 11th International Joint Conference on Natural Language Processing (Volume 1: Long Papers)",
+    month = aug,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.acl-long.112",
+    doi = "10.18653/v1/2021.acl-long.112",
+    pages = "1405--1418",
+}
+```
+```
+@inproceedings{hosking-etal-2022-hierarchical,
+    title = "Hierarchical Sketch Induction for Paraphrase Generation",
+    author = "Hosking, Tom  and
+      Tang, Hao  and
+      Lapata, Mirella",
+    booktitle = "Proceedings of the 60th Annual Meeting of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = may,
+    year = "2022",
+    address = "Dublin, Ireland",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.acl-long.178",
+    doi = "10.18653/v1/2022.acl-long.178",
+    pages = "2489--2501",
 }
 ```
