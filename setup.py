@@ -40,7 +40,8 @@ setuptools.setup(
         'matplotlib',
         'opentsne',
         'sentencepiece==0.1.95',
-        'protobuf<4'
+        'protobuf<4',
+        'pydantic==1.9.1'
         # 'pytorch-lightning==1.5.9'
     ],
 )

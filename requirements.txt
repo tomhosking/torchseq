@@ -13,6 +13,7 @@ py-rouge
 rouge-score
 opentsne
 sentencepiece==0.1.95
+pydantic==1.9.1
 
 matplotlib
 
