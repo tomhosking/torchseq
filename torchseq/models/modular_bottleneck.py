@@ -5,6 +5,7 @@ from transformers import BartModel, BertModel
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.hrq_vae import HierarchicalRefinementQuantizer
+from torchseq.models.pythae_vq import PythaeQuantizerWrapper
 from torchseq.models.kl_divergence import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
@@ -162,6 +163,15 @@ class BottleneckPart(nn.Module):
                 embedding_dim,
                 **quantizer_kwargs,
             )
+        # VQ-VAE bottleneck (pythae implementation)
+        if config.get("type", None) == "pythae:vqvae":
+            quantizer_kwargs = config.get("quantizer", {})
+            quantizer_kwargs.pop("codebook_size")
+            self.quantizer = PythaeQuantizerWrapper(
+                config.quantizer.codebook_size,
+                embedding_dim,
+                **quantizer_kwargs,
+            )
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
         # if head_mask is not None:
@@ -177,7 +187,7 @@ class BottleneckPart(nn.Module):
         encoding_post = encoding_pooled
 
         # Quantize
-        if self.config.get("type", None) in ["vqvae", "hrqvae"]:
+        if self.config.get("type", None) in ["vqvae", "hrqvae","pythae:vqvae"]:
 
             if self.config.get("type", None) == "hrqvae":
                 vq_loss, encoding_post, quantizer_indices = self.quantizer(

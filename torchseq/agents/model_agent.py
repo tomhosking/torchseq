@@ -118,6 +118,7 @@ class ModelAgent(BaseAgent):
 
                 curr_lr = cfg.get("lr", self.config.training.optimizer.lr)
                 curr_bsz = cfg.get("optim_batch_size", self.config.training.optim_batch_size)
+                curr_scheduled = cfg.get("lr_schedule", self.config.training.optimizer.lr_schedule)
                 curr_group = [{"params": params, "lr": curr_lr}]
 
                 # Adjust LR for different batch sizes
@@ -145,7 +146,7 @@ class ModelAgent(BaseAgent):
                 curr_scheduler = get_scheduler(
                     curr_optimizer,
                     base_lr=curr_lr,
-                    scheduled=self.config.training.optimizer.lr_schedule,
+                    scheduled=curr_scheduled,
                     warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
                     num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
                 )
@@ -353,7 +354,7 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            test_loss, best_metrics, _, _ = self.validate(data_loader, save=True, training_loop=True)
+            test_loss, best_metrics, _, _ = self.validate(data_loader, save_model=True, training_loop=True)
 
             best_loss = test_loss
 
@@ -369,7 +370,7 @@ class ModelAgent(BaseAgent):
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                test_loss, best_metrics, _, _ = self.validate(data_loader, save=True, training_loop=True)
+                test_loss, best_metrics, _, _ = self.validate(data_loader, save_model=True, training_loop=True)
                 self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
                 Logger().log_scalar("dev/loss", test_loss, self.global_step)
@@ -379,7 +380,11 @@ class ModelAgent(BaseAgent):
                 else:
                     epochs_without_improvement += 1
                 if epochs_without_improvement > self.config.training.get("early_stopping_patience", 3):
-                    self.logger.info("No improvement in dev loss for 3 epochs - stopping early")
+                    self.logger.info(
+                        "No improvement in dev loss for {:} epochs - stopping early".format(
+                            self.config.training.get("early_stopping_patience", 3)
+                        )
+                    )
                     break
             else:
                 # We won't have metrics - but we should update the progress tracker
@@ -649,7 +654,6 @@ class ModelAgent(BaseAgent):
     def validate(
         self,
         data_loader,
-        save=False,
         force_save_output=False,
         use_test=False,
         use_train=False,
@@ -718,7 +722,7 @@ class ModelAgent(BaseAgent):
 
         for h_ix, codes in self.vq_codes.items():
             if len(codes) > 0:
-                Logger().log_histogram("vq_codes/h" + str(h_ix), codes, self.global_step)
+                Logger().log_histogram(f"vq_codes/{split_slug}/h{h_ix}", codes, self.global_step)
 
         # if len(self.vq_codes) > 0 and self.run_id is not None:
         #     with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:

@@ -16,7 +16,7 @@ sentencepiece==0.1.95
 
 matplotlib
 
-wandb==0.12.11
+wandb==0.12.21
 protobuf<4
 
 pytest>=6.2

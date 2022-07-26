@@ -1,4 +1,3 @@
-from turtle import pos
 from torchseq.utils.functions import cos_sim, onehot, initialize_truncated_normal_, initialize_polar_normal_
 import torch
 import torch.nn as nn
@@ -142,7 +141,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                     embedding.weight.data[init_ix:, :], std=init_scale * init_decay_weight**hix
                 )  # / sqrt(self._embedding_dim)
             elif init_embeds_uniform:
-                scale = init_scale * init_decay_weight**hix
+                scale = init_scale * init_decay_weight**hix / sqrt(self._embedding_dim)
                 embedding.weight.data[init_ix:, :].uniform_(-1.0 * scale, scale)
             elif init_embeds_polar:
                 initialize_polar_normal_(
@@ -156,7 +155,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 embedding.weight.data[init_ix:, :] = (
                     embedding.weight.data[init_ix:, :]
                     / torch.linalg.vector_norm(embedding.weight[init_ix:, :], dim=1, keepdim=True)
-                    * torch.linalg.vector_norm(embedding.weight[init_ix:, :], dim=1).mean()
+                    * init_scale * init_decay_weight**hix
                 )
 
         self._kl_weight = kl_weight
@@ -193,10 +192,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
         else:
             self._post_linear = None
 
-        if simple_norm:
-            self._simple_norm_weight = nn.Parameter(torch.FloatTensor([1.0]))
-            self._simple_norm_bias = nn.Parameter(torch.zeros(embedding_dim))
-
         # def bwd_debug(mod, grad_in, grad_out):
         #     print(grad_in[0].shape)
         #     print(grad_out[1].shape)
@@ -220,10 +215,10 @@ class HierarchicalRefinementQuantizer(nn.Module):
         this_input = inputs[:, 0, :]
 
         if self._pre_norm is not None:
-            this_input = self._pre_norm(this_input)
+            this_input = self._pre_norm(this_input) / sqrt(self.embedding_dim)
 
         if self._simple_norm:
-            this_input = this_input / self._simple_norm_weight - self._simple_norm_bias
+            this_input = this_input / torch.linalg.norm(this_input, dim=-1, keepdim=True) / sqrt(self.embedding_dim)
 
         if (
             self.training
@@ -319,7 +314,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
             if self.training:
 
-                gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
+                # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
+                gumbel_sched_weight = exp(-float(global_step) / float(33333))
                 gumbel_temp = (
                     max(self._gumbel_temp * gumbel_sched_weight, self._temp_min)
                     if self._temp_schedule
@@ -335,7 +331,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
             # Prior should only be included (if at all) for first head - others are dependent on previous levels
             # posterior = torch.softmax(logits, dim=-1)
-            posterior = torch.nn.functional.gumbel_softmax(logits, tau=gumbel_temp, hard=False, dim=-1)
+            posterior = torch.nn.functional.softmax(logits, dim=-1)
             # if head_ix == 0:
             #     print(posterior.max(dim=1).indices, posterior.min(dim=1).indices, posterior.mean(dim=1))
             kl_loss = torch.nn.KLDivLoss(reduction="none")
@@ -351,7 +347,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
             kl_warmup_weight = (
                 min(float(global_step) / float(self._kl_warmup_steps), 1.0) if self._kl_warmup_steps > 0 else 1.0
             )
-            kl = kl_loss(nn.functional.log_softmax(logits / gumbel_temp, dim=-1), prior).sum(dim=-1)
+            kl = kl_loss(nn.functional.log_softmax(logits, dim=-1), prior).sum(dim=-1)
             Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/kl", kl.mean(), global_step)
             if self._kl_weight > 0:
                 loss += kl * self._kl_weight * kl_warmup_weight
@@ -498,9 +494,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._post_linear is not None:
             quantized = self._post_linear(quantized)
 
-        commitment_loss = torch.sqrt(
-            nn.functional.mse_loss(this_input, quantized.squeeze(), reduction="none").sum(dim=-1)
-        )
+        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(), reduction="none").sum(dim=-1)
+
         Logger().log_scalar(f"hrq_{dev_str}/commitment_loss", commitment_loss.mean(), global_step)
         if self._commitment_weight > 0:
             loss += commitment_loss * self._commitment_weight

@@ -23,8 +23,8 @@ class Logger(metaclass=Singleton):
             self.writer = SummaryWriter(log_path)
 
     def log_scalar(self, key, value, iteration):
-        if iteration < self.step:
-            raise Exception("What's the first thing that decreases step?!")
+        # if iteration < self.step:
+        #     raise Exception("What's the first thing that decreases step?!")
         self.step = iteration
         if iteration % self.interval != 0:
             return

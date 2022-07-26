@@ -36,7 +36,7 @@ setuptools.setup(
         'sacrebleu>=2.0',
         'py-rouge',
         'rouge-score',
-        'wandb==0.12.11',
+        'wandb==0.12.21',
         'matplotlib',
         'opentsne',
         'sentencepiece==0.1.95',

@@ -48,7 +48,7 @@ def test_bert_embeds():
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
-    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 2.94483) < 1e-3, "Loss is different to expected!"
@@ -94,7 +94,7 @@ def test_paraphrasing_vae():
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
-    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 2.2377) < 1e-3, "Loss is different to expected!"
@@ -138,7 +138,7 @@ def test_qg_transformer():
 
     agent.load_checkpoint(CHKPT)
     agent.model.eval()
-    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 3.16849) < 1e-3, "Loss is different to expected!"
@@ -177,7 +177,7 @@ def test_qg_bart():
     data_loader = dataloader_from_config(config, DATA_PATH)
 
     agent.load_checkpoint(CHKPT)
-    loss, metrics, output, memory = agent.validate(data_loader, save=False, force_save_output=True, save_model=False)
+    loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 15.60321) < 1e-3, "Loss is different to expected!"
