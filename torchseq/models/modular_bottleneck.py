@@ -187,7 +187,7 @@ class BottleneckPart(nn.Module):
         encoding_post = encoding_pooled
 
         # Quantize
-        if self.config.get("type", None) in ["vqvae", "hrqvae","pythae:vqvae"]:
+        if self.config.get("type", None) in ["vqvae", "hrqvae", "pythae:vqvae"]:
 
             if self.config.get("type", None) == "hrqvae":
                 vq_loss, encoding_post, quantizer_indices = self.quantizer(

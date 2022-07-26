@@ -155,7 +155,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 embedding.weight.data[init_ix:, :] = (
                     embedding.weight.data[init_ix:, :]
                     / torch.linalg.vector_norm(embedding.weight[init_ix:, :], dim=1, keepdim=True)
-                    * init_scale * init_decay_weight**hix
+                    * init_scale
+                    * init_decay_weight**hix
                 )
 
         self._kl_weight = kl_weight

@@ -172,9 +172,7 @@ def main():
         set_status_mckenzie("validating")
         # wandb_log({"status": "validating"}, step=agent.global_step)
         logger.info("Starting validation (on training set)...")
-        _ = agent.validate(
-            data_loader, force_save_output=True, use_train=True, save_model=False, slow_metrics=True
-        )
+        _ = agent.validate(data_loader, force_save_output=True, use_train=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
 
     if args.validate:
@@ -207,9 +205,7 @@ def main():
         set_status_mckenzie("validating")
         # wandb_log({"status": "testing"}, step=agent.global_step)
         logger.info("Starting testing...")
-        _ = agent.validate(
-            data_loader, force_save_output=True, use_test=True, save_model=False, slow_metrics=True
-        )
+        _ = agent.validate(data_loader, force_save_output=True, use_test=True, save_model=False, slow_metrics=True)
         logger.info("...testing done!")
 
 

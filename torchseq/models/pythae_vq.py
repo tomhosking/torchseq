@@ -91,7 +91,6 @@ class Quantizer(nn.Module):
         if self.demean_inputs:
             self.register_buffer("input_mean", torch.zeros(self.embedding_dim))
 
-
     def forward(self, z: torch.Tensor, step: int = 0):
 
         if self.model_config.noise_inputs and self.training:
@@ -110,7 +109,7 @@ class Quantizer(nn.Module):
             # update mean
             if self.training:
                 alpha = 0.99
-                self.input_mean =  alpha * self.input_mean + (1-alpha) * z.mean(dim=0).squeeze().detach()
+                self.input_mean = alpha * self.input_mean + (1 - alpha) * z.mean(dim=0).squeeze().detach()
 
             # then subtract
             z = z - self.input_mean.detach()
@@ -184,7 +183,9 @@ class Quantizer(nn.Module):
             reduction="batchmean",
         )
         kl_warmup_weight = (
-            min(float(step) / float(self.model_config.kl_warmup_steps), 1.0) if self.model_config.kl_warmup_steps > 0 else 1.0
+            min(float(step) / float(self.model_config.kl_warmup_steps), 1.0)
+            if self.model_config.kl_warmup_steps > 0
+            else 1.0
         )
 
         if not self.use_gumbel:
@@ -232,9 +233,7 @@ class Quantizer(nn.Module):
             f"hrq_{dev_str}/{head_ix}/probs_ent_batch",
             -1.0
             * torch.sum(
-                posterior
-                / torch.sum(posterior, dim=0)
-                * torch.log(posterior / torch.sum(posterior, dim=0) + 1e-10),
+                posterior / torch.sum(posterior, dim=0) * torch.log(posterior / torch.sum(posterior, dim=0) + 1e-10),
                 dim=0,
             ).mean(),
             global_step,
@@ -328,13 +327,13 @@ class PythaeQuantizerWrapper(Quantizer):
             normalize_inputs=simple_norm,
             batchnorm_inputs=pre_norm,
             normalize_embeds=(init_scale if init_sphere else None),
-            demean_inputs = demean_inputs,
+            demean_inputs=demean_inputs,
             noise_inputs=noise_inputs,
             noise_outputs=False,
             hierarchy_depth=num_heads,
             depth_dropout=head_dropout,
             depth_decay_factor=init_decay_weight,
-            kl_warmup_steps=kl_warmup_steps
+            kl_warmup_steps=kl_warmup_steps,
         )
         super(PythaeQuantizerWrapper, self).__init__(config)
 
