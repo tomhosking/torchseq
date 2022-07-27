@@ -151,9 +151,9 @@ class SequenceEncoder(nn.Module):
             bert_padding_mask = (~padding_mask).long()
 
             bert_typeids = {}
-
+            
             self.bert_encoding = self.bert_encoder(
-                input_ids=input_seq, attention_mask=bert_padding_mask, **bert_typeids
+                input_ids=input_seq.to(input_seq.device), attention_mask=bert_padding_mask, **bert_typeids
             )[0]
 
             if self.config.encdec.num_encoder_layers > 0:

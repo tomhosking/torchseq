@@ -38,7 +38,7 @@ class BottleneckAutoencoderModel(nn.Module):
         self.seq_encoder = SequenceEncoder(
             config,
             self.input_tokenizer,
-            freeze_embeddings=config.encoder.get("freeze_embeddings", config.get("freeze_embeddings", False))
+            freeze_embeddings=config.encoder.get("freeze_embeddings", config.get("freeze_embeddings", False)),
         )
 
         if config.bottleneck.get("modular", False):

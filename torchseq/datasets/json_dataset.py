@@ -82,14 +82,15 @@ class JsonDataset(Dataset):
             self.output_tokenizer,
             tok_window=self.config.prepro.tok_window,
             include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
+            drop_target_lang_codes=self.config.prepro.data.get("drop_target_lang_codes", False),
             mask_prob=self.config.prepro.data.get("token_mask_prob", 0),
         )
 
     @staticmethod
     def to_tensor(
-        obj, fields, input_tokenizer, output_tokenizer, tok_window=64, include_lang_codes=False, mask_prob=0.0
+        obj, fields, input_tokenizer, output_tokenizer, tok_window=64, include_lang_codes=False, drop_target_lang_codes=False, mask_prob=0.0
     ):
-
+        
         src_lang = obj.get("src_lang", "en_XX")
         tgt_lang = obj.get("tgt_lang", "en_XX")
 
@@ -110,7 +111,7 @@ class JsonDataset(Dataset):
             # HACK: this should be in a config somewhere...
             if include_lang_codes and f["to"] == "source":
                 lang_tok = [src_lang_token]
-            elif include_lang_codes and f["to"] == "target":
+            elif include_lang_codes and not drop_target_lang_codes and f["to"] == "target": # In semparse we don't need this on the output side
                 lang_tok = [tgt_lang_token]
             else:
                 lang_tok = []
