@@ -427,6 +427,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         quantized = torch.cat(quantized_list, dim=1)
 
+        print(quantized.shape)
+        print(inputs.shape)
+
         if head_mask is not None:
             # print('mask found')
             # print(head_mask)
@@ -495,7 +498,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._post_linear is not None:
             quantized = self._post_linear(quantized)
 
-        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(), reduction="none").sum(dim=-1)
+        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(1), reduction="none").sum(dim=-1)
 
         Logger().log_scalar(f"hrq_{dev_str}/commitment_loss", commitment_loss.mean(), global_step)
         if self._commitment_weight > 0:
@@ -503,7 +506,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         Logger().log_scalar(
             f"hrq_{dev_str}/{head_ix}/norm_output",
-            torch.linalg.vector_norm(quantized.squeeze(), dim=1).mean(),
+            torch.linalg.vector_norm(quantized.squeeze(1), dim=1).mean(),
             global_step,
         )
 
