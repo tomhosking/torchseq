@@ -94,6 +94,9 @@ class JsonDataset(Dataset):
         tgt_lang = obj.get("tgt_lang", "en_XX")
 
         if include_lang_codes:
+            assert src_lang in FAIRSEQ_LANGUAGE_CODES, f"Value in src_lang:\"{src_lang}\" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py"
+            assert tgt_lang in FAIRSEQ_LANGUAGE_CODES, f"Value in tgt_lang:\"{tgt_lang}\" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py"
+
             src_lang_token = FAIRSEQ_LANGUAGE_CODES[src_lang]
             tgt_lang_token = FAIRSEQ_LANGUAGE_CODES[tgt_lang]
 

@@ -3,7 +3,7 @@ import torch
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
 from transformers import BartModel, BertModel, RobertaModel
-from transformers import MBartTokenizerFast
+from transformers import MBart50TokenizerFast
 
 from torchseq.utils.singleton import Singleton
 from torchseq.utils.tokenizer_wordlevel import WordLevelTokenizer
@@ -64,6 +64,33 @@ FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
     "tr_TR": 250023,
     "vi_VN": 250024,
     "zh_CN": 250025,
+    "af_ZA": 250026,
+    "az_AZ": 250027,
+    "bn_IN": 250028,
+    "fa_IR": 250029,
+    "he_IL": 250030,
+    "hr_HR": 250031,
+    "id_ID": 250032,
+    "ka_GE": 250033,
+    "km_KH": 250034,
+    "mk_MK": 250035,
+    "ml_IN": 250036,
+    "mn_MN": 250037,
+    "mr_IN": 250038,
+    "pl_PL": 250039,
+    "ps_AF": 250040,
+    "pt_XX": 250041,
+    "sv_SE": 250042,
+    "sw_KE": 250043,
+    "ta_IN": 250044,
+    "te_IN": 250045,
+    "th_TH": 250046,
+    "tl_XX": 250047,
+    "uk_UA": 250048,
+    "ur_PK": 250049,
+    "xh_ZA": 250050,
+    "gl_ES": 250051,
+    "sl_SI": 250052
 }
 
 
@@ -90,9 +117,8 @@ class Tokenizer:
         self.has_embeddings = True
 
         if "mbart-" in model_slug:
-            # self.engine = MBartTokenizerFast.from_pretrained("facebook/mbart-large-cc25")
-            self.engine = MBartTokenizerFast.from_pretrained(
-                "facebook/mbart-large-50", src_lang="en_XX", tgt_lang="en_XX", add_prefix_space=True
+            self.engine = MBart50TokenizerFast.from_pretrained(
+                "facebook/mbart-large-50-many-to-many-mmt", src_lang="en_XX", tgt_lang="en_XX", add_prefix_space=True
             )
 
             self.pad_id = self.engine.pad_token_id
@@ -158,7 +184,12 @@ class Tokenizer:
             self.bos_id = self.engine.token_to_id("[CLS]")
             self.eos_id = self.engine.token_to_id("[SEP]")
 
-        self.vocab_size = self.engine.get_vocab_size()
+
+        # Vocab size from PretrainedFastTokenize is __len__ attr
+        if "mbart-" in model_slug:
+            self.vocab_size = len(self.engine)
+        else:
+            self.vocab_size = self.engine.get_vocab_size()
 
     # instance = None
     # def __init__(self, model_slug=None):
@@ -181,16 +212,16 @@ class Tokenizer:
     def get_embeddings(self):
         return torch.load(
             os.path.join(self.data_path, "pretrained-vocabs/{:}.embeddings.pt".format(self.model_slug.split("/")[-1]))
-        )
+        ).cpu()
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
 
         if "mbart-" in self.model_slug:
-            output = self.engine.encode_plus(text, return_offsets_mapping=True, add_special_tokens=False)
+            output = self.engine(text, return_offsets_mapping=True, add_special_tokens=False)
 
             token_ids = output["input_ids"]
             offsets = output["offset_mapping"]
-            token_texts = ["[MBART]" for _ in range(len(token_ids))]
+            token_texts = output.tokens() # tokens() is a method in PretrainedFastTokenizer
         else:
             output = self.engine.encode(text)
 
@@ -204,7 +235,6 @@ class Tokenizer:
         # mBART doesn't use bos tokens
         if "mbart-" in self.model_slug:
             eos = [{"id": self.eos_id, "text": eos_str, "begin": len(text), "end": len(text)}]
-            # bos = [{"id": self.bos_id, "text": bos_str, "begin": 0, "end": 0}]
             bos = []
 
         else:

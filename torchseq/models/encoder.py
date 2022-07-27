@@ -1,8 +1,9 @@
 import math
+import logging
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel, RobertaModel
+from transformers import BartModel, BertModel, RobertaModel, MBartModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
@@ -17,6 +18,7 @@ class SequenceEncoder(nn.Module):
         super().__init__()
         self.config = config
         self.tokenizer = tokenizer
+        self.logger = logging.getLogger(__file__)
 
         # Embedding layers
         if embeddings is not None:
@@ -44,8 +46,11 @@ class SequenceEncoder(nn.Module):
 
         # Encoder/decoders
         if config.encdec.bert_encoder:
-
-            if "bart" in config.encdec.bert_model:
+            if "mbart" in config.encdec.bert_model:
+                bart_model = MBartModel.from_pretrained(config.encdec.bert_model)
+                self.bert_encoder = bart_model.encoder
+                del bart_model.decoder
+            elif "bart" in config.encdec.bert_model:
                 bart_model = BartModel.from_pretrained(config.encdec.bert_model)
                 self.bert_encoder = bart_model.encoder
                 del bart_model.decoder
@@ -126,7 +131,7 @@ class SequenceEncoder(nn.Module):
             input_seq.device
         )
 
-        # Embed the input
+        # Embed the input (this is ignored if you use the `bert_encoder` but done anyway for maybe residual connection)
         input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
 
         if self.config.encoder.embedding_dim != self.config.get_first(
@@ -136,7 +141,6 @@ class SequenceEncoder(nn.Module):
 
         input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
 
-        # print(include_position, self.tokenizer.decode(input_seq[0]))
         if include_position:
             input_embedded = self.positional_embeddings(input_embedded)
 
@@ -144,19 +148,13 @@ class SequenceEncoder(nn.Module):
         if self.config.encdec.bert_encoder:
 
             # BERT expects a mask that's 1 unmasked, 0 for masked
-            bert_padding_mask = (~padding_mask).double()
+            bert_padding_mask = (~padding_mask).long()
 
             bert_typeids = {}
 
-            if "bart" in self.config.encdec.bert_model:
-                bert_padding_mask = (1.0 - bert_padding_mask.long()) * -10000.0
-
             self.bert_encoding = self.bert_encoder(
-                input_ids=input_seq.to(input_seq.device), attention_mask=bert_padding_mask, **bert_typeids
+                input_ids=input_seq, attention_mask=bert_padding_mask, **bert_typeids
             )[0]
-
-            if "bart" in self.config.encdec.bert_model:
-                self.bert_encoding = self.bert_encoding.permute(1, 0, 2)
 
             if self.config.encdec.num_encoder_layers > 0:
                 encoding = (
@@ -182,8 +180,6 @@ class SequenceEncoder(nn.Module):
             input_toks_resid = self.embeddings(input_seq).to(input_seq.device)
             input_toks_resid = self.token_projection(input_toks_resid)
             input_toks_resid = self.positional_embeddings(input_toks_resid.permute(1, 0, 2))
-            # print(encoding.shape)
-            # print(input_toks_resid.shape)
             encoding = torch.cat([encoding, input_toks_resid.permute(1, 0, 2)], dim=-1)
 
         return encoding, memory
