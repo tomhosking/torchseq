@@ -33,8 +33,8 @@ class Logger(metaclass=Singleton):
             self.writer.add_scalar(key, value, iteration)
 
     def log_histogram(self, key, value, iteration):
-        if max(value) > 512:
-            value = [x for x in value if x <= 512]
+        if max(value) >= 512:
+            value = [x for x in value if x < 512]
         if len(value) == 0:
             return
 
