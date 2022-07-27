@@ -38,7 +38,7 @@ class Logger(metaclass=Singleton):
         if len(value) == 0:
             return
 
-        wandb_log({key: wbHistogram(value, num_bins=int(max(value)))}, step=iteration)
+        wandb_log({key: wbHistogram(value, num_bins=int(max(value)) + 1)}, step=iteration)
         if self.writer is not None:
             self.writer.add_histogram(key, torch.Tensor(value), iteration)
 
