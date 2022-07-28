@@ -57,6 +57,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         commitment_weight=0,
         freeze_embeddings=False,
         detach=False,
+        noise_inputs=False,
         debug={},
     ):
 
@@ -76,6 +77,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._temp_schedule = temp_schedule
         self._temp_schedule_gamma = temp_schedule_gamma
         self._soft_gumbel = soft_gumbel
+        self._noise_inputs = noise_inputs
 
         self._warmup_steps = warmup_steps
 
@@ -214,6 +216,11 @@ class HierarchicalRefinementQuantizer(nn.Module):
         loss = torch.zeros(input_shape[0]).to(inputs.device)
 
         this_input = inputs[:, 0, :]
+
+        if self._noise_inputs and self.training:
+            noise = torch.empty_like(this_input).normal_() * 0.1
+
+            this_input = this_input + noise
 
         if self._pre_norm is not None:
             this_input = self._pre_norm(this_input) / sqrt(self.embedding_dim)
