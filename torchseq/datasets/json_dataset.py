@@ -88,15 +88,26 @@ class JsonDataset(Dataset):
 
     @staticmethod
     def to_tensor(
-        obj, fields, input_tokenizer, output_tokenizer, tok_window=64, include_lang_codes=False, drop_target_lang_codes=False, mask_prob=0.0
+        obj,
+        fields,
+        input_tokenizer,
+        output_tokenizer,
+        tok_window=64,
+        include_lang_codes=False,
+        drop_target_lang_codes=False,
+        mask_prob=0.0,
     ):
-        
+
         src_lang = obj.get("src_lang", "en_XX")
         tgt_lang = obj.get("tgt_lang", "en_XX")
 
         if include_lang_codes:
-            assert src_lang in FAIRSEQ_LANGUAGE_CODES, f"Value in src_lang:\"{src_lang}\" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py"
-            assert tgt_lang in FAIRSEQ_LANGUAGE_CODES, f"Value in tgt_lang:\"{tgt_lang}\" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py"
+            assert (
+                src_lang in FAIRSEQ_LANGUAGE_CODES
+            ), f'Value in src_lang:"{src_lang}" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py'
+            assert (
+                tgt_lang in FAIRSEQ_LANGUAGE_CODES
+            ), f'Value in tgt_lang:"{tgt_lang}" attribute not recognised. Check FAIRSEQ_LANGUAGE_CODES in tokenizer.py'
 
             src_lang_token = FAIRSEQ_LANGUAGE_CODES[src_lang]
             tgt_lang_token = FAIRSEQ_LANGUAGE_CODES[tgt_lang]
@@ -111,7 +122,9 @@ class JsonDataset(Dataset):
             # HACK: this should be in a config somewhere...
             if include_lang_codes and f["to"] == "source":
                 lang_tok = [src_lang_token]
-            elif include_lang_codes and not drop_target_lang_codes and f["to"] == "target": # In semparse we don't need this on the output side
+            elif (
+                include_lang_codes and not drop_target_lang_codes and f["to"] == "target"
+            ):  # In semparse we don't need this on the output side
                 lang_tok = [tgt_lang_token]
             else:
                 lang_tok = []

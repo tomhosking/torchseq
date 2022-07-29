@@ -90,7 +90,7 @@ FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
     "ur_PK": 250049,
     "xh_ZA": 250050,
     "gl_ES": 250051,
-    "sl_SI": 250052
+    "sl_SI": 250052,
 }
 
 
@@ -184,7 +184,6 @@ class Tokenizer:
             self.bos_id = self.engine.token_to_id("[CLS]")
             self.eos_id = self.engine.token_to_id("[SEP]")
 
-
         # Vocab size from PretrainedFastTokenize is __len__ attr
         if "mbart-" in model_slug:
             self.vocab_size = len(self.engine)
@@ -221,7 +220,7 @@ class Tokenizer:
 
             token_ids = output["input_ids"]
             offsets = output["offset_mapping"]
-            token_texts = output.tokens() # tokens() is a method in PretrainedFastTokenizer
+            token_texts = output.tokens()  # tokens() is a method in PretrainedFastTokenizer
         else:
             output = self.engine.encode(text)
 
