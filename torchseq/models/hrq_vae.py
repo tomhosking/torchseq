@@ -58,10 +58,14 @@ class HierarchicalRefinementQuantizer(nn.Module):
         freeze_embeddings=False,
         detach=False,
         noise_inputs=False,
+        demean_inputs=False,
         debug={},
     ):
 
         super(HierarchicalRefinementQuantizer, self).__init__()
+
+        if demean_inputs:
+            raise Exception("Demean inputs not supported for HRQ! Use pythae:vqvae instead")
 
         self._detach = detach
         self._debug = debug
@@ -505,7 +509,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._post_linear is not None:
             quantized = self._post_linear(quantized)
 
-        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(1), reduction="none").sum(dim=-1)
+        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(1), reduction="none").mean(dim=-1)
 
         Logger().log_scalar(f"hrq_{dev_str}/commitment_loss", commitment_loss.mean(), global_step)
         if self._commitment_weight > 0:

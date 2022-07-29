@@ -22,7 +22,7 @@ class SequenceDecoder(nn.Module):
             self.embeddings = nn.Embedding(
                 tokenizer.vocab_size,
                 config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"]),
-            ).cpu()
+            )
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
@@ -33,6 +33,8 @@ class SequenceDecoder(nn.Module):
                 if "decoder" in config.data
                 else config.get("freeze_embeddings", False)
             )
+            self.embeddings.cpu()
+            self.embeddings.force_device = True
 
         decoder_layer = nn.TransformerDecoderLayer(
             config.decoder.embedding_dim,
@@ -99,6 +101,7 @@ class SequenceDecoder(nn.Module):
         )[:, :output_max_len]
 
         # Embed the output so far
+        # TODO: why is this sqrt here, but not in the encoder?
         output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
             self.config.decoder.embedding_dim
         )

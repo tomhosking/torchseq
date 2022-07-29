@@ -110,3 +110,11 @@ def initialize_polar_normal_(tensor, mean=0, scale=1):
     direction /= torch.sqrt(torch.sum(direction**2, dim=-1, keepdim=True))
     distance = tensor.new_empty(tensor.shape[:-1]).normal_(mean=0, std=np.sqrt(tensor.shape[-1]) * scale).unsqueeze(-1)
     tensor.data.copy_(distance * direction + mean)
+
+
+def to_device_unless_marked(device):
+    def _to_device_unless_marked(obj):
+        if not getattr(obj, "force_device", False):
+            obj.to(device)
+
+    return _to_device_unless_marked

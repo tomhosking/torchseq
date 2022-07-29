@@ -180,9 +180,9 @@ def test_qg_bart():
     loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
-    assert abs(loss.item() - 15.60321) < 1e-3, "Loss is different to expected!"
+    assert abs(loss.item() - 1.23542) < 1e-3, "Loss is different to expected!"  #
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 33.8669) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 25.918) < 1e-2, "BLEU score is different to expected!"
 
 
 @test_utils.slow

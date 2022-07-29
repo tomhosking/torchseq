@@ -2,6 +2,8 @@ import logging
 
 import torch
 
+from torchseq.utils.functions import to_device_unless_marked
+
 # This project was originally based off this template:
 # https://github.com/moemen95/Pytorch-Project-Template
 
@@ -27,21 +29,23 @@ class BaseAgent:
 
         self.cuda = self.cuda_available & use_cuda
 
+        if not self.model:
+            raise Exception("You need to define your model before calling set_device!")
+
         if self.cuda:
             self.device = torch.device("cuda")
 
             self.logger.info("Program will run on *****GPU-CUDA***** ")
 
-            self.model.to(self.device)
+            # self.model.to(self.device)
+            self.model.apply(to_device_unless_marked(self.device))
+
             self.loss.to(self.device)
 
         else:
             self.device = torch.device("cpu")
 
-            self.logger.info("Program will run on *****CPU*****\n")
-
-        if not self.model:
-            raise Exception("You need to define your model before calling set_device!")
+            self.logger.info("Program will run on *****CPU*****")
 
         self.model.device = self.device
 
