@@ -18,7 +18,6 @@ class SequenceEncoder(nn.Module):
         super().__init__()
         self.config = config
         self.tokenizer = tokenizer
-        self.logger = logging.getLogger(__file__)
 
         # Embedding layers
         if embeddings is not None:
@@ -151,7 +150,7 @@ class SequenceEncoder(nn.Module):
             bert_padding_mask = (~padding_mask).long()
 
             bert_typeids = {}
-            
+
             self.bert_encoding = self.bert_encoder(
                 input_ids=input_seq.to(input_seq.device), attention_mask=bert_padding_mask, **bert_typeids
             )[0]
