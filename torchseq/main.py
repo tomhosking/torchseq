@@ -146,7 +146,7 @@ def main():
         # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
-        if agent.config.bottleneck.get('modular', False):
+        if agent.config.bottleneck.get("modular", False):
             bneck_types = [x.type for x in agent.config.bottleneck.modules]
             quantizer_index = None
             if "vqvae" in bneck_types:
@@ -183,7 +183,7 @@ def main():
             raise Exception("Selected dataset does not include a dev split - cannot run validation!")
 
         # TEMP: save out the VQ embeds *after* they've been trained, for debug
-        if agent.config.bottleneck.get('modular', False):
+        if agent.config.bottleneck.get("modular", False):
             bneck_types = [x.type for x in agent.config.bottleneck.modules]
             quantizer_index = None
             if "vqvae" in bneck_types:

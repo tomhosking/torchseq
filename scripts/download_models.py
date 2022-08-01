@@ -24,4 +24,6 @@ model = AutoModelForSequenceClassification.from_pretrained("tomhosking/deberta-v
 
 
 mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX', tgt_lang='en_XX')
+mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50-many-to-many-mmt', src_lang='en_XX', tgt_lang='en_XX')
 mod = MBartModel.from_pretrained('facebook/mbart-large-50-many-to-many-mmt')
+

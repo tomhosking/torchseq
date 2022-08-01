@@ -101,7 +101,6 @@ class SequenceDecoder(nn.Module):
         )[:, :output_max_len]
 
         # Embed the output so far
-        # TODO: why is this sqrt here, but not in the encoder?
         output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
             self.config.decoder.embedding_dim
         )
