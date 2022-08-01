@@ -438,8 +438,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         quantized = torch.cat(quantized_list, dim=1)
 
-        print(quantized.shape)
-        print(inputs.shape)
+        # print(quantized.shape)
+        # print(inputs.shape)
 
         if head_mask is not None:
             # print('mask found')

@@ -49,7 +49,7 @@ class SequenceEncoder(nn.Module):
             pretrained_model_slug = (
                 config.encoder.pretrained_encoder
                 if config.encoder.get("pretrained_encoder", None) is not None
-                else config.encdec.bert_encoder
+                else config.encdec.bert_model
             )
             if "mbart" in pretrained_model_slug:
                 bart_model = MBartModel.from_pretrained(pretrained_model_slug)
