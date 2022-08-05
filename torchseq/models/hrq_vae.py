@@ -59,6 +59,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         detach=False,
         noise_inputs=False,
         demean_inputs=False,
+        pre_scale=False,
+        post_scale=False,
         debug={},
     ):
 
@@ -70,6 +72,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._detach = detach
         self._debug = debug
 
+        if isinstance(num_embeddings, int):
+            num_embeddings = [num_embeddings for _ in range(num_heads)]
         self._num_embeddings = num_embeddings
         self._num_heads = num_heads
         self._embedding_dim = embedding_dim
@@ -105,6 +109,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._output_cumsum = output_cumsum
 
         self._simple_norm = simple_norm
+        self._pre_scale = pre_scale
+        self._post_scale = post_scale
 
         self._logits_warmup_steps = logits_warmup_steps
 
@@ -121,9 +127,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._embedding = nn.ModuleList(
             [
                 nn.Embedding(
-                    self._num_embeddings, self._embedding_dim, padding_idx=(0 if self._adaptive_depth else None)
+                    self._num_embeddings[hix], self._embedding_dim, padding_idx=(0 if self._adaptive_depth else None)
                 )
-                for _ in range(num_heads)
+                for hix in range(num_heads)
             ]
         )
 
@@ -164,6 +170,11 @@ class HierarchicalRefinementQuantizer(nn.Module):
                     * init_scale
                     * init_decay_weight**hix
                 )
+
+        if self._adaptive_depth:
+            for hix, embedding in enumerate(self._embedding):
+                scale = 0.05 * init_scale * init_decay_weight**hix / sqrt(self._embedding_dim)
+                embedding.weight.data[0, :].uniform_(-1.0 * scale, scale)
 
         self._kl_weight = kl_weight
         self._kl_warmup_steps = kl_warmup_steps
@@ -220,6 +231,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
         loss = torch.zeros(input_shape[0]).to(inputs.device)
 
         this_input = inputs[:, 0, :]
+
+        if self._pre_scale:
+            this_input = this_input / sqrt(self._embedding_dim)
 
         if self._noise_inputs and self.training:
             noise = torch.empty_like(this_input).normal_() * 0.1
@@ -352,7 +366,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
                     torch.softmax(self._learnable_priors[head_ix], dim=-1).unsqueeze(0).expand(posterior.shape[0], -1)
                 )
             else:
-                prior = torch.ones_like(posterior).detach() / self._num_embeddings
+                prior = torch.ones_like(posterior).detach() / torch.ones_like(posterior).sum(-1, keepdim=True).detach()
 
             dev_str = "train" if self.training else "dev"
 
@@ -508,6 +522,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         if self._post_linear is not None:
             quantized = self._post_linear(quantized)
+
+        if self._post_scale:
+            quantized = quantized * sqrt(self._embedding_dim)
 
         commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(1), reduction="none").mean(dim=-1)
 
