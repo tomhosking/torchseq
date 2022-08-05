@@ -115,6 +115,8 @@ class ModelAgent(BaseAgent):
         if len(param_group_config) > 0:
             for pattern, cfg in param_group_config.items():
                 params = [p for n, p in self.model.named_parameters() if p.requires_grad and pattern in n]
+                if len(params) == 0:
+                    raise Exception("Optimizer group {:} didnt match any model parameters!".format(pattern))
 
                 curr_lr = cfg.get("lr", self.config.training.optimizer.lr)
                 curr_bsz = cfg.get("optim_batch_size", self.config.training.optim_batch_size)
@@ -149,6 +151,7 @@ class ModelAgent(BaseAgent):
                     scheduled=curr_scheduled,
                     warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
                     num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
+                    legacy=self.config.training.optimizer.get("lr_schedule_legacy", True),
                 )
 
                 optimizer_list.append(curr_optimizer)
@@ -186,6 +189,7 @@ class ModelAgent(BaseAgent):
             scheduled=self.config.training.optimizer.lr_schedule,
             warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
             num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
+            legacy=self.config.training.optimizer.get("lr_schedule_legacy", True),
         )
 
         optimizer_list.append(def_optimizer)
