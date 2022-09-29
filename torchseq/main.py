@@ -16,6 +16,7 @@ from torchseq.agents.meta_learning_agent import MetaLearningAgent
 from torchseq.agents.exemplar_agent import ExemplarGuidedAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
+from torchseq.utils.config_migration import check_config
 from torchseq.utils.mckenzie import set_status_mckenzie
 from torchseq.utils.wandb import wandb_init
 
@@ -74,6 +75,9 @@ def main():
 
     with open(args.config) as f:
         cfg_dict = json.load(f)
+
+    if check_config(cfg_dict):
+        logger.warn("Config is outdated! Run the migration script to update it")
 
     if args.patch is not None and len(args.patch) > 0:
         for mask_path in args.patch:
