@@ -22,7 +22,7 @@ def migrate_optimizers_23(cfg_dict, check_only=False):
         if "lr_warmup_steps" in cfg_dict["training"]:
             cfg_dict["training"].pop("lr_warmup_steps")
 
-        cfg_dict["training"]["optimizer"] = optimizer_cfg
+        cfg_dict["training"]["optimizer"] = optimizer_cfg_dict
 
     return False if check_only else cfg_dict
 
