@@ -174,7 +174,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._adaptive_depth:
             for hix, embedding in enumerate(self._embedding):
                 scale = 0.05 * init_scale * init_decay_weight**hix / sqrt(self._embedding_dim)
-                embedding.weight.data[0, :].uniform_(-1.0 * scale, scale)
+                embedding.weight.data[0, :].fill_(scale)
 
         self._kl_weight = kl_weight
         self._kl_warmup_steps = kl_warmup_steps

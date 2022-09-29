@@ -20,6 +20,15 @@ class Config(object):
         else:
             raise KeyError
 
+    def get_path(self, path, default=None):
+        if path[0] in self.data:
+            if len(path) > 1:
+                return self.get_path(path[1:], default)
+            else:
+                return self.data[path[0]]
+        else:
+            return default
+
 
 def merge_cfg_dicts(main_cfg, cfg_mask):
     for k, v in cfg_mask.items():

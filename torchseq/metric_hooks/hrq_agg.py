@@ -72,20 +72,26 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_generate_summaries", False):
             logger.info("Running generation using HRQ paths")
-            self.scores["hrq_agg_generation"], _ = HRQAggregationMetricHook.eval_generate_summaries(
+            self.scores["hrq_agg_generation"], generated_summaries = HRQAggregationMetricHook.eval_generate_summaries(
                 self.config,
                 agent,
                 test=use_test,
             )
+            split = "test" if use_test else "dev"
+            with open(agent.run_output_path + f"/summaries_{split}.json", "w") as f:
+                json.dump(generated_summaries, f)
             logger.info("...done")
 
         if self.config.eval.metrics.hrq_agg.get("run_masked_generation", False):
             logger.info("Running generation with masking")
-            self.scores["hrq_agg_masking"], _ = HRQAggregationMetricHook.eval_masked_generation(
+            self.scores["hrq_agg_masking"], masked_outputs = HRQAggregationMetricHook.eval_masked_generation(
                 self.config,
                 agent,
                 test=use_test,
             )
+            split = "test" if use_test else "dev"
+            with open(agent.run_output_path + f"/masked_outputs_{split}.json", "w") as f:
+                json.dump(masked_outputs, f)
             logger.info("...done")
 
         return self.scores
@@ -94,7 +100,9 @@ class HRQAggregationMetricHook(MetricHook):
     def codes_from_cache(config, agent, test=False):
 
         split = "test" if test else "dev"
-        if os.path.exists(agent.run_output_path + f"/sents_by_code_{split}.json"):
+        if agent.run_output_path is not None and os.path.exists(
+            agent.run_output_path + f"/sents_by_code_{split}.json"
+        ):
             with open(agent.run_output_path + f"/sents_by_code_{split}.json") as f:
                 sents_by_code = json.load(f)
             with open(agent.run_output_path + f"/outputs_with_codes_{split}.json") as f:
@@ -631,20 +639,113 @@ class HRQAggregationMetricHook(MetricHook):
         return scores
 
     @abstractmethod
+    def select_entity_summary_trees(
+        all_review_trees,
+        tree_limit=5,
+        truncation_length=None,
+        prune_min_weight=None,
+        prune_max_paths=None,
+    ):
+        class AggregationTree:
+            def __init__(self, elements):
+                self.nodes = defaultdict(float)
+                for element in elements:
+                    self.nodes[element] += 1
+
+            def __getitem__(self, key):
+                val = self.nodes[key]
+                for k, v in self.nodes.items():
+                    if len(k) > len(key) and k[: len(key)] == key:
+                        val += v
+                return val
+
+            def __setitem__(self, key, val):
+                self.nodes[key] = val
+
+            def pop(self, key):
+                self.nodes.pop(key)
+
+            def __len__(self):
+                return len(self.nodes)
+
+            def items(self):
+                return self.nodes.items()
+
+            def keys(self):
+                return self.nodes.keys()
+
+            def values(self):
+                return self.nodes.values()
+
+        summary_trees = {}
+        summary_tree_weights = {}
+        for entity_id, reviews in all_review_trees.items():
+            all_trees = [tuple(tree) for trees in reviews.values() for tree in trees]
+
+            tree_weights = AggregationTree(all_trees)
+
+            if truncation_length is not None:
+                tree_weights_pruned = Counter()
+                for codes, weight in tree_weights.items():
+                    tree_weights_pruned[codes[:truncation_length]] += weight
+                summary_trees[entity_id] = [x[0] for x in tree_weights_pruned.most_common(tree_limit)]
+                summary_tree_weights[entity_id] = [x[1] for x in tree_weights_pruned.most_common(tree_limit)]
+            elif prune_max_paths is not None:
+                while len(tree_weights) > prune_max_paths:
+                    remaining_paths = [x for x in tree_weights.items()]  # if len(x[0]) > 1
+                    if len(remaining_paths) == 0:
+                        break
+                    code_to_prune, weight = sorted(remaining_paths, key=lambda x: (x[1], -len(x[0])))[
+                        0
+                    ]  # sort lowest weight, then longest path
+                    tree_weights.nodes[code_to_prune] = 0
+                    if len(code_to_prune) > 1:
+                        tree_weights.nodes[code_to_prune[:-1]] += weight
+                    tree_weights.nodes.pop(code_to_prune)
+                summary_trees[entity_id] = list(tree_weights.keys())[:tree_limit]
+                summary_tree_weights[entity_id] = list(tree_weights.values())[:tree_limit]
+            elif prune_min_weight is not None:
+                total = sum(tree_weights.nodes.values())
+                for k, v in tree_weights.nodes.items():
+                    tree_weights.nodes[k] = v / total
+                while (min(tree_weights.values())) < prune_min_weight:
+                    remaining_paths = [x for x in tree_weights.items()]  # if len(x[0]) > 1
+                    if len(remaining_paths) == 0:
+                        break
+                    code_to_prune, weight = sorted(remaining_paths, key=lambda x: (x[1], -len(x[0])))[
+                        0
+                    ]  # sort lowest weight, then longest path
+                    tree_weights.nodes[code_to_prune] = 0
+                    if len(code_to_prune) > 1:
+                        tree_weights.nodes[code_to_prune[:-1]] += weight
+                    tree_weights.nodes.pop(code_to_prune)
+                summary_trees[entity_id] = list(tree_weights.keys())[:tree_limit]
+                summary_tree_weights[entity_id] = list(tree_weights.values())[:tree_limit]
+
+            else:
+                raise "You need to specify at least one parameter to select_entity_summary_trees!"
+
+        return summary_trees, summary_tree_weights
+
+    @abstractmethod
     def eval_generate_summaries(config, agent, test=False):
+        split = "test" if test else "dev"
+
+        with jsonlines.open(os.path.join(agent.data_path, "opagg/space-eval", f"{split}.jsonl")) as reader:
+            all_rows = [x for x in reader]
+
         # First, get encodings for all sentences
         config_codes = copy.deepcopy(config.data)
         config_codes["dataset"] = "json"
         config_codes["json_dataset"] = {
-            "path": config.eval.metrics.hrq_agg.dataset_all,
-            "filename": "space_reviews.{split}",
+            "path": None,
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
                 {"type": "copy", "from": "sentence", "to": "source"},
             ],
         }
 
-        MASK_LENGTH = 3
+        # MASK_LENGTH = 4
 
         if agent.config.bottleneck.get("quantizer_heads", None) is not None:
             num_heads = agent.config.bottleneck.quantizer_heads - agent.config.bottleneck.get(
@@ -658,37 +759,70 @@ class HRQAggregationMetricHook(MetricHook):
             quantizer_index = bneck_types.index("hrqvae")
             num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
-        data_loader = JsonDataLoader(config=Config(config_codes), data_path=agent.data_path)
+        def prefilter_condition(sentence):
+            return sum(i.isalpha() for i in sentence) / len(sentence) > 0.5
+
+        eval_sentences = [
+            {"sentence": sentence, "review_id": review["review_id"], "entity_id": row["entity_id"]}
+            for row in all_rows
+            for review in row["reviews"]
+            for sentence in review["sentences"]
+            if prefilter_condition(sentence)
+        ]
+
+        data_loader = JsonDataLoader(
+            config=Config(config_codes), data_path=agent.data_path, dev_samples=eval_sentences
+        )
 
         sample_outputs = agent.config.eval.get("sample_outputs", True)
         agent.config.eval.data["sample_outputs"] = False
 
-        _, _, _, memory = agent.inference(
-            data_loader.test_loader if test else data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+
+        all_codes = memory["vq_codes"].tolist()
+
+        # Organise trees by entity/review, then get summary trees
+        trees_by_review_by_entity = defaultdict(lambda: defaultdict(list))
+        for row, codes in zip(eval_sentences, all_codes):
+            trees_by_review_by_entity[row["entity_id"]][row["review_id"]].append(codes)
+
+        summary_trees, summary_tree_weights = HRQAggregationMetricHook.select_entity_summary_trees(
+            trees_by_review_by_entity,
+            tree_limit=config.eval.metrics.hrq_agg.get("summary_tree_limit", 6),
+            truncation_length=config.eval.metrics.hrq_agg.get("summary_truncation_length", None),
+            prune_min_weight=config.eval.metrics.hrq_agg.get("summary_prune_min_weight", None),
+            prune_max_paths=config.eval.metrics.hrq_agg.get("summary_prune_max", 5),
         )
 
-        all_codes = memory["vq_codes"]
+        # # Identify top clusters per entity
+        # codes_by_entity = defaultdict(Counter)
 
-        split = "test" if test else "dev"
+        # for row, codes in zip(all_rows, all_codes):
+        #     codes_by_entity[row["entity_id"]][tuple(codes.tolist()[:-MASK_LENGTH])] += 1
 
-        with jsonlines.open(
-            os.path.join(agent.data_path, config.eval.metrics.hrq_agg.dataset_all, f"space_reviews.{split}.jsonl")
-        ) as reader:
-            all_rows = [x for x in reader]
+        # mask = [1] * (num_heads - MASK_LENGTH) + [0] * MASK_LENGTH
 
-        # Identify top clusters per entity
-        codes_by_entity = defaultdict(Counter)
-
-        for row, codes in zip(all_rows, all_codes):
-            codes_by_entity[row["entity_id"]][tuple(codes.tolist()[:-MASK_LENGTH])] += 1
-
-        mask = [1] * (num_heads - MASK_LENGTH) + [0] * MASK_LENGTH
+        # filtered_examples = []
+        # for entity, counter in codes_by_entity.items():
+        #     for x, count in counter.most_common(5):
+        #         filtered_examples.append(
+        #             {"entity_id": entity, "codes": list(x) + [0] * MASK_LENGTH, "sentence": "", "head_mask": mask}
+        #         )
 
         filtered_examples = []
-        for entity, counter in codes_by_entity.items():
-            for x, count in counter.most_common(5):
+        # for entity, trees in summary_trees.items():
+        for row in all_rows:
+            entity_id = row["entity_id"]
+            for tree in summary_trees[entity_id]:
+                mask = [1] * len(tree) + [0] * (num_heads - len(tree))
+                # print(tree)
                 filtered_examples.append(
-                    {"entity_id": entity, "codes": list(x) + [0] * MASK_LENGTH, "sentence": "", "head_mask": mask}
+                    {
+                        "entity_id": entity_id,
+                        "codes": list(tree) + [0] * (num_heads - len(tree)),
+                        "sentence": "",
+                        "head_mask": mask,
+                    }
                 )
 
         # Generate!
@@ -697,7 +831,7 @@ class HRQAggregationMetricHook(MetricHook):
         config_forced = copy.deepcopy(config.data)
         config_forced["dataset"] = "json"
         config_forced["json_dataset"] = {
-            "path": config.eval.metrics.hrq_agg.dataset_all,
+            "path": None,
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
                 {"type": "copy", "from": "sentence", "to": "source"},
@@ -706,15 +840,53 @@ class HRQAggregationMetricHook(MetricHook):
             ],
         }
 
-        forced_loader = JsonDataLoader(config=Config(config_forced), dev_samples=filtered_examples)
+        forced_loader = JsonDataLoader(
+            config=Config(config_forced), data_path=agent.data_path, dev_samples=filtered_examples
+        )
 
         _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
 
+        sentences_by_entity = defaultdict(list)
+        for input, sentence in zip(filtered_examples, output):
+            sentences_by_entity[input["entity_id"]].append(sentence)
+
+        # Extractive summaries
+        sentences_by_tree = defaultdict(lambda: defaultdict(list))
+        extractive_summs = []
+        for row, codes in zip(eval_sentences, all_codes):
+            sentences_by_tree[row["entity_id"]][tuple(codes)].append(row["sentence"])
+
+        for row in all_rows:
+            summary_sentences = []
+            entity = row["entity_id"]
+            trees = summary_trees[entity]
+            for tree in trees:
+                for codes, sents in sentences_by_tree[entity].items():
+                    if tree == codes[: len(tree)]:
+                        summary_sentences.append(sents[0])
+                        break
+            extractive_summs.append(" ".join(summary_sentences))
+
         # TODO: eval against reference summaries
+
+        from torchseq.utils.rouge import get_jackknife_rouge
+
+        gold_summs = [ent["summaries"] for ent in all_rows]
+        pred_summs = [" ".join(sentences_by_entity[ent["entity_id"]]) for ent in all_rows]
+
+        scores = {k: v * 100 for k, v in get_jackknife_rouge(pred_summs, gold_summs).items()}
+
+        extractive_scores = {k: v * 100 for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
 
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
-        return {}, output
+        return {"abstractive": scores, "extractive": extractive_scores}, {
+            "summaries": pred_summs,
+            "trees": [summary_trees[ent["entity_id"]] for ent in all_rows],
+            "weights": [summary_tree_weights[ent["entity_id"]] for ent in all_rows],
+            "extractive_summaries": extractive_summs,
+            # "trees_by_review_by_entity": trees_by_review_by_entity
+        }
 
     @abstractmethod
     def eval_masked_generation(config, agent, test=False, dev_samples=None, test_samples=None, skip_scores=False):

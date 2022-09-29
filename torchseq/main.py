@@ -146,7 +146,7 @@ def main():
         # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
-        if agent.config.bottleneck.get("modular", False):
+        if agent.config.get_path(["bottleneck", "modular"], False):
             bneck_types = [x.type for x in agent.config.bottleneck.modules]
             quantizer_index = None
             if "vqvae" in bneck_types:

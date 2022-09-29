@@ -6,7 +6,8 @@ import torch.nn as nn
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
-from torchseq.utils.functions import initialize_truncated_normal_
+from torchseq.utils.functions import initialize_truncated_normal_, init_bert_params
+from transformers import BartModel, BertModel, RobertaModel, MBartModel
 
 
 class SequenceDecoder(nn.Module):
@@ -26,8 +27,10 @@ class SequenceDecoder(nn.Module):
             if self.tokenizer.has_embeddings:
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
-                torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
-                # initialize_truncated_normal_(self.embeddings.weight.data, std=0.02)
+                # torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
+                initialize_truncated_normal_(
+                    self.embeddings.weight.data, std=1 / math.sqrt(config.decoder.embedding_dim)
+                )
             self.embeddings.weight.requires_grad = not (
                 config.decoder.get("freeze_embeddings", config.get("freeze_embeddings", False))
                 if "decoder" in config.data
@@ -35,6 +38,26 @@ class SequenceDecoder(nn.Module):
             )
             self.embeddings.cpu()
             self.embeddings.force_device = True
+
+        self.pretrained_model_slug = None
+        if config.decoder.get("pretrained_decoder", None) is not None:
+            self.pretrained_model_slug = config.decoder.pretrained_decoder
+            if "mbart" in self.pretrained_model_slug:
+                bart_model = MBartModel.from_pretrained(self.pretrained_model_slug)
+                self.pretrained_decoder = bart_model.decoder
+                del bart_model
+            elif "bart" in self.pretrained_model_slug:
+                bart_model = BartModel.from_pretrained(self.pretrained_model_slug)
+                self.pretrained_decoder = bart_model.decoder
+                del bart_model
+            else:
+                # TODO: Make this an AutoModel?
+                raise Exception("Unrecognised pretrained decoder slug: {:}".format(self.pretrained_model_slug))
+
+            if config.decoder.get("freeze_pretrained", False):
+                self.pretrained_decoder.requires_grad = False
+        else:
+            self.pretrained_decoder = None
 
         decoder_layer = nn.TransformerDecoderLayer(
             config.decoder.embedding_dim,
@@ -45,9 +68,16 @@ class SequenceDecoder(nn.Module):
         )
         decoder_norm = nn.LayerNorm(config.decoder.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.encdec.num_decoder_layers, decoder_norm)
+        if self.config.encdec.get("init_like_bert", False):
+            init_bert_params(self.decoder)
 
         projection_init = None
-        if (
+        if self.pretrained_model_slug is not None:
+            # TODO: reuse the model from earlier
+            bart_model = MBartModel.from_pretrained(self.pretrained_model_slug)
+            projection_init = bart_model.shared.weight.data
+            del bart_model
+        elif (
             config.decoder.embedding_dim == config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"])
             and config.data.get("init_projection", True)
             and self.tokenizer.has_embeddings
@@ -100,28 +130,58 @@ class SequenceDecoder(nn.Module):
             output_seq.device
         )[:, :output_max_len]
 
-        # Embed the output so far
-        output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
-            self.config.decoder.embedding_dim
-        )
+        if self.pretrained_model_slug is None:
+            # Embed the output so far
+            output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
+                self.config.decoder.embedding_dim
+            )
 
-        # if self.config.raw_embedding_dim != self.config.decoder.embedding_dim:
-        #     output_embedded = self.embedding_projection(output_embedded)
+            # if self.config.raw_embedding_dim != self.config.decoder.embedding_dim:
+            #     output_embedded = self.embedding_projection(output_embedded)
 
-        # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
-        output_embedded = self.positional_embeddings(output_embedded.permute(1, 0, 2))
+            # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
+            output_embedded = self.positional_embeddings(output_embedded.permute(1, 0, 2))
 
-        # Decoder block fwd pass
-        output_seq = self.decoder(
-            output_embedded,
-            memory["encoding"].permute(1, 0, 2),
-            tgt_mask=tgt_mask,
-            tgt_key_padding_mask=output_pad_mask,
-            memory_key_padding_mask=memory["encoding_mask"],
-        ).permute(1, 0, 2)
+            # Decoder block fwd pass
+            output_seq = self.decoder(
+                output_embedded,
+                memory["encoding"].permute(1, 0, 2),
+                tgt_mask=tgt_mask,
+                tgt_key_padding_mask=output_pad_mask,
+                memory_key_padding_mask=memory["encoding_mask"],
+            ).permute(1, 0, 2)
+
+        else:
+
+            # Build some masks
+            tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(self.device)
+            # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('0')).to(self.device)
+            tgt_mask = torch.triu(tgt_mask, diagonal=1)
+
+            # ie how many indices are non-pad
+            output_len = torch.sum(torch.ne(output_seq, self.output_tokenizer.pad_id), dim=-1)
+
+            output_pad_mask = (torch.arange(output_max_len)[None, :].cpu() >= output_len[:, None].cpu()).to(
+                self.device
+            )[:, :output_max_len]
+            output_seq = self.decoder(
+                input_ids=output_seq,
+                encoder_hidden_states=memory["encoding"],
+                encoder_attention_mask=~memory["encoding_mask"],
+                attention_mask=~output_pad_mask,
+            )[0]
+
+            if self.config.encdec.num_decoder_layers > 0:
+                output_seq = self.decoder(
+                    output_seq,
+                    memory["encoding"].permute(1, 0, 2),
+                    tgt_mask=tgt_mask,
+                    tgt_key_padding_mask=output_pad_mask,
+                    memory_key_padding_mask=memory["encoding_mask"],
+                ).permute(1, 0, 2)
 
         # Embeddings -> logits
-        if self.config.data.get("variational_projection", False):
+        if self.config.get("variational_projection", False):
             logits, memory = self.output_projection(output_seq)
         else:
             logits = self.output_projection(output_seq)

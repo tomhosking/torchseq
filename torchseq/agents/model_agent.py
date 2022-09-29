@@ -72,6 +72,7 @@ class ModelAgent(BaseAgent):
         self.verbose = verbose
 
         self.training_mode = training_mode
+        self.run_output_path = None
 
         set_seed(config.get("seed", 123))
 
@@ -95,7 +96,7 @@ class ModelAgent(BaseAgent):
             self.cache = Cache(cache_root if cache_root is not None else self.run_output_path)
 
         if self.config.training.get("loss_dropping", 0) > 0:
-            self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=5000)
+            self.dropper = LossDropper(dropc=self.config.training.get("loss_dropping", 0), recompute=10000)
 
         # initialize counter
         self.best_metric = None
@@ -151,7 +152,9 @@ class ModelAgent(BaseAgent):
                     scheduled=curr_scheduled,
                     warmup=self.config.training.optimizer.get("lr_warmup_steps", 10000) > 0,
                     num_warmup_steps=self.config.training.optimizer.get("lr_warmup_steps", 10000),
-                    legacy=self.config.training.optimizer.get("lr_schedule_legacy", True),
+                    legacy=self.config.training.optimizer.get(
+                        "lr_schedule_legacy", True
+                    ),  # TODO: deprecate this and change the default for v3
                 )
 
                 optimizer_list.append(curr_optimizer)
@@ -330,7 +333,7 @@ class ModelAgent(BaseAgent):
         if "loss" in memory:
             this_loss += memory["loss"]
 
-        if self.config.training.get("loss_dropping", False):
+        if self.config.training.get("loss_dropping", 0) > 0:
             mask = self.dropper(this_loss)  # The dropper returns a mask of 0s where data should be dropped.
             this_loss *= mask  # Mask out the high losses')
 
