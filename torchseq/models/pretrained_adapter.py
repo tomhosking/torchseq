@@ -173,10 +173,10 @@ class PretrainedAdapterModel(nn.Module):
 
                     encoding = self.adapter(
                         pretrained_encoding.transpose(0, 1),
-                        sideinfo.permute(1, 0, 2),
+                        sideinfo,
                         tgt_key_padding_mask=context_mask,
                         memory_key_padding_mask=sideinfo_mask,
-                    ).permute(1, 0, 2)
+                    )
                     # encoding = self.adapter(pretrained_encoding.transpose(0, 1)).transpose(0, 1)
                 else:
                     adapter_out = self.adapter(

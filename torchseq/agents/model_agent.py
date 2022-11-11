@@ -470,7 +470,7 @@ class ModelAgent(BaseAgent):
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
 
-                    with torch.no_grad():
+                    with torch.inference_mode():
                         greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
 
                     self.logger.info(
@@ -576,7 +576,7 @@ class ModelAgent(BaseAgent):
         for hook in metric_hooks:
             hook.on_begin_epoch(use_test)
 
-        with torch.no_grad():
+        with torch.inference_mode():
             num_samples = 0
             for batch_idx, batch in enumerate(
                 tqdm(data_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
@@ -645,7 +645,7 @@ class ModelAgent(BaseAgent):
                     # This is a horrible way of getting the current batch worth of decoded output - tidy it up at some point!
                     hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory, use_test)
 
-        test_loss /= num_samples
+        test_loss = test_loss / num_samples
 
         all_metrics = {}
         for hook in metric_hooks:

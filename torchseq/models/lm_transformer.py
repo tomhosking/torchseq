@@ -32,6 +32,7 @@ class TransformerLanguageModel(nn.Module):
             dim_feedforward=config.encoder.dim_feedforward,
             dropout=config.dropout,
             activation=config.encoder.activation,
+            batch_first=True,
         )
         encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
         self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_encoder_layers, encoder_norm)
@@ -94,10 +95,10 @@ class TransformerLanguageModel(nn.Module):
 
         ctxt_embedded = ctxt_toks_embedded * math.sqrt(self.config.encoder.embedding_dim)
 
-        ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded.permute(1, 0, 2))
+        ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded)
 
         encoding = (
-            self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).permute(1, 0, 2).contiguous()
+            self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).contiguous()
         )
 
         logits = self.output_projection(encoding)

@@ -56,6 +56,7 @@ class ModularBottleneck(nn.Module):
                 dim_feedforward=hidden_dim,
                 dropout=config.dropout,
                 activation="relu",
+                batch_first=True,
             )
             encoder_norm = nn.LayerNorm(config.bottleneck.get("input_dim", config.bottleneck.embedding_dim))
             self.pre_transform = nn.TransformerEncoder(transform_layer, num_layers, encoder_norm)
@@ -73,6 +74,7 @@ class ModularBottleneck(nn.Module):
                 dim_feedforward=hidden_dim,
                 dropout=config.dropout,
                 activation="relu",
+                batch_first=True,
             )
             transform_norm = nn.LayerNorm(config.bottleneck.get("output_dim", config.bottleneck.embedding_dim))
             self.post_transform = nn.TransformerEncoder(transform_layer, num_layers, transform_norm)

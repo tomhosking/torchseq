@@ -7,7 +7,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-# Temporarily leave PositionalEncoding module here. Will be moved somewhere else.
 class PositionalEncoding(nn.Module):
     r"""
     Inject some information about the relative or absolute position of the tokens
@@ -30,7 +29,7 @@ class PositionalEncoding(nn.Module):
 
     """
 
-    def __init__(self, d_model, dropout=0.1, max_len=5000):
+    def __init__(self, d_model, dropout=0.1, max_len=5000, batch_first=True):
         super(PositionalEncoding, self).__init__()
         self.dropout = nn.Dropout(p=dropout)
 
@@ -40,7 +39,10 @@ class PositionalEncoding(nn.Module):
         pe[:, 0::2] = torch.sin(position * div_term)
         pe[:, 1::2] = torch.cos(position * div_term)
         pe = pe.unsqueeze(0).transpose(0, 1)
+        # if not batch_first:
+        #     pe = pe.transpose(0, 1)
         self.register_buffer("pe", pe)
+        self.batch_first = batch_first
 
     def forward(self, x):
         r"""
@@ -58,5 +60,8 @@ class PositionalEncoding(nn.Module):
 
         """
 
-        x = x + self.pe[: x.size(0), :]
+        if self.batch_first:
+            x = x + self.pe.transpose(0, 1)[:, : x.size(1), :]
+        else:
+            x = x + self.pe[: x.size(0), :]
         return self.dropout(x)

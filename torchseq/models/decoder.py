@@ -72,6 +72,7 @@ class SequenceDecoder(nn.Module):
             dim_feedforward=config.decoder.dim_feedforward,
             dropout=config.dropout,
             activation=config.decoder.activation,
+            batch_first=True,
         )
         decoder_norm = nn.LayerNorm(config.decoder.embedding_dim)
         self.decoder = nn.TransformerDecoder(decoder_layer, config.decoder.num_layers, decoder_norm)
@@ -156,16 +157,16 @@ class SequenceDecoder(nn.Module):
             #     output_embedded = self.embedding_projection(output_embedded)
 
             # For some reason the Transformer implementation expects seq x batch x feat - this is weird, so permute the input and the output
-            output_embedded = self.positional_embeddings(output_embedded.permute(1, 0, 2))
+            output_embedded = self.positional_embeddings(output_embedded)
 
             # Decoder block fwd pass
             output_seq = self.decoder(
                 output_embedded,
-                memory["encoding"].permute(1, 0, 2),
+                memory["encoding"],
                 tgt_mask=tgt_mask,
                 tgt_key_padding_mask=output_pad_mask,
                 memory_key_padding_mask=memory["encoding_mask"],
-            ).permute(1, 0, 2)
+            )
 
         else:
 
@@ -191,11 +192,11 @@ class SequenceDecoder(nn.Module):
             if self.config.decoder.num_layers > 0:
                 output_seq = self.decoder(
                     output_seq,
-                    memory["encoding"].permute(1, 0, 2),
+                    memory["encoding"],
                     tgt_mask=tgt_mask,
                     tgt_key_padding_mask=output_pad_mask,
                     memory_key_padding_mask=memory["encoding_mask"],
-                ).permute(1, 0, 2)
+                )
 
         # Embeddings -> logits
         if self.config.get("variational_projection", False):
