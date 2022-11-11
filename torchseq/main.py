@@ -19,22 +19,13 @@ from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.config_migration import check_config
 from torchseq.utils.mckenzie import set_status_mckenzie
 from torchseq.utils.wandb import wandb_init
+from torchseq.utils.model_loader import AGENT_TYPES
 
 from torchseq.datasets.builder import dataloader_from_config
 
 # from pytorch_lightning.lite import LightningLite
 import transformers
 
-
-AGENT_TYPES = {
-    "aq": AQAgent,
-    "langmodel": LangModelAgent,
-    "para": Seq2SeqAgent,
-    "seq2seq": Seq2SeqAgent,
-    "autoencoder": Seq2SeqAgent,
-    "metalearning": MetaLearningAgent,
-    "exemplarguided": ExemplarGuidedAgent,
-}
 
 """
 Entry point for torchseq CLI
@@ -138,7 +129,8 @@ def main():
     #     data_loader.test_loader = self.setup_dataloaders(data_loader.test_loader)
 
     if args.load_chkpt is not None:
-        logger.info("Loading from checkpoint...")
+        logger.info("Loading from checkpoint:")
+        logger.info(args.load_chkpt)
         agent.load_checkpoint(args.load_chkpt)
         logger.info("...loaded!")
 
@@ -166,11 +158,11 @@ def main():
         agent.train(data_loader)
         logger.info("...training done!")
 
-    if args.reload_after_train:
-        logger.info("Training done - reloading saved model")
-        save_path = os.path.join(agent.run_output_path, "model", "checkpoint.pt")
-        agent.load_checkpoint(save_path, write_pointer=False)
-        logger.info("...loaded!")
+        if args.reload_after_train:
+            logger.info("Training done - reloading saved model")
+            save_path = os.path.join(agent.run_output_path, "model", "checkpoint.pt")
+            agent.load_checkpoint(save_path, write_pointer=False)
+            logger.info("...loaded!")
 
     if args.validate_train:
         if data_loader.train_loader is None:
@@ -187,7 +179,7 @@ def main():
             raise Exception("Selected dataset does not include a dev split - cannot run validation!")
 
         # TEMP: save out the VQ embeds *after* they've been trained, for debug
-        if agent.config.bottleneck.get("modular", False):
+        if agent.config.get_path(["bottleneck", "modular"], False):
             bneck_types = [x.type for x in agent.config.bottleneck.modules]
             quantizer_index = None
             if "vqvae" in bneck_types:

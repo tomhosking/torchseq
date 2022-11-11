@@ -44,10 +44,48 @@ class ModularBottleneck(nn.Module):
         else:
             self.output_projection = None
 
+        # Pre/post transformations
+        if config.bottleneck.get("pre_transform", None) is not None:
+            num_layers = config.bottleneck.pre_transform.get("num_layers", 0)
+            hidden_dim = config.bottleneck.pre_transform.get("hidden_dim", config.bottleneck.embedding_dim * 4)
+            num_heads = config.bottleneck.pre_transform.get("num_heads", 8)
+
+            transform_layer = nn.TransformerEncoderLayer(
+                config.bottleneck.get("input_dim", config.bottleneck.embedding_dim),
+                nhead=num_heads,
+                dim_feedforward=hidden_dim,
+                dropout=config.dropout,
+                activation="relu",
+            )
+            encoder_norm = nn.LayerNorm(config.bottleneck.get("input_dim", config.bottleneck.embedding_dim))
+            self.pre_transform = nn.TransformerEncoder(transform_layer, num_layers, encoder_norm)
+        else:
+            self.pre_transform = None
+
+        if config.bottleneck.get("post_transform", None) is not None:
+            num_layers = config.bottleneck.post_transform.get("num_layers", 0)
+            hidden_dim = config.bottleneck.post_transform.get("hidden_dim", config.bottleneck.embedding_dim * 4)
+            num_heads = config.bottleneck.post_transform.get("num_heads", 8)
+
+            transform_layer = nn.TransformerEncoderLayer(
+                config.bottleneck.get("output_dim", config.bottleneck.embedding_dim),
+                nhead=num_heads,
+                dim_feedforward=hidden_dim,
+                dropout=config.dropout,
+                activation="relu",
+            )
+            transform_norm = nn.LayerNorm(config.bottleneck.get("output_dim", config.bottleneck.embedding_dim))
+            self.post_transform = nn.TransformerEncoder(transform_layer, num_layers, transform_norm)
+        else:
+            self.post_transform = None
+
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
 
         # if head_mask is not None:
         #     print('hm in bottleneck')
+
+        if self.pre_transform is not None:
+            encoding = self.pre_transform(encoding)
 
         if self.input_projection is not None:
             encoding = self.input_projection(encoding)
@@ -88,9 +126,15 @@ class ModularBottleneck(nn.Module):
         memory["encoding_pooled"] = torch.cat(encodings_pooled, dim=-1).detach()
         full_encoding_post = torch.cat(encodings_post, dim=-1)
 
+        if any_pooled:
+            memory["encoding_mask"] = None
+
         if self.output_projection is not None:
             memory["encoding_pooled"] = self.output_projection(memory["encoding_pooled"])
             full_encoding_post = self.output_projection(full_encoding_post)
+
+        if self.post_transform is not None:
+            encoding = self.post_transform(encoding)
 
         return full_encoding_post, memory
 
@@ -180,7 +224,9 @@ class BottleneckPart(nn.Module):
         # print('BN part, input=', encoding.shape)
 
         encoding_pooled = (
-            self.pooling(key=encoding, value=encoding).unsqueeze(1) if self.config.get("pooling", True) else encoding
+            self.pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)
+            if self.config.get("pooling", True)
+            else encoding
         )
 
         # Stash this for later
@@ -217,9 +263,11 @@ class BottleneckPart(nn.Module):
 
         if not isinstance(var_weight, float) and len(var_weight) > 1:
             raise Exception("Varying VAE noise weight is not yet supported for the modular bottleneck!")
-            assert len(var_weight) == self.config.encdec.num_heads
+            assert len(var_weight) == self.config.encoder.num_heads
             var_weight = torch.Tensor(var_weight).to(encoding.device)
-            var_weight = torch.repeat_interleave(var_weight, self.config.embedding_dim // self.config.encdec.num_heads)
+            var_weight = torch.repeat_interleave(
+                var_weight, self.config.embedding_dim // self.config.encoder.num_heads
+            )
 
         # if self.config.get("hyperbolic", False):
         #     encoding_post, memory = self.hyperbolic_bottleneck(encoding_post, memory, global_step)
@@ -229,7 +277,7 @@ class BottleneckPart(nn.Module):
 
             if self.config.get("pooling", False):
                 mu = encoding_post
-                logvar = self.logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+                logvar = self.logvar_pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)
             else:
                 mu = self.mu_proj(encoding_post)
                 logvar = self.var_proj(encoding_post)

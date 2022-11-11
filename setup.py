@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchseq",
-    version="2.3.1.dev",
+    version="2.4.0.dev",
     author="Tom Hosking",
     author_email="code@tomho.sk",
     description="A Seq2Seq framework for PyTorch",
@@ -26,7 +26,7 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.9.0',
-        'torch==1.12.0',
+        'torch==1.12.1',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
@@ -36,7 +36,7 @@ setuptools.setup(
         'sacrebleu>=2.0',
         'py-rouge',
         'rouge-score',
-        'wandb==0.12.21',
+        'wandb==0.13.4',
         'matplotlib',
         'opentsne',
         'sentencepiece==0.1.95',

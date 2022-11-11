@@ -30,7 +30,7 @@ class PoolingBottleneck(nn.Module):
             self.output_projection = None
 
         self.encoder_pooling = MultiHeadedPooling(
-            config.encdec.num_heads,
+            config.encoder.num_heads,
             config.bottleneck.embedding_dim,
             dropout=config.dropout,
             model_dim_out=config.bottleneck.embedding_dim,
@@ -40,7 +40,7 @@ class PoolingBottleneck(nn.Module):
         # Extra modules for a variational bottleneck
         if self.config.bottleneck.get("variational", False):
             self.encoder_logvar_pooling = MultiHeadedPooling(
-                config.encdec.num_heads,
+                config.encoder.num_heads,
                 config.bottleneck.embedding_dim,
                 dropout=config.dropout,
                 model_dim_out=config.bottleneck.embedding_dim,
@@ -108,12 +108,13 @@ class PoolingBottleneck(nn.Module):
 
         # Pool
         encoding_pooled = (
-            self.encoder_pooling(key=encoding, value=encoding).unsqueeze(1)
+            self.encoder_pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)
             if self.config.bottleneck.get("pooling", True)
             else encoding
         )
 
         memory["encoding_pooled"] = encoding_pooled.detach()
+        memory["encoding_mask"] = None if self.config.bottleneck.get("pooling", True) else memory["encoding_mask"]
 
         # Quantize
         if self.config.bottleneck.get("vector_quantized", False):
@@ -198,10 +199,10 @@ class PoolingBottleneck(nn.Module):
         )
 
         if not isinstance(var_weight, float) and len(var_weight) > 1:
-            assert len(var_weight) == self.config.encdec.num_heads
+            assert len(var_weight) == self.config.encoder.num_heads
             var_weight = torch.Tensor(var_weight).to(encoding.device)
             var_weight = torch.repeat_interleave(
-                var_weight, self.config.bottleneck.embedding_dim // self.config.encdec.num_heads
+                var_weight, self.config.bottleneck.embedding_dim // self.config.encoder.num_heads
             )
 
         if self.config.bottleneck.get("hyperbolic", False):
@@ -211,7 +212,9 @@ class PoolingBottleneck(nn.Module):
         if self.config.bottleneck.get("variational", False):
 
             mu = encoding_pooled
-            logvar = self.encoder_logvar_pooling(key=encoding, value=encoding).unsqueeze(1)
+            logvar = self.encoder_logvar_pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(
+                1
+            )
 
             # If VQ-VAE with residual path, only make the residual heads variational
             if (

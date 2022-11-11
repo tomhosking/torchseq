@@ -23,7 +23,7 @@ class Config(object):
     def get_path(self, path, default=None):
         if path[0] in self.data:
             if len(path) > 1:
-                return self.get_path(path[1:], default)
+                return getattr(self, path[0]).get_path(path[1:], default)
             else:
                 return self.data[path[0]]
         else:

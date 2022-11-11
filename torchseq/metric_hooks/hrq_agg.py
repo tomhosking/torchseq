@@ -4,18 +4,22 @@ import numpy as np
 import copy
 import os
 import json
+import re
 from abc import abstractmethod
 from tqdm import tqdm
+from math import ceil
+
 
 from collections import defaultdict, Counter
 from torchseq.metric_hooks.base import MetricHook
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
 from torchseq.utils.functions import batchify, cos_sim
+from torchseq.utils.rouge import get_jackknife_rouge, get_pairwise_rouge
 
 import sacrebleu
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-
+from nltk import sent_tokenize
 
 from openTSNE import TSNE
 
@@ -26,6 +30,38 @@ import matplotlib.colors as mcolors
 import logging
 
 logger = logging.getLogger("HRQAggregationMetric")
+
+
+class AggregationTree:
+    def __init__(self, elements):
+        self.nodes = defaultdict(float)
+        for element in elements:
+            self.nodes[element] += 1
+
+    def __getitem__(self, key):
+        val = self.nodes[key]
+        for k, v in self.nodes.items():
+            if len(k) > len(key) and k[: len(key)] == key:
+                val += v
+        return val
+
+    def __setitem__(self, key, val):
+        self.nodes[key] = val
+
+    def pop(self, key):
+        self.nodes.pop(key)
+
+    def __len__(self):
+        return len(self.nodes)
+
+    def items(self):
+        return self.nodes.items()
+
+    def keys(self):
+        return self.nodes.keys()
+
+    def values(self):
+        return self.nodes.values()
 
 
 class HRQAggregationMetricHook(MetricHook):
@@ -42,6 +78,12 @@ class HRQAggregationMetricHook(MetricHook):
         pass
 
     def on_end_epoch(self, agent, use_test=False):
+
+        # Populate caches
+        logger.info("Populating HRQ caches - this may take a while!")
+        _, _ = HRQAggregationMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
+        # _, _ = HRQAggregationMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
+        logger.info("...done")
 
         if self.config.eval.metrics.hrq_agg.get("run_nli", False):
             logger.info("Running NLI eval")
@@ -72,7 +114,10 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_generate_summaries", False):
             logger.info("Running generation using HRQ paths")
-            self.scores["hrq_agg_generation"], generated_summaries = HRQAggregationMetricHook.eval_generate_summaries(
+            (
+                self.scores["hrq_agg_generation"],
+                generated_summaries,
+            ) = HRQAggregationMetricHook.eval_generate_summaries_and_score(
                 self.config,
                 agent,
                 test=use_test,
@@ -94,14 +139,32 @@ class HRQAggregationMetricHook(MetricHook):
                 json.dump(masked_outputs, f)
             logger.info("...done")
 
+        if self.config.eval.metrics.hrq_agg.get("run_oracle", False):
+            logger.info("Running oracle summary generation")
+            res = HRQAggregationMetricHook.eval_oracle_summaries(self.config, agent, test=use_test)
+            self.scores["hrq_agg_oracle"] = {"full": res[0], "masked": res[1]}
+            split = "test" if use_test else "dev"
+            with open(agent.run_output_path + f"/oracle_eval_{split}.json", "w") as f:
+                json.dump(res, f)
+            logger.info("...done")
+
+        if self.config.eval.metrics.hrq_agg.get("run_purity", False):
+            logger.info("Running cluster purity eval")
+            self.scores["hrq_agg_purity"] = HRQAggregationMetricHook.eval_cluster_purity(
+                self.config, agent, test=use_test
+            )
+            logger.info("...done")
+
         return self.scores
 
     @abstractmethod
-    def codes_from_cache(config, agent, test=False):
+    def codes_from_cache(config, agent, test=False, train=False, force_rebuild=False):
 
-        split = "test" if test else "dev"
-        if agent.run_output_path is not None and os.path.exists(
-            agent.run_output_path + f"/sents_by_code_{split}.json"
+        split = "test" if test else ("train" if train else "dev")
+        if (
+            not force_rebuild
+            and agent.run_output_path is not None
+            and os.path.exists(agent.run_output_path + f"/sents_by_code_{split}.json")
         ):
             with open(agent.run_output_path + f"/sents_by_code_{split}.json") as f:
                 sents_by_code = json.load(f)
@@ -111,22 +174,24 @@ class HRQAggregationMetricHook(MetricHook):
             cfg_dict = copy.deepcopy(config.data)
 
             cfg_dict["json_dataset"] = {
-                "path": "opagg/space-filtered-all",
-                "filename": "space_reviews.{split}",
+                "path": config.eval.metrics.hrq_agg.dataset_all,
+                "filename": "reviews.{split}",
                 "field_map": [
                     {"type": "copy", "from": "sentence", "to": "target"},
                     {"type": "copy", "from": "sentence", "to": "source"},
                 ],
             }
 
-            cfg_dict["eval"]["metrics"]["hrq_agg"] = {
-                "dataset_clusters": "opagg/space-filtered-clusters",
-                "dataset_all": "opagg/space-filtered-all",
-                "run_generate_summaries": False,
-                "run_retrieval": False,
-                "run_masked_generation": True,
-            }
-            cfg_dict["eval"]["eval_batch_size"] = 32
+            # cfg_dict["eval"]["metrics"]["hrq_agg"] = {
+            #     "dataset_clusters": "opagg/space-filtered-25toks-clusters",
+            #     "dataset_all": "opagg/space-filtered-25toks-all",
+            #     "run_generate_summaries": False,
+            #     "run_retrieval": False,
+            #     "run_masked_generation": True,
+            # }
+
+            cfg_dict["training"]["batch_size"] = cfg_dict["eval"]["eval_batch_size"]
+            cfg_dict["training"]["shuffle_data"] = False
             # cfg_dict['eval']['truncate_dataset'] = 10000
 
             config_forced = Config(cfg_dict)
@@ -138,13 +203,17 @@ class HRQAggregationMetricHook(MetricHook):
 
             data_loader = JsonDataLoader(config_forced, data_path=agent.data_path)
 
-            _, _, (pred_output, _, _), memory = agent.inference(
-                data_loader.valid_loader, memory_keys_to_return=["vq_codes"]
+            loader = (
+                data_loader.test_loader if test else (data_loader.train_loader if train else data_loader.valid_loader)
             )
 
-            with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/space_reviews.dev.jsonl") as f:
+            _, _, (pred_output, _, _), memory = agent.inference(loader, memory_keys_to_return=["vq_codes"])
+
+            with jsonlines.open(
+                agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+            ) as f:
                 inputs = [x["sentence"] for x in f]
-            # with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/space_reviews.dev.jsonl") as f:
+            # with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/reviews.dev.jsonl") as f:
             #     scores = [x["rating"] for x in f]
 
             sents_by_code = defaultdict(set)
@@ -154,7 +223,7 @@ class HRQAggregationMetricHook(MetricHook):
             for k, v in sents_by_code.items():
                 sents_by_code[k] = list(v)
 
-            outputs_with_codes = {"outputs": pred_output, "codes": memory["vq_codes"].tolist()}
+            outputs_with_codes = {"outputs": pred_output, "codes": memory["vq_codes"].tolist(), "inputs": inputs}
 
             with open(agent.run_output_path + f"/sents_by_code_{split}.json", "w") as f:
                 json.dump(sents_by_code, f)
@@ -173,22 +242,14 @@ class HRQAggregationMetricHook(MetricHook):
         # cfg_dict = config_nli.data
 
         cfg_dict["json_dataset"] = {
-            "path": "opagg/space-filtered-all",
-            "filename": "space_reviews.{split}",
+            "path": config.eval.metrics.hrq_agg.dataset_all,
+            "filename": "reviews.{split}",
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
                 {"type": "copy", "from": "sentence", "to": "source"},
             ],
         }
-
-        cfg_dict["eval"]["metrics"]["hrq_agg"] = {
-            "dataset_clusters": "opagg/space-filtered-clusters",
-            "dataset_all": "opagg/space-filtered-all",
-            "run_generate_summaries": False,
-            "run_retrieval": False,
-            "run_masked_generation": True,
-        }
-        cfg_dict["eval"]["eval_batch_size"] = 32
+        # cfg_dict["eval"]["eval_batch_size"] = 32
         cfg_dict["eval"]["truncate_dataset"] = 1000
 
         config_nli = Config(cfg_dict)
@@ -204,6 +265,7 @@ class HRQAggregationMetricHook(MetricHook):
         config_forced["dataset"] = "json"
         config_forced["json_dataset"] = {
             "path": config.eval.metrics.hrq_agg.dataset_all,
+            "filename": "reviews.{split}",
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
                 {"type": "copy", "from": "sentence", "to": "source"},
@@ -239,7 +301,9 @@ class HRQAggregationMetricHook(MetricHook):
             mask = [1] * (num_heads - mask_len) + [0] * mask_len
             masked_samples = [{**x, "head_mask": mask} for x in samples]
 
-            forced_loader = JsonDataLoader(config=Config(config_forced), dev_samples=masked_samples)
+            forced_loader = JsonDataLoader(
+                config=Config(config_forced), dev_samples=masked_samples, data_path=agent.data_path
+            )
 
             _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
 
@@ -339,31 +403,19 @@ class HRQAggregationMetricHook(MetricHook):
 
     @abstractmethod
     def eval_tsne(config, agent, test=False, show_plot=False):
+        logger.info("Loading data")
         sents_by_code, outputs_with_codes = HRQAggregationMetricHook.codes_from_cache(config, agent, test)
 
         split = "test" if test else "dev"
 
         LIMIT = 10000
-        PLOT_LIMIT = 1000
-        # LIMIT = 1000000
-
-        # with open(path_to_model + "/config.json") as f:
-        #     cfg_dict = json.load(f)
-        # from torchseq.utils.config import Config
-
-        # config = Config(cfg_dict)
-
-        # with open(path_to_model + 'outputs_with_codes_dev.json') as f:
-        #     outputs_with_codes = json.load(f)
+        PLOT_LIMIT = 500
 
         codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
         outputs = outputs_with_codes["outputs"][:LIMIT]
 
-        # chkpt = torch.load(path_to_model + "model/checkpoint.pt", map_location='cpu')
-
         num_heads = config.bottleneck.modules[0].quantizer.num_heads
 
-        # embeddings = [torch.nn.Embedding.from_pretrained(chkpt['model_state_dict'][f'bottleneck.module_list.0.quantizer._embedding.{hix}.weight']).cpu() for hix in range(num_heads)]
         embeddings = agent.model.bottleneck.module_list[0].quantizer._embedding
 
         embedded_codes = (
@@ -385,31 +437,39 @@ class HRQAggregationMetricHook(MetricHook):
         )
         full_embeddings = torch.sum(embedded_codes, dim=1)
 
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             entity_ids = [x["entity_id"] for x in f][:LIMIT]
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             review_ids = [x["review_id"] for x in f][:LIMIT]
 
-        # construct probabilistic trees
+        # construct probabilistic paths
 
-        trees_by_entity = defaultdict(lambda: defaultdict(int))
-        trees_by_entity_probs = defaultdict(lambda: defaultdict(float))
+        paths_by_entity = defaultdict(lambda: defaultdict(int))
+        paths_by_entity_probs = defaultdict(lambda: defaultdict(float))
 
         for entity_id, review_id, path, pred_sent in zip(entity_ids, review_ids, codes, outputs):
             for h in range(num_heads):
-                trees_by_entity[entity_id][path[: h + 1]] += 1
+                paths_by_entity[entity_id][path[: h + 1]] += 1
 
         # normalise
-        for entity_id in trees_by_entity.keys():
+        for entity_id in paths_by_entity.keys():
             for h in range(num_heads):
-                total = sum([v for k, v in trees_by_entity[entity_id].items() if len(k) == (h + 1)])
-                for k, v in trees_by_entity[entity_id].items():
+                total = sum([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)])
+                for k, v in paths_by_entity[entity_id].items():
                     if len(k) == (h + 1):
-                        trees_by_entity_probs[entity_id][k] = 1.0 * v / total
+                        paths_by_entity_probs[entity_id][k] = 1.0 * v / total
 
         tsne = TSNE(n_components=2)
 
+        logger.info("Fitting tSNE")
+
         X_full_embedded = tsne.fit(full_embeddings)
+
+        logger.info("Transforming paths")
 
         X_byhead_embedded = X_full_embedded.transform(partial_codes.reshape(-1, 768)).reshape(-1, num_heads + 1, 2)
 
@@ -461,7 +521,7 @@ class HRQAggregationMetricHook(MetricHook):
         else:
             markers = [marker_types[0] for x in codes]
 
-        if len(codes[0]) > 2:
+        if len(codes[0]) > 2 and False:
             patterns = [pattern_types[x[2] % len(pattern_types)] for x in codes]
         else:
             patterns = [pattern_types[0] for x in codes]
@@ -469,26 +529,30 @@ class HRQAggregationMetricHook(MetricHook):
         for i, (x, y, c, m, p) in enumerate(
             zip(X_full_embedded.T[0], X_full_embedded.T[1], color_labels, markers, patterns)
         ):
-            if (
-                unique_entities.index(entity_ids[i]) > 2 or unique_entities.index(entity_ids[i]) < 1
-            ) and i > PLOT_LIMIT:
-                continue
-            ax.scatter(x, y, color=c, s=10, marker=m)  # hatch=4*p, facecolor='white'
+            if i > PLOT_LIMIT:
+                break
+            ax.scatter(x, y, color=c, s=20, marker=m)  # hatch=4*p, facecolor='white'
 
         entitycols = [linecols[unique_entities.index(x) % len(linecols)] for x in entity_ids]
 
         plt.title(agent.run_id)
 
+        logger.info("Plotting")
+        plotted = set()
         if num_heads > 1:
-            for hix in range(max(num_heads - 1, 0)):
-                for i in range(LIMIT):
-                    if unique_entities.index(entity_ids[i]) > 2 or unique_entities.index(entity_ids[i]) < 1:
-                        continue
+            for i in range(LIMIT):
+                if unique_entities.index(entity_ids[i]) > 1:
+                    continue
+                if (entity_ids[i], codes[i]) in plotted:
+                    continue
+                for hix in range(max(min(num_heads - 1, 2), 0)):
                     from_coords = X_byhead_embedded[i : (i + 1), hix, :]
                     to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
                     ab_pairs = np.c_[from_coords, to_coords]
                     ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
-                    ax.plot(*ab_args, c=entitycols[i], linewidth=3, alpha=0.05)
+                    alpha = paths_by_entity_probs[entity_ids[i]][codes[i]]
+                    plotted.add((entity_ids[i], codes[i]))
+                    ax.plot(*ab_args, c=entitycols[i], linewidth=5, alpha=alpha)
         plt.savefig(agent.run_output_path + "/tsne_entity_overlay.pdf", bbox_inches="tight")
 
         if show_plot:
@@ -526,13 +590,21 @@ class HRQAggregationMetricHook(MetricHook):
         num_heads = config.bottleneck.modules[0].quantizer.num_heads
         codebook_size = config.bottleneck.modules[0].quantizer.codebook_size
 
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             entity_ids = [x["entity_id"] for x in f]
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             review_ids = [x["review_id"] for x in f]
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             inputs = [x["sentence"] for x in f]
-        with jsonlines.open(agent.data_path + f"/opagg/space-filtered-all/space_reviews.{split}.jsonl") as f:
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
             ratings = [x["rating"] for x in f]
 
         # Get (weak) aspect labels
@@ -558,20 +630,20 @@ class HRQAggregationMetricHook(MetricHook):
         sentence_pos_relative = [1.0 * pos / length for pos, length in zip(sentence_positions, review_lengths)]
         sentence_pos_buckets = [0 if pos < 0.25 else (2 if pos >= 0.75 else 1) for pos in sentence_pos_relative]
 
-        # Measures of tree concentration
+        # Measures of path concentration
 
-        # entropy (tree | entity_id)
+        # entropy (path | entity_id)
 
-        # construct probabilistic trees
-        trees_by_entity = defaultdict(lambda: defaultdict(int))
-        trees_by_review = defaultdict(lambda: defaultdict(int))
-        trees_by_entity_probs = defaultdict(lambda: defaultdict(float))
-        trees_by_review_probs = defaultdict(lambda: defaultdict(float))
+        # construct probabilistic paths
+        paths_by_entity = defaultdict(lambda: defaultdict(int))
+        paths_by_review = defaultdict(lambda: defaultdict(int))
+        paths_by_entity_probs = defaultdict(lambda: defaultdict(float))
+        paths_by_review_probs = defaultdict(lambda: defaultdict(float))
 
         for entity_id, review_id, path in zip(entity_ids, review_ids, codes):
             for h in range(num_heads):
-                trees_by_entity[entity_id][path[: h + 1]] += 1
-                trees_by_review[review_id][path[: h + 1]] += 1
+                paths_by_entity[entity_id][path[: h + 1]] += 1
+                paths_by_review[review_id][path[: h + 1]] += 1
 
         # normalise
         entropies_entity_by_head = {}
@@ -581,23 +653,23 @@ class HRQAggregationMetricHook(MetricHook):
             entropies_entity_by_head[h] = []
             entropies_review_by_head[h] = []
 
-            for entity_id in trees_by_entity.keys():
-                total = sum([v for k, v in trees_by_entity[entity_id].items() if len(k) == (h + 1)])
-                for k, v in trees_by_entity[entity_id].items():
+            for entity_id in paths_by_entity.keys():
+                total = sum([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)])
+                for k, v in paths_by_entity[entity_id].items():
                     if len(k) == (h + 1):
-                        trees_by_entity_probs[entity_id][k] = 1.0 * v / total
-                this_probs = [prob for k, prob in trees_by_entity_probs[entity_id].items() if len(k) == (h + 1)]
+                        paths_by_entity_probs[entity_id][k] = 1.0 * v / total
+                this_probs = [prob for k, prob in paths_by_entity_probs[entity_id].items() if len(k) == (h + 1)]
                 this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
                 entropies_entity_by_head[h].append(this_entropy)
 
             entropies_entity_by_head[h] = np.mean(entropies_entity_by_head[h])
 
-            for review_id in trees_by_review.keys():
-                total = sum([v for k, v in trees_by_review[review_id].items() if len(k) == (h + 1)])
-                for k, v in trees_by_review[review_id].items():
+            for review_id in paths_by_review.keys():
+                total = sum([v for k, v in paths_by_review[review_id].items() if len(k) == (h + 1)])
+                for k, v in paths_by_review[review_id].items():
                     if len(k) == (h + 1):
-                        trees_by_review_probs[review_id][k] = 1.0 * v / total
-                this_probs = [prob for k, prob in trees_by_review_probs[review_id].items() if len(k) == (h + 1)]
+                        paths_by_review_probs[review_id][k] = 1.0 * v / total
+                this_probs = [prob for k, prob in paths_by_review_probs[review_id].items() if len(k) == (h + 1)]
                 this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
                 entropies_review_by_head[h].append(this_entropy)
 
@@ -605,6 +677,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         uniform_by_depth = {}
         for d in range(num_heads):
+            codebook_size = codebook_size if isinstance(codebook_size, int) else codebook_size[d]
             uniform_prob = 1.0 / (codebook_size ** (d + 1))
             uniform_entropy = -1.0 * (codebook_size ** (d + 1)) * (np.log(uniform_prob) * uniform_prob)
             uniform_by_depth[d] = uniform_entropy
@@ -639,100 +712,168 @@ class HRQAggregationMetricHook(MetricHook):
         return scores
 
     @abstractmethod
-    def select_entity_summary_trees(
-        all_review_trees,
-        tree_limit=5,
+    def select_entity_summary_paths(
+        all_review_paths,
+        max_path_depth,
+        path_limit=5,
         truncation_length=None,
         prune_min_weight=None,
         prune_max_paths=None,
+        use_tfidf=False,
+        block_paths=None,
     ):
-        class AggregationTree:
-            def __init__(self, elements):
-                self.nodes = defaultdict(float)
-                for element in elements:
-                    self.nodes[element] += 1
+        summary_paths = {}
+        summary_path_weights = {}
 
-            def __getitem__(self, key):
-                val = self.nodes[key]
-                for k, v in self.nodes.items():
-                    if len(k) > len(key) and k[: len(key)] == key:
-                        val += v
-                return val
+        # remove blocked paths
 
-            def __setitem__(self, key, val):
-                self.nodes[key] = val
+        if block_paths is not None:
+            all_review_paths_filtered = copy.deepcopy(all_review_paths)
+            for entity_id, reviews in all_review_paths.items():
+                for rev_id, paths in reviews.items():
+                    for path in paths:
+                        for blocked in block_paths[entity_id]:
+                            if (
+                                tuple(path[: len(blocked)]) == blocked
+                                and path in all_review_paths_filtered[entity_id][rev_id]
+                            ):
+                                all_review_paths_filtered[entity_id][rev_id] = [
+                                    x for x in all_review_paths_filtered[entity_id][rev_id] if x != path
+                                ]
+            all_review_paths = all_review_paths_filtered
 
-            def pop(self, key):
-                self.nodes.pop(key)
+        if use_tfidf:
+            terms_by_doc = defaultdict(Counter)
+            all_terms = set()
+            idf = {}
 
-            def __len__(self):
-                return len(self.nodes)
+            for entity_id, reviews in all_review_paths.items():
+                all_paths = [tuple(path) for paths in reviews.values() for path in paths]
+                for path in all_paths:
+                    for max_len in range(1, max_path_depth + 1):
+                        terms_by_doc[entity_id][path[:max_len]] += 1
+                        all_terms.add(path[:max_len])
 
-            def items(self):
-                return self.nodes.items()
+            for term in all_terms:
+                idf[term] = np.log(
+                    len(all_review_paths) / sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
+                )
 
-            def keys(self):
-                return self.nodes.keys()
+            for entity_id, reviews in all_review_paths.items():
+                path_weights = {}
+                for term in all_terms:
+                    df = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
+                    path_weights[term] = df * np.sqrt(idf[term]) / len(term)
+                    # path_weights[term] = df * np.sqrt(idf[term] / len(term))
+                    # path_weights[term] = df * (idf[term]) / len(term)
+                    # path_weights[term] = df * 3**(len(term)-1)
 
-            def values(self):
-                return self.nodes.values()
+                summary_paths[entity_id], summary_path_weights[entity_id] = [], []
+                for path, score in sorted(path_weights.items(), key=lambda x: x[1], reverse=True):
+                    if len(summary_paths[entity_id]) >= path_limit:
+                        break
+                    if (
+                        # len(
+                        #     [
+                        #         1
+                        #         for length in range(len(path))
+                        #         if path[:length] in summary_paths[entity_id]
+                        #     ]
+                        # )
+                        # == 0
+                        # and
+                        len(
+                            [
+                                1
+                                for selected_path in summary_paths[entity_id]
+                                if path[: len(selected_path)]
+                                == selected_path[
+                                    : len(path)
+                                ]  # or path[: len(selected_path)-1] == selected_path[: len(path)-1]
+                            ]
+                        )
+                        == 0
+                    ):
+                        summary_paths[entity_id].append(path)
+                        summary_path_weights[entity_id].append(score)
 
-        summary_trees = {}
-        summary_tree_weights = {}
-        for entity_id, reviews in all_review_trees.items():
-            all_trees = [tuple(tree) for trees in reviews.values() for tree in trees]
+            return summary_paths, summary_path_weights
 
-            tree_weights = AggregationTree(all_trees)
+        for entity_id, reviews in all_review_paths.items():
+            all_paths = [tuple(path) for paths in reviews.values() for path in paths]
+
+            path_weights = AggregationTree(all_paths)
 
             if truncation_length is not None:
-                tree_weights_pruned = Counter()
-                for codes, weight in tree_weights.items():
-                    tree_weights_pruned[codes[:truncation_length]] += weight
-                summary_trees[entity_id] = [x[0] for x in tree_weights_pruned.most_common(tree_limit)]
-                summary_tree_weights[entity_id] = [x[1] for x in tree_weights_pruned.most_common(tree_limit)]
+                path_weights_pruned = Counter()
+                for codes, weight in path_weights.items():
+                    path_weights_pruned[codes[:truncation_length]] += weight
+                summary_paths[entity_id] = [x[0] for x in path_weights_pruned.most_common(path_limit)]
+                summary_path_weights[entity_id] = [x[1] for x in path_weights_pruned.most_common(path_limit)]
             elif prune_max_paths is not None:
-                while len(tree_weights) > prune_max_paths:
-                    remaining_paths = [x for x in tree_weights.items()]  # if len(x[0]) > 1
+                while len(path_weights) > prune_max_paths:
+                    remaining_paths = [x for x in path_weights.items()]  # if len(x[0]) > 1
                     if len(remaining_paths) == 0:
                         break
                     code_to_prune, weight = sorted(remaining_paths, key=lambda x: (x[1], -len(x[0])))[
                         0
                     ]  # sort lowest weight, then longest path
-                    tree_weights.nodes[code_to_prune] = 0
+                    path_weights.nodes[code_to_prune] = 0
                     if len(code_to_prune) > 1:
-                        tree_weights.nodes[code_to_prune[:-1]] += weight
-                    tree_weights.nodes.pop(code_to_prune)
-                summary_trees[entity_id] = list(tree_weights.keys())[:tree_limit]
-                summary_tree_weights[entity_id] = list(tree_weights.values())[:tree_limit]
+                        path_weights.nodes[code_to_prune[:-1]] += weight
+                    path_weights.nodes.pop(code_to_prune)
+                summary_paths[entity_id] = list(path_weights.keys())[:path_limit]
+                summary_path_weights[entity_id] = list(path_weights.values())[:path_limit]
             elif prune_min_weight is not None:
-                total = sum(tree_weights.nodes.values())
-                for k, v in tree_weights.nodes.items():
-                    tree_weights.nodes[k] = v / total
-                while (min(tree_weights.values())) < prune_min_weight:
-                    remaining_paths = [x for x in tree_weights.items()]  # if len(x[0]) > 1
+                total = sum(path_weights.nodes.values())
+                for k, v in path_weights.nodes.items():
+                    path_weights.nodes[k] = v / total
+                while (min(path_weights.values())) < prune_min_weight:
+                    remaining_paths = [x for x in path_weights.items()]  # if len(x[0]) > 1
                     if len(remaining_paths) == 0:
                         break
                     code_to_prune, weight = sorted(remaining_paths, key=lambda x: (x[1], -len(x[0])))[
                         0
                     ]  # sort lowest weight, then longest path
-                    tree_weights.nodes[code_to_prune] = 0
+                    path_weights.nodes[code_to_prune] = 0
                     if len(code_to_prune) > 1:
-                        tree_weights.nodes[code_to_prune[:-1]] += weight
-                    tree_weights.nodes.pop(code_to_prune)
-                summary_trees[entity_id] = list(tree_weights.keys())[:tree_limit]
-                summary_tree_weights[entity_id] = list(tree_weights.values())[:tree_limit]
+                        path_weights.nodes[code_to_prune[:-1]] += weight
+                    path_weights.nodes.pop(code_to_prune)
+                    if len(code_to_prune) == 0:
+                        # rebalance
+                        total = sum(path_weights.nodes.values())
+                        for k, v in path_weights.nodes.items():
+                            path_weights.nodes[k] = v / total
+                summary_paths[entity_id], summary_path_weights[entity_id] = zip(
+                    *sorted(path_weights.items(), key=lambda x: x[1], reverse=True)[:path_limit]
+                )
+                summary_paths[entity_id], summary_path_weights[entity_id] = list(summary_paths[entity_id]), list(
+                    summary_path_weights[entity_id]
+                )
+                # summary_paths[entity_id] = list(path_weights.keys())[:path_limit]
+                # summary_path_weights[entity_id] = list(path_weights.values())[:path_limit]
 
             else:
-                raise "You need to specify at least one parameter to select_entity_summary_trees!"
+                raise "You need to specify at least one parameter to select_entity_summary_paths!"
 
-        return summary_trees, summary_tree_weights
+        return summary_paths, summary_path_weights
+
+    """Generate summaries from sets of input reviews, by aggregating their hierarchical encodings.
+    Parameters:
+    agent       -- A trained summarisation model
+    test        -- Use test split?
+    eval_data   -- [{'entity_id': 0, 'reviews': [{'review_id': 12345, 'sentences': ['Review sentences go here']}]}
+                    or set to None to load from config.eval.metrics.hrq_agg.dataset_eval
+    """
 
     @abstractmethod
-    def eval_generate_summaries(config, agent, test=False):
+    def eval_generate_summaries_and_score(config, agent, test=False, eval_data=None):
         split = "test" if test else "dev"
 
-        with jsonlines.open(os.path.join(agent.data_path, "opagg/space-eval", f"{split}.jsonl")) as reader:
-            all_rows = [x for x in reader]
+        if eval_data is None:
+            dataset_eval = config.eval.metrics.hrq_agg.get("dataset_eval", "opagg/space-eval")
+            with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+                eval_data = [x for x in reader]
 
         # First, get encodings for all sentences
         config_codes = copy.deepcopy(config.data)
@@ -760,11 +901,23 @@ class HRQAggregationMetricHook(MetricHook):
             num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
         def prefilter_condition(sentence):
-            return sum(i.isalpha() for i in sentence) / len(sentence) > 0.5
+            if len(sentence.split()) > 25:
+                return False
+            if sum(i.isalpha() for i in sentence) / len(sentence) < 0.5:
+                return False
+            if re.search(r"[0-9]+ night", sentence.lower()) is not None:
+                return False
+            if (
+                " stayed" in sentence.lower() or " visited" in sentence.lower()
+            ):  # or " my wife and" in sentence.lower() or " my husband and" in sentence.lower()
+                return False
+            # if sentence.lower().count(' we ') > 1 or sentence.lower().count(' i ') > 1:
+            #     return False
+            return True
 
         eval_sentences = [
             {"sentence": sentence, "review_id": review["review_id"], "entity_id": row["entity_id"]}
-            for row in all_rows
+            for row in eval_data
             for review in row["reviews"]
             for sentence in review["sentences"]
             if prefilter_condition(sentence)
@@ -781,23 +934,72 @@ class HRQAggregationMetricHook(MetricHook):
 
         all_codes = memory["vq_codes"].tolist()
 
-        # Organise trees by entity/review, then get summary trees
-        trees_by_review_by_entity = defaultdict(lambda: defaultdict(list))
+        # Organise paths by entity/review, then get summary paths
+        paths_by_review_by_entity = defaultdict(lambda: defaultdict(list))
         for row, codes in zip(eval_sentences, all_codes):
-            trees_by_review_by_entity[row["entity_id"]][row["review_id"]].append(codes)
+            paths_by_review_by_entity[row["entity_id"]][row["review_id"]].append(codes)
 
-        summary_trees, summary_tree_weights = HRQAggregationMetricHook.select_entity_summary_trees(
-            trees_by_review_by_entity,
-            tree_limit=config.eval.metrics.hrq_agg.get("summary_tree_limit", 6),
-            truncation_length=config.eval.metrics.hrq_agg.get("summary_truncation_length", None),
-            prune_min_weight=config.eval.metrics.hrq_agg.get("summary_prune_min_weight", None),
-            prune_max_paths=config.eval.metrics.hrq_agg.get("summary_prune_max", 5),
-        )
+        if config.eval.metrics.hrq_agg.get("summary_smart_heuristic", False):
+            # Get some generic, some specific
+
+            (
+                summary_paths_specific,
+                summary_path_weights_specific,
+            ) = HRQAggregationMetricHook.select_entity_summary_paths(
+                paths_by_review_by_entity,
+                # ceil(num_heads // 3),
+                5,
+                path_limit=config.eval.metrics.hrq_agg.get("summary_smart_num_specific", 4),
+                truncation_length=None,
+                prune_min_weight=None,
+                prune_max_paths=None,
+                use_tfidf=True,
+            )
+
+            summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
+                paths_by_review_by_entity,
+                # ceil(num_heads // 2),
+                8,
+                path_limit=config.eval.metrics.hrq_agg.get("summary_smart_num_generic", 4),
+                truncation_length=None,
+                prune_min_weight=0.01,
+                prune_max_paths=None,
+                use_tfidf=False,
+                block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
+            )
+            # summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
+            #     paths_by_review_by_entity,
+            #     ceil(num_heads // 8),
+            #     path_limit=config.eval.metrics.hrq_agg.get("summary_smart_num_generic", 4),
+            #     truncation_length=None,
+            #     prune_min_weight=None,
+            #     prune_max_paths=None,
+            #     use_tfidf=True,
+            #     block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
+            # )
+
+            summary_paths, summary_path_weights = {}, {}
+            for ent_id in summary_paths_generic.keys():
+                summary_paths[ent_id] = summary_paths_generic[ent_id] + summary_paths_specific[ent_id]
+                summary_path_weights[ent_id] = (
+                    summary_path_weights_generic[ent_id] + summary_path_weights_specific[ent_id]
+                )
+        else:
+            summary_paths, summary_path_weights = HRQAggregationMetricHook.select_entity_summary_paths(
+                paths_by_review_by_entity,
+                # ceil(num_heads // 4),
+                4,
+                path_limit=config.eval.metrics.hrq_agg.get("summary_path_limit", 6),
+                truncation_length=config.eval.metrics.hrq_agg.get("summary_truncation_length", None),
+                prune_min_weight=config.eval.metrics.hrq_agg.get("summary_prune_min_weight", 0.01),
+                prune_max_paths=config.eval.metrics.hrq_agg.get("summary_prune_max", None),
+                use_tfidf=config.eval.metrics.hrq_agg.get("summary_use_tfidf", False),
+            )
 
         # # Identify top clusters per entity
         # codes_by_entity = defaultdict(Counter)
 
-        # for row, codes in zip(all_rows, all_codes):
+        # for row, codes in zip(eval_data, all_codes):
         #     codes_by_entity[row["entity_id"]][tuple(codes.tolist()[:-MASK_LENGTH])] += 1
 
         # mask = [1] * (num_heads - MASK_LENGTH) + [0] * MASK_LENGTH
@@ -810,16 +1012,16 @@ class HRQAggregationMetricHook(MetricHook):
         #         )
 
         filtered_examples = []
-        # for entity, trees in summary_trees.items():
-        for row in all_rows:
+        # for entity, paths in summary_paths.items():
+        for row in eval_data:
             entity_id = row["entity_id"]
-            for tree in summary_trees[entity_id]:
-                mask = [1] * len(tree) + [0] * (num_heads - len(tree))
-                # print(tree)
+            for path in summary_paths[entity_id]:
+                mask = [1] * len(path) + [0] * (num_heads - len(path))
+                # print(path)
                 filtered_examples.append(
                     {
                         "entity_id": entity_id,
-                        "codes": list(tree) + [0] * (num_heads - len(tree)),
+                        "codes": list(path) + [0] * (num_heads - len(path)),
                         "sentence": "",
                         "head_mask": mask,
                     }
@@ -851,28 +1053,63 @@ class HRQAggregationMetricHook(MetricHook):
             sentences_by_entity[input["entity_id"]].append(sentence)
 
         # Extractive summaries
-        sentences_by_tree = defaultdict(lambda: defaultdict(list))
+        sentences_by_path = defaultdict(lambda: defaultdict(list))
         extractive_summs = []
         for row, codes in zip(eval_sentences, all_codes):
-            sentences_by_tree[row["entity_id"]][tuple(codes)].append(row["sentence"])
+            sentences_by_path[row["entity_id"]][tuple(codes)].append(row["sentence"])
 
-        for row in all_rows:
+        all_evidence = []
+        all_evidence_paths = []
+        for row in eval_data:
             summary_sentences = []
+            summary_evidence = []
+            summary_evidence_paths = []
             entity = row["entity_id"]
-            trees = summary_trees[entity]
-            for tree in trees:
-                for codes, sents in sentences_by_tree[entity].items():
-                    if tree == codes[: len(tree)]:
-                        summary_sentences.append(sents[0])
-                        break
+            paths = summary_paths[entity]
+            for i, path in enumerate(paths):
+                path_evidence = []
+                path_evidence_paths = []
+                for codes, sents in sentences_by_path[entity].items():
+                    if path == codes[: len(path)]:
+                        # if len(summary_sentences) <= i:
+                        #     summary_sentences.append(sents[0])
+                        path_evidence.extend(sents)
+                        path_evidence_paths.extend([codes for _ in sents])
+
+                    # Select rouge centroid as top extractive pick
+
+                if len(path_evidence) == 0:
+                    print("Found entity with no evidence!")
+                    print(entity)
+                    print(path_evidence)
+                    print(path)
+                    print(paths)
+                    print(summary_path_weights[entity])
+                    print(sentences_by_path[entity].keys())
+                    print(paths_by_review_by_entity[entity])
+
+                path_evidence = path_evidence[:50]
+                path_evidence_paths = path_evidence_paths[:50]
+
+                scores = []
+                for x in path_evidence:
+                    scores.append([])
+                    for y in path_evidence:
+                        rouge = get_pairwise_rouge(x, y)["rouge2"]
+                        scores[-1].append(rouge * 100)
+                    # print(scores)
+                    scores[-1] = np.mean(scores[-1])
+
+                max_ix = np.argmax(scores)
+                summary_sentences.append(path_evidence[max_ix])
+                summary_evidence.append(path_evidence)
+                summary_evidence_paths.append(path_evidence_paths)
             extractive_summs.append(" ".join(summary_sentences))
+            all_evidence.append(summary_evidence)
+            all_evidence_paths.append(summary_evidence_paths)
 
-        # TODO: eval against reference summaries
-
-        from torchseq.utils.rouge import get_jackknife_rouge
-
-        gold_summs = [ent["summaries"] for ent in all_rows]
-        pred_summs = [" ".join(sentences_by_entity[ent["entity_id"]]) for ent in all_rows]
+        gold_summs = [ent["summaries"] for ent in eval_data]
+        pred_summs = [" ".join(sentences_by_entity[ent["entity_id"]]) for ent in eval_data]
 
         scores = {k: v * 100 for k, v in get_jackknife_rouge(pred_summs, gold_summs).items()}
 
@@ -882,10 +1119,12 @@ class HRQAggregationMetricHook(MetricHook):
 
         return {"abstractive": scores, "extractive": extractive_scores}, {
             "summaries": pred_summs,
-            "trees": [summary_trees[ent["entity_id"]] for ent in all_rows],
-            "weights": [summary_tree_weights[ent["entity_id"]] for ent in all_rows],
+            "paths": [summary_paths[ent["entity_id"]] for ent in eval_data],
+            "weights": [summary_path_weights[ent["entity_id"]] for ent in eval_data],
             "extractive_summaries": extractive_summs,
-            # "trees_by_review_by_entity": trees_by_review_by_entity
+            "evidence": all_evidence,
+            "evidence_paths": all_evidence_paths,
+            "paths_by_review_by_entity": paths_by_review_by_entity,
         }
 
     @abstractmethod
@@ -894,7 +1133,7 @@ class HRQAggregationMetricHook(MetricHook):
         config_gen_masked["dataset"] = "json"
         config_gen_masked["json_dataset"] = {
             "path": config.eval.metrics.hrq_agg.dataset_all,
-            "filename": "space_reviews.{split}",
+            "filename": "reviews.{split}",
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
                 {"type": "copy", "from": "sentence", "to": "source"},
@@ -927,13 +1166,14 @@ class HRQAggregationMetricHook(MetricHook):
                 os.path.join(
                     agent.data_path,
                     config.eval.metrics.hrq_agg.dataset_all,
-                    f"space_reviews.{split}.jsonl",
+                    f"reviews.{split}.jsonl",
                 )
             ) as f:
                 rows = [row for row in f][: config_gen_masked["eval"].get("truncate_dataset", None)]
             refs = [[q["sentence"]] for q in rows]
 
         for mask_length in range(0, num_heads + 1):
+            logger.info("Generating with mask length {:}".format(mask_length))
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = (data_loader._test if test else data_loader._valid).samples
             samples = [{**x, "head_mask": mask, "residual_mask": [0]} for x in samples]
@@ -955,3 +1195,208 @@ class HRQAggregationMetricHook(MetricHook):
             outputs[mask_length] = output
 
         return scores, outputs
+
+    @abstractmethod
+    def eval_cluster_purity(config, agent, test=False):
+        sents_by_code, outputs_with_codes = HRQAggregationMetricHook.codes_from_cache(config, agent, test)
+
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        if "hrqvae" not in bneck_types:
+            logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
+            return {}
+        quantizer_index = bneck_types.index("hrqvae")
+        num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
+
+        scores = {}
+        for mask_len in range(num_heads):
+            sents_by_cluster = defaultdict(set)
+            for codes, sents in sents_by_code.items():
+                sents_by_cluster[eval(codes)[: mask_len + 1]].update(sents)
+
+            inters = []
+            intras = []
+
+            for codes, sents in tqdm(sents_by_cluster.items()[:1000]):
+                sents = list(sents)
+                if len(sents) == 1:
+                    continue
+                other_sents = [
+                    sent for other_codes, sents in sents_by_cluster.items() if codes != other_codes for sent in sents
+                ][:100]
+                inter_refs = [other_sents] * len(sents[:100])
+                inter_score = sacrebleu.corpus_bleu(sents[:100], list(zip(*inter_refs)), lowercase=True).score
+                #     inter_rouge = get_jackknife_rouge(sents[:1000], inter_refs)['rouge2'] * 100
+                #     inter_rouges.append(inter_rouge)
+
+                inters.append(inter_score)
+                refs = [[s for s in sents[:1000] if s != sent] for sent in sents[:100]]
+                intra_score = sacrebleu.corpus_bleu(sents[:100], list(zip(*refs)), lowercase=True).score
+                #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2'] * 100
+                intras.append(intra_score)
+            scores[mask_len] = (np.mean(inters), np.mean(intras))
+
+        return scores
+
+    @abstractmethod
+    def eval_oracle_summaries(config, agent, test=False, eval_data=None):
+
+        split = "test" if test else "dev"
+
+        if eval_data is None:
+            dataset_eval = config.eval.metrics.hrq_agg.get("dataset_eval", "opagg/space-eval")
+            with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+                eval_data = [x for x in reader]
+
+        eval_sentences = [
+            {"sentence": sentence, "summ_id": summ_id, "entity_id": row["entity_id"]}
+            for row in eval_data
+            for summ_id, summ in enumerate(row["summaries"])
+            for sentence in sent_tokenize(summ)
+        ]
+
+        # First, get the oracle codes for the reference summaries
+        config_codes = copy.deepcopy(config.data)
+        config_codes["dataset"] = "json"
+        config_codes["json_dataset"] = {
+            "path": None,
+            "field_map": [
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
+            ],
+        }
+
+        data_loader = JsonDataLoader(
+            config=Config(config_codes), data_path=agent.data_path, dev_samples=eval_sentences
+        )
+
+        # sample_outputs = instance.config.eval.get("sample_outputs", True)
+        # instance.config.eval.data["sample_outputs"] = False
+
+        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+
+        all_codes = memory["vq_codes"].tolist()
+
+        # Now, decode partial codes, to check how much detail is actually required
+        masked_sents = []
+
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        quantizer_index = bneck_types.index("hrqvae")
+        num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
+
+        config_masked = copy.deepcopy(config.data)
+        config_masked["dataset"] = "json"
+        config_masked["json_dataset"] = {
+            "path": None,
+            "field_map": [
+                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "source"},
+                {"type": "copy", "from": "forced_codes", "to": "forced_codes"},
+                {"type": "copy", "from": "head_mask", "to": "head_mask"},
+                {"type": "copy", "from": "residual_mask", "to": "residual_mask"},
+            ],
+        }
+
+        for mask_length in range(num_heads - 1, 0, -1):
+            mask = [1] * (num_heads - mask_length) + [0] * mask_length
+            samples = [
+                {**x, "sentence": "", "forced_codes": all_codes[i], "head_mask": mask, "residual_mask": [0]}
+                for i, x in enumerate(eval_sentences)
+            ]
+
+            masked_loader = JsonDataLoader(
+                config=Config(config_masked), data_path=agent.data_path, dev_samples=samples
+            )
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+            masked_sents.append(output)
+        masked_sents = list(zip(*masked_sents))
+
+        # Determine best depth for oracle generation
+        all_sims = []
+        best_matches_unconstrained = []
+        for inputs, output, codes in zip(eval_sentences, masked_sents, all_codes):
+            sims = [
+                sacrebleu.sentence_bleu(output[i], [inputs["sentence"]], lowercase=True).score
+                for i in range(num_heads - 1)
+            ]
+
+            all_sims.append(sims)
+
+            best_matches_unconstrained.append(
+                (
+                    inputs["sentence"],
+                    # output[np.argmax([1 if x > np.max(sims) * 0.9 else 0 for x in sims])],
+                    output[np.argmax(sims)],
+                    max(sims),
+                    codes[: np.argmax(sims) + 1],
+                )
+            )
+
+        # Finally, construct the summaries and score them
+        oracle_summaries = defaultdict(lambda: defaultdict(list))
+        for input_row, best_match in zip(eval_sentences, best_matches_unconstrained):
+            oracle_summaries[input_row["entity_id"]][input_row["summ_id"]].append(best_match)
+
+        scores = []
+        best_summaries = []
+        for row in eval_data:
+            scores.append([])
+            for summ_id, _ in enumerate(row["summaries"]):
+                rouge = get_jackknife_rouge(
+                    [" ".join([x[1] for x in oracle_summaries[row["entity_id"]][summ_id]])], [row["summaries"]]
+                )["rouge2"]
+                scores[-1].append(rouge)
+
+            best_summaries.append(oracle_summaries[row["entity_id"]][np.argmax(scores[-1])])
+
+        best_score = np.mean(np.max(scores, axis=1))
+
+        # Now get the best summaries with limited depths
+        truncated_scores = {}
+        summaries_by_depth = []
+        for max_depth in range(1, num_heads + 1):
+            best_matches = []
+            for inputs, output, codes in zip(eval_sentences, masked_sents, all_codes):
+                sims = [
+                    sacrebleu.sentence_bleu(output[i], [inputs["sentence"]], lowercase=True).score
+                    for i in range(num_heads - 1)
+                ]
+
+                best_matches.append(
+                    (
+                        inputs["sentence"],
+                        # output[np.argmax([1 if x > np.max(sims) * 0.9 else 0 for x in sims[:max_depth]])],
+                        output[np.argmax(sims[:max_depth])],
+                        max(sims[:max_depth]),
+                        codes[: np.argmax(sims[:max_depth]) + 1],
+                    )
+                )
+
+            # construct the summaries and score them
+            oracle_summaries = defaultdict(lambda: defaultdict(list))
+            for input_row, best_match in zip(eval_sentences, best_matches):
+                oracle_summaries[input_row["entity_id"]][input_row["summ_id"]].append(best_match)
+
+            scores = []
+            summaries_this_depth = []
+            for row in eval_data:
+                scores.append([])
+                for summ_id, _ in enumerate(row["summaries"]):
+                    rouge = get_jackknife_rouge(
+                        [" ".join([x[1] for x in oracle_summaries[row["entity_id"]][summ_id]])], [row["summaries"]]
+                    )["rouge2"]
+                    scores[-1].append(rouge)
+                summaries_this_depth.append(oracle_summaries[row["entity_id"]][np.argmax(scores[-1])])
+            summaries_by_depth.append(summaries_this_depth)
+
+            truncated_scores[max_depth] = np.mean(np.max(scores, axis=1))
+
+        return (
+            best_score,
+            truncated_scores,
+            best_summaries,
+            best_matches_unconstrained,
+            summaries_by_depth,
+            eval_sentences,
+            masked_sents,
+            all_codes,
+        )

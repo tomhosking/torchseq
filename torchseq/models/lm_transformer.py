@@ -28,13 +28,13 @@ class TransformerLanguageModel(nn.Module):
 
         encoder_layer = nn.TransformerEncoderLayer(
             config.encoder.embedding_dim,
-            nhead=config.encdec.num_heads,
-            dim_feedforward=config.encdec.dim_feedforward,
+            nhead=config.encoder.num_heads,
+            dim_feedforward=config.encoder.dim_feedforward,
             dropout=config.dropout,
-            activation=config.encdec.activation,
+            activation=config.encoder.activation,
         )
         encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
-        self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+        self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_encoder_layers, encoder_norm)
 
         # self.output_projection = nn.Linear(config.encoder.embedding_dim, config.prepro.get('input_vocab_size', config.prepro.vocab_size), bias=False).cpu()
         # # Init output projection layer with embedding matrix
@@ -66,7 +66,7 @@ class TransformerLanguageModel(nn.Module):
         # Re-normalise the projections...
         with torch.no_grad():
             self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            if self.config.encdec.data.get("residual", False):
+            if self.config.encoder.data.get("residual", False):
                 self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # Get some sizes

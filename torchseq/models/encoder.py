@@ -23,18 +23,22 @@ class SequenceEncoder(nn.Module):
         if embeddings is not None:
             self.embeddings = embeddings
             self.embeddings.force_device = True
-        elif not config.encdec.get("bert_encoder", False) and config.encdec.get("pretrained_encoder", None) is None:
+        elif not config.encoder.get("bert_encoder", False) and config.encoder.get("pretrained_encoder", None) is None:
             self.embeddings = nn.Embedding(
                 tokenizer.vocab_size,
                 config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
             ).cpu()
-            if self.tokenizer.has_embeddings:
+            if self.tokenizer.has_embeddings and self.config.encoder.get("init_embeds_from_tokenizer", True):
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
-                # torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
-                initialize_truncated_normal_(
-                    self.embeddings.weight.data, std=1 / math.sqrt(config.decoder.embedding_dim)
-                )
+
+                if self.config.encoder.get("init_embeds_like_bert", False):
+                    init_bert_params(self.embeddings)
+                else:
+                    torch.nn.init.xavier_uniform_(self.embeddings.weight.data, gain=1.0)
+                    # initialize_truncated_normal_(
+                    #     self.embeddings.weight.data, std=1 / math.sqrt(config.decoder.embedding_dim)
+                    # )
             self.embeddings.weight.requires_grad = not freeze_embeddings
             self.embeddings.cpu()
             self.embeddings.force_device = True
@@ -50,11 +54,11 @@ class SequenceEncoder(nn.Module):
 
         # Encoder/decoders
         self.pretrained_model_slug = None
-        if config.encdec.get("bert_encoder", False) or config.encoder.get("pretrained_encoder", None) is not None:
+        if config.encoder.get("bert_encoder", False) or config.encoder.get("pretrained_encoder", None) is not None:
             self.pretrained_model_slug = (
                 config.encoder.pretrained_encoder
                 if config.encoder.get("pretrained_encoder", None) is not None
-                else config.encdec.bert_model
+                else config.encoder.bert_model
             )
             if "mbart" in self.pretrained_model_slug:
                 bart_model = MBartModel.from_pretrained(self.pretrained_model_slug)
@@ -75,11 +79,11 @@ class SequenceEncoder(nn.Module):
         else:
             self.pretrained_encoder = None
 
-        if self.config.encdec.get("residual", False):
+        if self.config.encoder.get("residual", False):
             self.encoder_projection = nn.utils.weight_norm(
                 nn.Linear(config.encoder.embedding_dim * 2, config.encoder.embedding_dim, bias=False)
             )
-        if self.config.encdec.get("pre_residual", False):
+        if self.config.encoder.get("pre_residual", False):
             self.token_projection = nn.utils.weight_norm(
                 nn.Linear(
                     config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
@@ -88,29 +92,29 @@ class SequenceEncoder(nn.Module):
                 )
             )
 
-        if self.config.encdec.data.get("pre_ln", False):
+        if self.config.encoder.data.get("pre_ln", False):
             encoder_layer = custom_transformer.TransformerEncoderLayer(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim),
-                nhead=config.encdec.num_heads,
-                dim_feedforward=config.encdec.dim_feedforward,
+                nhead=config.encoder.num_heads,
+                dim_feedforward=config.encoder.dim_feedforward,
                 dropout=config.dropout,
-                activation=config.encdec.activation,
+                activation=config.encoder.activation,
             )
             encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
             self.encoder = custom_transformer.TransformerEncoder(
-                encoder_layer, config.encdec.num_encoder_layers, encoder_norm
+                encoder_layer, config.encoder.num_layers, encoder_norm
             )
         else:
             encoder_layer = nn.TransformerEncoderLayer(
                 config.encoder.embedding_dim,
-                nhead=config.encdec.num_heads,
-                dim_feedforward=config.encdec.dim_feedforward,
+                nhead=config.encoder.num_heads,
+                dim_feedforward=config.encoder.dim_feedforward,
                 dropout=config.dropout,
-                activation=config.encdec.activation,
+                activation=config.encoder.activation,
             )
             encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
-            self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+            self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_layers, encoder_norm)
 
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
@@ -126,15 +130,17 @@ class SequenceEncoder(nn.Module):
         )
         src_mask = torch.triu(src_mask, diagonal=1)
 
-        if self.config.encdec.data.get("attention_limit", None) is not None:
-            src_mask = torch.tril(src_mask, diagonal=self.config.encdec.data.get("attention_limit", 0))
+        if self.config.encoder.data.get("attention_limit", None) is not None:
+            src_mask = torch.tril(src_mask, diagonal=self.config.encoder.data.get("attention_limit", 0))
 
-        if self.config.encdec.data.get("no_diagonal_attn", False):
+        if self.config.encoder.data.get("no_diagonal_attn", False):
             src_mask += float("-inf") * torch.eye(max_input_len)
 
         padding_mask = (torch.arange(max_input_len)[None, :].cpu() >= input_seq_len[:, None].cpu()).to(
             input_seq.device
         )
+
+        memory["encoding_mask"] = padding_mask
 
         if self.pretrained_encoder is None:
             # Embed the input (this is ignored if you use the `bert_encoder` but done anyway for maybe residual connection)
@@ -147,8 +153,12 @@ class SequenceEncoder(nn.Module):
 
             input_embedded = input_toks_embedded.permute(1, 0, 2) * math.sqrt(self.config.encoder.embedding_dim)
 
+            memory["seq_embedded"] = input_embedded.permute(1, 0, 2).detach()
+
             if include_position:
                 input_embedded = self.positional_embeddings(input_embedded)
+
+            memory["seq_embedded_positioned"] = input_embedded.permute(1, 0, 2).detach()
 
             encoding = (
                 self.encoder(input_embedded, mask=src_mask, src_key_padding_mask=padding_mask)
@@ -163,24 +173,28 @@ class SequenceEncoder(nn.Module):
 
             bert_typeids = {}
 
-            self.bert_encoding = self.pretrained_encoder(
+            bert_encoding = self.pretrained_encoder(
                 input_ids=input_seq.to(input_seq.device), attention_mask=bert_padding_mask, **bert_typeids
             )[0]
 
-            if self.config.encdec.num_encoder_layers > 0:
+            if self.config.encoder.get("freeze_pretrained", False):
+                bert_encoding = bert_encoding.detach()
+
+            if self.config.encoder.num_layers > 0:
+
                 encoding = (
-                    self.encoder(self.bert_encoding.permute(1, 0, 2), mask=src_mask, src_key_padding_mask=padding_mask)
+                    self.encoder(bert_encoding.permute(1, 0, 2), mask=src_mask, src_key_padding_mask=padding_mask)
                     .permute(1, 0, 2)
                     .contiguous()
                 )
             else:
-                encoding = self.bert_encoding
+                encoding = bert_encoding
 
         # Include original input?
-        if self.config.encdec.get("residual", False):
+        if self.config.encoder.get("residual", False):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded.permute(1, 0, 2)], dim=-1))
 
-        if self.config.encdec.get("pre_residual", False):
+        if self.config.encoder.get("pre_residual", False):
             input_toks_resid = self.embeddings(input_seq.to(self.embeddings.device)).to(input_seq.device)
             input_toks_resid = self.token_projection(input_toks_resid)
             input_toks_resid = self.positional_embeddings(input_toks_resid.permute(1, 0, 2))
@@ -229,14 +243,14 @@ class ContextAnswerEncoder(nn.Module):
 
         # Encoder/decoders
         self.pretrained_model_slug = None
-        if config.encdec.get("bert_encoder", False) or config.encoder.get("pretrained_encoder", None) is not None:
+        if config.encoder.get("bert_encoder", False) or config.encoder.get("pretrained_encoder", None) is not None:
             self.pretrained_model_slug = (
                 config.encoder.pretrained_encoder
                 if config.encoder.get("pretrained_encoder", None) is not None
-                else config.encdec.bert_model
+                else config.encoder.bert_model
             )
 
-            self.freeze_bert = not self.config.encdec.bert_finetune
+            self.freeze_bert = not self.config.encoder.bert_finetune
             if "bart-" in self.pretrained_model_slug:
                 bart_model = BartModel.from_pretrained(self.pretrained_model_slug)
                 self.pretrained_encoder = bart_model.encoder
@@ -249,45 +263,45 @@ class ContextAnswerEncoder(nn.Module):
             # for param in self.pretrained_encoder.parameters():
             #     param.requires_grad = True
 
-        if self.config.encdec.data.get("pre_ln", False):
+        if self.config.encoder.data.get("pre_ln", False):
             encoder_layer = custom_transformer.TransformerEncoderLayer(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim),
-                nhead=config.encdec.num_heads,
-                dim_feedforward=config.encdec.dim_feedforward,
+                nhead=config.encoder.num_heads,
+                dim_feedforward=config.encoder.dim_feedforward,
                 dropout=config.dropout,
-                activation=config.encdec.activation,
+                activation=config.encoder.activation,
             )
             encoder_norm = nn.LayerNorm(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim)
             )
             self.encoder = custom_transformer.TransformerEncoder(
-                encoder_layer, config.encdec.num_encoder_layers, encoder_norm
+                encoder_layer, config.encoder.num_layers, encoder_norm
             )
 
         else:
             encoder_layer = nn.TransformerEncoderLayer(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim),
-                nhead=config.encdec.num_heads,
-                dim_feedforward=config.encdec.dim_feedforward,
+                nhead=config.encoder.num_heads,
+                dim_feedforward=config.encoder.dim_feedforward,
                 dropout=config.dropout,
-                activation=config.encdec.activation,
+                activation=config.encoder.activation,
             )
             encoder_norm = nn.LayerNorm(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim)
             )
-            self.encoder = nn.TransformerEncoder(encoder_layer, config.encdec.num_encoder_layers, encoder_norm)
+            self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_layers, encoder_norm)
 
-            if self.config.encdec.get("init_like_bert", False):
+            if self.config.encoder.get("init_like_bert", False):
                 init_bert_params(self.encoder)
 
-        if self.config.encdec.data.get("xav_uni_init", False):
-            for p in self.encoder.parameters():
-                if p.dim() > 1:
-                    nn.init.xavier_uniform_(p)
+        # if self.config.encoder.data.get("xav_uni_init", False):
+        #     for p in self.encoder.parameters():
+        #         if p.dim() > 1:
+        #             nn.init.xavier_uniform_(p)
 
         # Encoder combination
         num_encoder_outputs = sum(
@@ -301,14 +315,14 @@ class ContextAnswerEncoder(nn.Module):
 
         # Pooling layers
         self.ans_pooling = MultiHeadedPooling(
-            config.encdec.num_heads,
+            config.encoder.num_heads,
             config.encoder.embedding_dim + config.bio_embedding_dim,
             dropout=config.dropout,
             model_dim_out=config.encoder.embedding_dim,
             use_final_linear=False,
         )
         self.ctxt_pooling = MultiHeadedPooling(
-            config.encdec.num_heads,
+            config.encoder.num_heads,
             config.encoder.embedding_dim + config.bio_embedding_dim,
             dropout=config.dropout,
             model_dim_out=config.encoder.embedding_dim,
@@ -385,22 +399,16 @@ class ContextAnswerEncoder(nn.Module):
                 # BERT expects a mask that's 1 unmasked, 0 for masked
                 bert_context_mask = (~context_mask).double()
 
-                if "bert_typeids" in self.config.encdec.data and self.config.encdec.bert_typeids:
+                if "bert_typeids" in self.config.encoder.data and self.config.encoder.bert_typeids:
                     bert_typeids = {"token_type_ids": a_pos.to(ctxt_seq.device)}
                 else:
                     bert_typeids = {}
 
-                if self.freeze_bert or not self.config.encdec.bert_finetune:
-                    with torch.no_grad():
-                        self.bert_encoding = self.pretrained_encoder(
-                            input_ids=ctxt_seq.to(ctxt_seq.device), attention_mask=bert_context_mask, **bert_typeids
-                        )[0]
-                else:
-                    self.bert_encoding = self.pretrained_encoder(
-                        input_ids=ctxt_seq.to(ctxt_seq.device), attention_mask=bert_context_mask, **bert_typeids
-                    )[0]
+                self.bert_encoding = self.pretrained_encoder(
+                    input_ids=ctxt_seq.to(ctxt_seq.device), attention_mask=bert_context_mask, **bert_typeids
+                )[0]
 
-                if "bart" in self.config.encdec.bert_model:
+                if "bart" in self.pretrained_model_slug:
                     self.bert_encoding = self.bert_encoding.permute(1, 0, 2)
 
                 if self.config.encoder.embedding_dim != self.config.get_first(
@@ -408,7 +416,7 @@ class ContextAnswerEncoder(nn.Module):
                 ):
                     self.bert_encoding = self.embedding_projection(self.bert_encoding)
 
-                if self.config.encdec.num_encoder_layers > 0:
+                if self.config.encoder.num_layers > 0:
                     bert_encoding_augmented = torch.cat(
                         [self.bert_encoding, ctxt_ans_embedded], dim=-1
                     )  # ctxt_embedded.permute(1,0,2)

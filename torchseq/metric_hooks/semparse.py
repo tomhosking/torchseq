@@ -76,6 +76,18 @@ class SemanticParsingMetricHook(MetricHook):
         infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
         agent.config.bottleneck.code_predictor.data["infer_codes"] = True
 
+        config_eval = copy.deepcopy(config.data)
+        config_eval["dataset"] = "json"
+        config_eval["json_dataset"] = {
+            "path": "semparse/atis",
+            "field_map": [
+                {"type": "copy", "from": "target", "to": "target", "tokenizer": "output"},
+                {"type": "copy", "from": "source", "to": "source"},
+                {"type": "copy", "from": "target", "to": "template", "tokenizer": "output"},
+            ],
+        }
+        config = Config(config_eval)
+
         data_loader = JsonDataLoader(data_path=agent.data_path, config=config)
 
         agent.config.eval.data["sample_outputs"] = True

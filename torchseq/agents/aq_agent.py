@@ -70,7 +70,7 @@ class AQAgent(ModelAgent):
         self.begin_epoch_hook()
 
     def begin_epoch_hook(self):
-        self.model.freeze_bert = self.current_epoch < self.config.encdec.bert_warmup_epochs
+        self.model.freeze_bert = self.current_epoch < self.config.encoder.bert_warmup_epochs
 
     def step_train(self, batch, tgt_field):
         batch["_global_step"] = self.global_step

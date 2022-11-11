@@ -35,7 +35,7 @@ class BaseAgent:
         if self.cuda:
             self.device = torch.device("cuda")
 
-            self.logger.info("Program will run on *****GPU-CUDA***** ")
+            self.logger.info("Model will run on *****GPU-CUDA***** ")
 
             # self.model.to(self.device)
             self.model.apply(to_device_unless_marked(self.device))
@@ -45,7 +45,7 @@ class BaseAgent:
         else:
             self.device = torch.device("cpu")
 
-            self.logger.info("Program will run on *****CPU*****")
+            self.logger.info("Model will run on *****CPU*****")
 
         self.model.device = self.device
 

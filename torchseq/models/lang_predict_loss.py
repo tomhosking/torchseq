@@ -34,7 +34,7 @@ class LangPredictLoss(nn.Module):
 
     def forward(self, encoding, memory, lang):
 
-        pooled = self.pooling(encoding, encoding)
+        pooled = self.pooling(encoding, encoding, mask=memory["encoding_mask"])
 
         logits = self.classifier(pooled)
 

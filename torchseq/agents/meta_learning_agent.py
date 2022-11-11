@@ -100,7 +100,7 @@ class MetaLearningAgent(ModelAgent):
         One epoch of training
         :return:
         """
-        self.logger.info("## Training epoch {:}".format(self.current_epoch))
+        self.logger.info("## Training epoch {:}".format(self.current_epoch + 1))
 
         self.model.train()
         self.optimizers.zero_grad()

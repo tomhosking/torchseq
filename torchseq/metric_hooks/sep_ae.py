@@ -502,7 +502,7 @@ class SepAEMetricHook(MetricHook):
                 var2 = noise_weight
             # TODO: This won't work with modular bottlenecks!
             agent.config.bottleneck.data["prior_var_weight"] = (
-                [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encdec"]["num_heads"] - var_offset - 1)
+                [var1] * var_offset + [var2] + [var2] * (config_gen_noised["encoder"]["num_heads"] - var_offset - 1)
             )
 
         data_loader = JsonDataLoader(data_path=agent.data_path, config=Config(config_gen_noised))

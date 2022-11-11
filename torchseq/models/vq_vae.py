@@ -55,6 +55,9 @@ class VectorQuantizerMultiHead(nn.Module):
         head_dropout=None,
         head_dropout_keep_first=True,
         learnable_priors=False,
+        init_sphere=False,
+        soft_gumbel=False,
+        kl_weight=None,
     ):
 
         # residual_head_range=(0, 0),
@@ -86,6 +89,7 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._soft_em = soft_em
         self._use_gumbel = use_gumbel
+        self._soft_gumbel = soft_gumbel
         self._gumbel_temp = gumbel_temp
         self._temp_min = temp_min
         self._temp_schedule = temp_schedule
@@ -105,6 +109,8 @@ class VectorQuantizerMultiHead(nn.Module):
 
         self._relative_error = relative_error
         self._relative_error_cumulative = relative_error_cumulative
+
+        self._kl_weight = kl_weight
 
         self._cos_sim = use_cosine_similarities
 
@@ -152,6 +158,12 @@ class VectorQuantizerMultiHead(nn.Module):
             torch.nn.init.xavier_uniform_(
                 embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
             ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
+            if init_sphere:
+                embedding.weight.data = (
+                    embedding.weight.data
+                    / torch.linalg.vector_norm(embedding.weight, dim=1, keepdim=True)
+                    * init_scale
+                )
 
         if separate_output_embedding:
             self._output_embedding = nn.ModuleList(
@@ -321,9 +333,15 @@ class VectorQuantizerMultiHead(nn.Module):
 
             if self._learnable_priors is not None:
                 prior = torch.softmax(self._learnable_priors[head_ix], dim=-1)
-                posterior = torch.softmax(logits, dim=-1)
+                posterior = nn.functional.log_softmax(logits, dim=-1)
                 kl_loss = torch.nn.KLDivLoss(reduction="none")
                 loss += kl_loss(posterior, prior).sum(dim=-1)
+
+            if self._kl_weight is not None:
+                posterior = nn.functional.log_softmax(logits, dim=-1)
+                prior = torch.ones_like(posterior).detach() / torch.ones_like(posterior).sum(-1, keepdim=True).detach()
+                kl_loss = torch.nn.KLDivLoss(reduction="none")
+                loss += kl_loss(posterior, prior).sum(dim=-1) * self._kl_weight
 
             if self._hierarchical and len(all_probs) > 0:
                 # For the hierarchical case, weight the current probs by the prob of their parent node
@@ -347,13 +365,16 @@ class VectorQuantizerMultiHead(nn.Module):
 
             if self._use_gumbel and self.training:
 
-                gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
+                # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
+                gumbel_sched_weight = exp(-float(global_step) / float(self._temp_schedule_gamma))
                 gumbel_temp = (
-                    self._gumbel_temp * max(gumbel_sched_weight, self._temp_min)
+                    max(self._gumbel_temp * gumbel_sched_weight, self._temp_min)
                     if self._temp_schedule
                     else self._gumbel_temp
                 )
-                probs = torch.nn.functional.gumbel_softmax(logits, tau=gumbel_temp, hard=True, dim=-1)
+                probs = torch.nn.functional.gumbel_softmax(
+                    logits, tau=gumbel_temp, hard=(not self._soft_gumbel), dim=-1
+                )
             elif self._use_gumbel:
                 indices = torch.argmax(logits, dim=-1)
                 probs = onehot(indices, N=logits.shape[-1])

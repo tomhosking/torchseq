@@ -24,7 +24,7 @@ class BottleneckAutoencoderModel(nn.Module):
         if self.config.bottleneck.get("num_similar_heads", None) is not None:
             print('num_similar_heads is deprecated! Use "splice_head_offset" instead')
 
-        num_heads = self.config.bottleneck.get("num_heads", self.config.encdec.get("num_heads", 1))
+        num_heads = self.config.bottleneck.get("num_heads", self.config.encoder.get("num_heads", 1))
 
         if self.config.bottleneck.get("num_similar_heads", None) is not None:
             splice_head_offset = self.config.bottleneck.num_similar_heads
@@ -108,11 +108,11 @@ class BottleneckAutoencoderModel(nn.Module):
                 use_final_linear=False,
             )
 
-    def reduce_fn(self, inputs):
+    def reduce_fn(self, inputs, mask=None):
         if self.config.bottleneck.get("reduce_fn", "max") == "pool":
             if self.reduce_proj is not None:
                 inputs = self.reduce_proj(inputs)
-            reduced = self.reduce_pooling(inputs, inputs).unsqueeze(1)
+            reduced = self.reduce_pooling(inputs, inputs, mask=mask).unsqueeze(1)
         else:
             reduced = inputs.max(dim=1).values.unsqueeze(1)
         return reduced
@@ -130,6 +130,8 @@ class BottleneckAutoencoderModel(nn.Module):
                 include_position=self.config.encoder.get("position_embeddings", True),
             )
 
+            memory["seq_encoding"] = encoding.detach()
+
             encoding_pooled, memory = self.bottleneck(
                 encoding,
                 memory,
@@ -138,6 +140,8 @@ class BottleneckAutoencoderModel(nn.Module):
                 forced_codes=batch.get("forced_codes", None),
                 residual_mask=batch.get("residual_mask", None),
             )
+
+            memory["seq_encoding_postbn"] = encoding_pooled.detach()
 
             prebn_encoding_pooled = memory["encoding_pooled"]
 
@@ -158,7 +162,9 @@ class BottleneckAutoencoderModel(nn.Module):
                     )
 
                 pred_codes = self.code_predictor.infer(
-                    self.reduce_fn(codepred_input).squeeze(1), batch, outputs_to_block=memory.get("vq_codes")
+                    self.reduce_fn(codepred_input, mask=memory["encoding_mask"]).squeeze(1),
+                    batch,
+                    outputs_to_block=memory.get("vq_codes"),
                 )
                 batch["forced_codes"] = pred_codes
 
@@ -268,13 +274,15 @@ class BottleneckAutoencoderModel(nn.Module):
                         codepred_input = self.reduce_fn(
                             sem_encoding_pooled[:, :, : self.sep_splice_ix]
                             if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
-                            else prebn_sem_encoding_pooled[:, :, : self.sep_splice_ix]
+                            else prebn_sem_encoding_pooled[:, :, : self.sep_splice_ix],
+                            mask=memory["encoding_mask"],
                         )
                     else:
                         codepred_input = self.reduce_fn(
                             sem_encoding_pooled
                             if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
-                            else prebn_sem_encoding_pooled
+                            else prebn_sem_encoding_pooled,
+                            mask=memory["encoding_mask"],
                         )
 
                     codepred_tgt = onehot(template_memory["vq_codes"], N=self.code_predictor.config.output_dim)
@@ -378,13 +386,15 @@ class BottleneckAutoencoderModel(nn.Module):
                     memory["loss"] += separation_loss
 
             memory["encoding"] = encoding_pooled
-            memory["encoding_mask"] = None
 
             # Note: this returns the encodings *before* bottleneck!
             if self.sep_splice_ix > 0:
-                memory["sep_encoding_1"] = self.reduce_fn(prebn_encoding_pooled[:, :, : self.sep_splice_ix]).detach()
+                memory["sep_encoding_1"] = self.reduce_fn(
+                    prebn_encoding_pooled[:, :, : self.sep_splice_ix], mask=memory["encoding_mask"]
+                ).detach()
                 memory["sep_encoding_1_after_bottleneck"] = self.reduce_fn(
-                    encoding_pooled[:, :, : self.sep_splice_ix]
+                    encoding_pooled[:, :, : self.sep_splice_ix],
+                    mask=memory["encoding_mask"],
                 ).detach()
             memory["sep_encoding_2"] = (
                 prebn_encoding_pooled[:, :, self.sep_splice_ix :].max(dim=1, keepdim=True).values.detach()

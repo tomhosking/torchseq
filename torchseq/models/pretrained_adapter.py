@@ -51,53 +51,53 @@ class PretrainedAdapterModel(nn.Module):
         self.src_field = src_field
         self.tgt_field = tgt_field
 
-        if "mbart" in self.config.encdec.bert_model:
+        if "mbart" in self.config.encoder.bert_model:
             from transformers import MBartModel
 
             # Encoder/decoders
-            bart_model = MBartModel.from_pretrained(config.encdec.bert_model)
+            bart_model = MBartModel.from_pretrained(config.encoder.bert_model)
             self.encoder = bart_model.encoder
             self.decoder = bart_model.decoder
 
-        elif "bart" in self.config.encdec.bert_model:
+        elif "bart" in self.config.encoder.bert_model:
             from transformers import BartModel
 
             # Encoder/decoders
-            bart_model = BartModel.from_pretrained(config.encdec.bert_model)
+            bart_model = BartModel.from_pretrained(config.encoder.bert_model)
             self.encoder = bart_model.encoder
             self.decoder = bart_model.decoder
 
         self.decoder.generation_mode = False
 
-        if self.config.encdec.data.get("adapter", False):
-            if self.config.encdec.get("aq_adapter", False):
+        if self.config.encoder.data.get("adapter", False):
+            if self.config.encoder.get("aq_adapter", False):
                 decoder_layer = custom_transformer.TransformerDecoderLayer(
                     config.decoder.embedding_dim,
-                    nhead=config.encdec.num_heads,
-                    dim_feedforward=config.encdec.dim_feedforward,
+                    nhead=config.encoder.num_heads,
+                    dim_feedforward=config.encoder.dim_feedforward,
                     dropout=config.dropout,
-                    activation=config.encdec.activation,
+                    activation=config.encoder.activation,
                 )
 
                 self.adapter = custom_transformer.TransformerDecoder(
-                    decoder_layer, config.encdec.num_encoder_layers, None
+                    decoder_layer, config.encoder.num_encoder_layers, None
                 )
             else:
                 encoder_layer = custom_transformer.TransformerEncoderLayer(
                     config.encoder.embedding_dim,
-                    nhead=config.encdec.num_heads,
-                    dim_feedforward=config.encdec.dim_feedforward,
+                    nhead=config.encoder.num_heads,
+                    dim_feedforward=config.encoder.dim_feedforward,
                     dropout=config.dropout,
-                    activation=config.encdec.activation,
+                    activation=config.encoder.activation,
                 )
 
                 self.adapter = custom_transformer.TransformerEncoder(
-                    encoder_layer, config.encdec.num_encoder_layers, None
+                    encoder_layer, config.encoder.num_encoder_layers, None
                 )
 
             for p in self.adapter.parameters():
                 if p.dim() > 1:
-                    nn.init.xavier_uniform_(p, gain=self.config.encdec.get("adapter_init_scale", 1e-1))
+                    nn.init.xavier_uniform_(p, gain=self.config.encoder.get("adapter_init_scale", 1e-1))
 
         self.output_projection = nn.Linear(
             config.decoder.embedding_dim, config.prepro.get_first(["output_vocab_size", "vocab_size"]), bias=False
@@ -108,10 +108,10 @@ class PretrainedAdapterModel(nn.Module):
         # self.output_projection = bart_model.lm_head
         self.output_projection.weight.requires_grad = not config.freeze_projection
 
-        if config.encdec.freeze_encoder:
+        if config.encoder.freeze_encoder:
             for param in self.encoder.parameters():
                 param.requires_grad = False
-        if config.encdec.freeze_decoder:
+        if config.decoder.freeze_decoder:
             for param in self.decoder.parameters():
                 param.requires_grad = False
 
@@ -162,11 +162,11 @@ class PretrainedAdapterModel(nn.Module):
                 input_ids=batch[self.src_field].to(self.device), attention_mask=~context_mask
             )[0]
 
-            if self.config.encdec.freeze_encoder:
+            if self.config.encoder.freeze_encoder:
                 pretrained_encoding = pretrained_encoding.detach()
 
-            if self.config.encdec.get("adapter", False):
-                if self.config.encdec.get("aq_adapter", False):
+            if self.config.encoder.get("adapter", False):
+                if self.config.encoder.get("aq_adapter", False):
                     sideinfo_mask = batch["a_pos"] == 0
 
                     sideinfo = pretrained_encoding

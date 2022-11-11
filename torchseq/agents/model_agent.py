@@ -405,7 +405,7 @@ class ModelAgent(BaseAgent):
         One epoch of training
         :return:
         """
-        self.logger.info("## Training epoch {:}".format(self.current_epoch))
+        self.logger.info("## Training epoch {:}".format(self.current_epoch + 1))
 
         self.model.train()
         self.optimizers.zero_grad()
@@ -415,7 +415,7 @@ class ModelAgent(BaseAgent):
 
         start_step = self.global_step
 
-        pbar = tqdm(data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch), disable=self.silent)
+        pbar = tqdm(data_loader.train_loader, desc="Epoch {:}".format(self.current_epoch + 1), disable=self.silent)
 
         for batch_idx, batch in enumerate(pbar):
             # TRAIN STEP BEGINS
@@ -753,7 +753,7 @@ class ModelAgent(BaseAgent):
 
             if self.run_id is not None:
                 with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:
-                    f.write("\n".join([json.dumps(pred) for pred in pred_output]))
+                    f.write("\n".join([pred for pred in pred_output]))
                 with open(os.path.join(self.run_output_path, f"metrics.{split_slug}.json"), "w") as f:
                     json.dump(self.all_metrics_at_best, f, indent=4)
 

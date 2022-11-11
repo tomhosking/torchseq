@@ -1,3 +1,6 @@
+from genericpath import isdir
+
+
 def migrate_optimizers_23(cfg_dict, check_only=False):
     # Migrate old style optimizer definition
     if "optimizer" not in cfg_dict["training"]:
@@ -13,11 +16,11 @@ def migrate_optimizers_23(cfg_dict, check_only=False):
         }
         cfg_dict["training"].pop("lr")
         cfg_dict["training"].pop("opt")
-        if "lr_warmup_steps" in cfg_dict["training"]:
+        if "beta1" in cfg_dict["training"]:
             cfg_dict["training"].pop("beta1")
-        if "lr_warmup_steps" in cfg_dict["training"]:
+        if "beta2" in cfg_dict["training"]:
             cfg_dict["training"].pop("beta2")
-        if "lr_warmup_steps" in cfg_dict["training"]:
+        if "lr_schedule" in cfg_dict["training"]:
             cfg_dict["training"].pop("lr_schedule")
         if "lr_warmup_steps" in cfg_dict["training"]:
             cfg_dict["training"].pop("lr_warmup_steps")
@@ -33,13 +36,20 @@ def migrate_23_to_24_encdec(cfg_dict, check_only=False):
         if check_only:
             return True
 
+        cfg_dict["encoder"] = {**cfg_dict["encdec"], **cfg_dict["encoder"]}
+        cfg_dict["decoder"] = {**cfg_dict["encdec"], **cfg_dict["encoder"]}
+        cfg_dict["encoder"]["num_layers"] = cfg_dict["encoder"]["num_encoder_layers"]
+        cfg_dict["decoder"]["num_layers"] = cfg_dict["decoder"]["num_decoder_layers"]
+        cfg_dict.pop("encdec")
+        cfg_dict["encoder"].pop("num_encoder_layers")
+        cfg_dict["encoder"].pop("num_decoder_layers")
+        cfg_dict["decoder"].pop("num_encoder_layers")
+        cfg_dict["decoder"].pop("num_decoder_layers")
+
     return False if check_only else cfg_dict
 
 
-all_migrations = [
-    migrate_optimizers_23,
-    # migrate_23_to_24_encdec
-]
+all_migrations = [migrate_optimizers_23, migrate_23_to_24_encdec]
 
 
 def check_config(config):
@@ -47,3 +57,43 @@ def check_config(config):
     for migration in all_migrations:
         would_modify = would_modify or migration(config, check_only=True)
     return would_modify
+
+
+def migrate_config(config):
+    for migration in all_migrations:
+        config = migration(config, check_only=False)
+    return config
+
+
+if __name__ == "__main__":
+    import argparse
+    import json
+    import os
+
+    def migrate_and_save(path):
+        with open(path) as f:
+            cfg_dict = json.load(f)
+
+        cfg_dict = migrate_config(cfg_dict)
+
+        with open(path, "w") as f:
+            cfg_dict = json.dump(cfg_dict, f, indent=4)
+
+    parser = argparse.ArgumentParser(
+        description="TorchSeq",
+    )
+
+    parser.add_argument("path", type=str, metavar="FILE", default=None, help="Path to config file")
+
+    args = parser.parse_args()
+
+    if os.path.isdir(args.path):
+        filepaths = [
+            os.path.join(args.path, f) for f in os.listdir(args.path) if os.path.isfile(os.path.join(args.path, f))
+        ]
+        for path in filepaths:
+            print("Migrating {:}".format(path))
+            migrate_and_save(path)
+
+    else:
+        migrate_and_save(args.path)
