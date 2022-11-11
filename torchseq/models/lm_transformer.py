@@ -35,7 +35,9 @@ class TransformerLanguageModel(nn.Module):
             batch_first=True,
         )
         encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
-        self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_encoder_layers, encoder_norm)
+        self.encoder = nn.TransformerEncoder(
+            encoder_layer, config.encoder.num_encoder_layers, encoder_norm, enable_nested_tensor=True
+        )
 
         # self.output_projection = nn.Linear(config.encoder.embedding_dim, config.prepro.get('input_vocab_size', config.prepro.vocab_size), bias=False).cpu()
         # # Init output projection layer with embedding matrix
@@ -97,9 +99,7 @@ class TransformerLanguageModel(nn.Module):
 
         ctxt_embedded = self.positional_embeddings_enc(ctxt_embedded)
 
-        encoding = (
-            self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).contiguous()
-        )
+        encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).contiguous()
 
         logits = self.output_projection(encoding)
 

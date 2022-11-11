@@ -73,8 +73,8 @@ if __name__ == "__main__":
     def migrate_and_save(path):
         with open(path) as f:
             cfg_dict = json.load(f)
-        
-        with open(path.replace('config.json', 'config.bak.json'), "w") as f:
+
+        with open(path.replace("config.json", "config.bak.json"), "w") as f:
             json.dump(cfg_dict, f, indent=4)
 
         cfg_dict = migrate_config(cfg_dict)
@@ -95,7 +95,7 @@ if __name__ == "__main__":
             os.path.join(args.path, f) for f in os.listdir(args.path) if os.path.isfile(os.path.join(args.path, f))
         ]
         for path in filepaths:
-            if path[-11:] == 'config.json':
+            if path[-11:] == "config.json":
                 print("Migrating {:}".format(path))
                 migrate_and_save(path)
 

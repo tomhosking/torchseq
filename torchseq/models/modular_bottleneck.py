@@ -59,7 +59,9 @@ class ModularBottleneck(nn.Module):
                 batch_first=True,
             )
             encoder_norm = nn.LayerNorm(config.bottleneck.get("input_dim", config.bottleneck.embedding_dim))
-            self.pre_transform = nn.TransformerEncoder(transform_layer, num_layers, encoder_norm)
+            self.pre_transform = nn.TransformerEncoder(
+                transform_layer, num_layers, encoder_norm, enable_nested_tensor=True
+            )
         else:
             self.pre_transform = None
 
@@ -77,7 +79,9 @@ class ModularBottleneck(nn.Module):
                 batch_first=True,
             )
             transform_norm = nn.LayerNorm(config.bottleneck.get("output_dim", config.bottleneck.embedding_dim))
-            self.post_transform = nn.TransformerEncoder(transform_layer, num_layers, transform_norm)
+            self.post_transform = nn.TransformerEncoder(
+                transform_layer, num_layers, transform_norm, enable_nested_tensor=True
+            )
         else:
             self.post_transform = None
 

@@ -115,7 +115,9 @@ class SequenceEncoder(nn.Module):
                 batch_first=True,
             )
             encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
-            self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_layers, encoder_norm)
+            self.encoder = nn.TransformerEncoder(
+                encoder_layer, config.encoder.num_layers, encoder_norm, enable_nested_tensor=True
+            )
 
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
@@ -161,11 +163,7 @@ class SequenceEncoder(nn.Module):
 
             memory["seq_embedded_positioned"] = input_embedded.detach()
 
-            encoding = (
-                self.encoder(input_embedded, mask=src_mask, src_key_padding_mask=padding_mask)
-                
-                .contiguous()
-            )
+            encoding = self.encoder(input_embedded, mask=src_mask, src_key_padding_mask=padding_mask).contiguous()
 
         else:
 
@@ -183,11 +181,7 @@ class SequenceEncoder(nn.Module):
 
             if self.config.encoder.num_layers > 0:
 
-                encoding = (
-                    self.encoder(bert_encoding, mask=src_mask, src_key_padding_mask=padding_mask)
-                    
-                    .contiguous()
-                )
+                encoding = self.encoder(bert_encoding, mask=src_mask, src_key_padding_mask=padding_mask).contiguous()
             else:
                 encoding = bert_encoding
 
@@ -295,7 +289,9 @@ class ContextAnswerEncoder(nn.Module):
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim)
             )
-            self.encoder = nn.TransformerEncoder(encoder_layer, config.encoder.num_layers, encoder_norm)
+            self.encoder = nn.TransformerEncoder(
+                encoder_layer, config.encoder.num_layers, encoder_norm, enable_nested_tensor=True
+            )
 
             if self.config.encoder.get("init_like_bert", False):
                 init_bert_params(self.encoder)
@@ -423,22 +419,14 @@ class ContextAnswerEncoder(nn.Module):
                         [self.bert_encoding, ctxt_ans_embedded], dim=-1
                     )  # ctxt_embedded.permute(1,0,2)
                     bert_encoding_augmented = self.bert_embedding_projection(bert_encoding_augmented)
-                    encoding = (
-                        self.encoder(
-                            bert_encoding_augmented, mask=src_mask, src_key_padding_mask=context_mask
-                        )
-                        
-                        .contiguous()
-                    )
+                    encoding = self.encoder(
+                        bert_encoding_augmented, mask=src_mask, src_key_padding_mask=context_mask
+                    ).contiguous()
                 else:
                     encoding = self.bert_encoding
 
             else:
-                encoding = (
-                    self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask)
-                    
-                    .contiguous()
-                )
+                encoding = self.encoder(ctxt_embedded, mask=src_mask, src_key_padding_mask=context_mask).contiguous()
 
             # Construct the encoder output by combining a few diff sources
             memory_elements = []
