@@ -23,6 +23,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         temp_min=0.5,
         temp_schedule=True,
         temp_schedule_gamma=10000,
+        temp_schedule_depth_factor=1,
         norm_loss_weight=None,
         norm_loss_scale=None,
         norm_loss_diff=False,
@@ -90,6 +91,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._temp_min = temp_min
         self._temp_schedule = temp_schedule
         self._temp_schedule_gamma = temp_schedule_gamma
+        self._temp_schedule_depth_factor = temp_schedule_depth_factor
         self._soft_gumbel = soft_gumbel
         self._noise_inputs = noise_inputs
 
@@ -360,7 +362,10 @@ class HierarchicalRefinementQuantizer(nn.Module):
             if self.training:
 
                 # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
-                gumbel_sched_weight = exp(-float(global_step) / float(self._temp_schedule_gamma))
+                gumbel_sched_weight = exp(
+                    -float(global_step)
+                    / float(self._temp_schedule_gamma * self._temp_schedule_depth_factor**head_ix)
+                )
                 gumbel_temp = (
                     max(self._gumbel_temp * gumbel_sched_weight, self._temp_min)
                     if self._temp_schedule

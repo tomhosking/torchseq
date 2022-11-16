@@ -148,12 +148,12 @@ class HRQAggregationMetricHook(MetricHook):
                 json.dump(res, f)
             logger.info("...done")
 
-        if self.config.eval.metrics.hrq_agg.get("run_purity", False):
-            logger.info("Running cluster purity eval")
-            self.scores["hrq_agg_purity"] = HRQAggregationMetricHook.eval_cluster_purity(
-                self.config, agent, test=use_test
-            )
-            logger.info("...done")
+        # if self.config.eval.metrics.hrq_agg.get("run_purity", False):
+        #     logger.info("Running cluster purity eval")
+        #     self.scores["hrq_agg_purity"] = HRQAggregationMetricHook.eval_cluster_purity(
+        #         self.config, agent, test=use_test
+        #     )
+        #     logger.info("...done")
 
         return self.scores
 
@@ -409,7 +409,7 @@ class HRQAggregationMetricHook(MetricHook):
         split = "test" if test else "dev"
 
         LIMIT = 10000
-        PLOT_LIMIT = 500
+        PLOT_LIMIT = 2000
 
         codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
         outputs = outputs_with_codes["outputs"][:LIMIT]
@@ -509,12 +509,24 @@ class HRQAggregationMetricHook(MetricHook):
         ]
         pattern_types = ("-", "+", "x", "\\", "*", "o", "O", ".", "/")
 
-        linecols = ["tab:blue", "red", "blue", "orange", "grey", "grey", "grey", "grey"]
+        linecols = [
+            "tab:blue",
+            "tab:red",
+            "tab:orange",
+            "tab:green",
+            "red",
+            "blue",
+            "orange",
+            "grey",
+            "grey",
+            "grey",
+            "grey",
+        ]
 
         plt.figure(figsize=(18, 12))
         ax = plt.gca()
 
-        unique_entities = list(set(entity_ids))
+        # unique_entities = list(set(entity_ids))
 
         if len(codes[0]) > 1:
             markers = [marker_types[x[1] % len(marker_types)] for x in codes]
@@ -533,26 +545,30 @@ class HRQAggregationMetricHook(MetricHook):
                 break
             ax.scatter(x, y, color=c, s=20, marker=m)  # hatch=4*p, facecolor='white'
 
-        entitycols = [linecols[unique_entities.index(x) % len(linecols)] for x in entity_ids]
+        # entitycols = [linecols[unique_entities.index(x) % len(linecols)] for x in entity_ids]
 
         plt.title(agent.run_id)
 
         logger.info("Plotting")
         plotted = set()
         if num_heads > 1:
+            entities_plotted = {}
             for i in range(LIMIT):
-                if unique_entities.index(entity_ids[i]) > 1:
+                # if unique_entities.index(entity_ids[i]) > 1:
+                #     continue
+                if len(entities_plotted) == 2 and entity_ids[i] not in entities_plotted:
                     continue
-                if (entity_ids[i], codes[i]) in plotted:
-                    continue
+                entities_plotted[entity_ids[i]] = len(entities_plotted)
                 for hix in range(max(min(num_heads - 1, 2), 0)):
+                    if (entity_ids[i], codes[i][: hix + 1]) in plotted:
+                        continue
                     from_coords = X_byhead_embedded[i : (i + 1), hix, :]
                     to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
                     ab_pairs = np.c_[from_coords, to_coords]
                     ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
-                    alpha = paths_by_entity_probs[entity_ids[i]][codes[i]]
-                    plotted.add((entity_ids[i], codes[i]))
-                    ax.plot(*ab_args, c=entitycols[i], linewidth=5, alpha=alpha)
+                    alpha = np.sqrt(paths_by_entity_probs[entity_ids[i]][codes[i][: hix + 1]])
+                    plotted.add((entity_ids[i], codes[i][: hix + 1]))
+                    ax.plot(*ab_args, c=linecols[entities_plotted[entity_ids[i]]], linewidth=5, alpha=alpha)
         plt.savefig(agent.run_output_path + "/tsne_entity_overlay.pdf", bbox_inches="tight")
 
         if show_plot:
@@ -744,15 +760,24 @@ class HRQAggregationMetricHook(MetricHook):
 
         if use_tfidf:
             terms_by_doc = defaultdict(Counter)
-            all_terms = set()
+            # all_terms = set()
             idf = {}
 
             for entity_id, reviews in all_review_paths.items():
                 all_paths = [tuple(path) for paths in reviews.values() for path in paths]
                 for path in all_paths:
                     for max_len in range(1, max_path_depth + 1):
-                        terms_by_doc[entity_id][path[:max_len]] += 1
-                        all_terms.add(path[:max_len])
+                        term = path[:max_len]
+                        terms_by_doc[entity_id][term] += 1
+
+                # Starting with the most specific terms, check whether their ancestors have no other descendants (ie, prefer the more specific term)
+                for term, count in sorted(terms_by_doc[entity_id].items(), key=lambda x: len(x[0]), reverse=True):
+                    for max_len in range(1, len(term)):
+                        if terms_by_doc[entity_id][term[:-max_len]] == count:
+                            # Zero out the generic term in favour of the specific one (since it )
+                            terms_by_doc[entity_id][term[:-max_len]] = 0
+
+            all_terms = set([term for terms in terms_by_doc.values() for term in terms.keys()])
 
             for term in all_terms:
                 idf[term] = np.log(
@@ -763,8 +788,8 @@ class HRQAggregationMetricHook(MetricHook):
                 path_weights = {}
                 for term in all_terms:
                     df = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
-                    path_weights[term] = df * np.sqrt(idf[term]) / len(term)
-                    # path_weights[term] = df * np.sqrt(idf[term] / len(term))
+                    # path_weights[term] = df * np.sqrt(idf[term]) / len(term)
+                    path_weights[term] = df * np.sqrt(idf[term] / len(term))
                     # path_weights[term] = df * (idf[term]) / len(term)
                     # path_weights[term] = df * 3**(len(term)-1)
 
@@ -786,10 +811,8 @@ class HRQAggregationMetricHook(MetricHook):
                             [
                                 1
                                 for selected_path in summary_paths[entity_id]
-                                if path[: len(selected_path)]
-                                == selected_path[
-                                    : len(path)
-                                ]  # or path[: len(selected_path)-1] == selected_path[: len(path)-1]
+                                if path[: len(selected_path)] == selected_path[: len(path)]
+                                or path[: len(selected_path) - 1] == selected_path[: len(path) - 1]
                             ]
                         )
                         == 0
@@ -948,7 +971,7 @@ class HRQAggregationMetricHook(MetricHook):
             ) = HRQAggregationMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 3),
-                5,
+                8,
                 path_limit=config.eval.metrics.hrq_agg.get("summary_smart_num_specific", 4),
                 truncation_length=None,
                 prune_min_weight=None,
@@ -988,7 +1011,7 @@ class HRQAggregationMetricHook(MetricHook):
             summary_paths, summary_path_weights = HRQAggregationMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 4),
-                4,
+                6,
                 path_limit=config.eval.metrics.hrq_agg.get("summary_path_limit", 6),
                 truncation_length=config.eval.metrics.hrq_agg.get("summary_truncation_length", None),
                 prune_min_weight=config.eval.metrics.hrq_agg.get("summary_prune_min_weight", 0.01),
@@ -1125,6 +1148,8 @@ class HRQAggregationMetricHook(MetricHook):
             "evidence": all_evidence,
             "evidence_paths": all_evidence_paths,
             "paths_by_review_by_entity": paths_by_review_by_entity,
+            "inputs": eval_sentences,
+            "all_codes": all_codes,
         }
 
     @abstractmethod
@@ -1216,24 +1241,27 @@ class HRQAggregationMetricHook(MetricHook):
             inters = []
             intras = []
 
-            for codes, sents in tqdm(sents_by_cluster.items()[:1000]):
+            for codes, sents in tqdm(list(sents_by_cluster.items())[:2000]):
                 sents = list(sents)
                 if len(sents) == 1:
                     continue
                 other_sents = [
                     sent for other_codes, sents in sents_by_cluster.items() if codes != other_codes for sent in sents
-                ][:100]
-                inter_refs = [other_sents] * len(sents[:100])
-                inter_score = sacrebleu.corpus_bleu(sents[:100], list(zip(*inter_refs)), lowercase=True).score
+                ]
+                np.random.shuffle(other_sents)
+                other_sents = other_sents[:1000]
+                inter_refs = [other_sents] * len(sents[:1000])
+                inter_score = sacrebleu.corpus_bleu(sents[:1000], list(zip(*inter_refs)), lowercase=True).score
                 #     inter_rouge = get_jackknife_rouge(sents[:1000], inter_refs)['rouge2'] * 100
                 #     inter_rouges.append(inter_rouge)
 
                 inters.append(inter_score)
-                refs = [[s for s in sents[:1000] if s != sent] for sent in sents[:100]]
+
+                refs = [[s for s in sents[:100] if s != sent] for sent in sents[:100]]
                 intra_score = sacrebleu.corpus_bleu(sents[:100], list(zip(*refs)), lowercase=True).score
                 #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2'] * 100
                 intras.append(intra_score)
-            scores[mask_len] = (np.mean(inters), np.mean(intras))
+            scores[num_heads - mask_len] = (np.mean(intras), np.mean(inters))
 
         return scores
 
