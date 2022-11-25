@@ -211,9 +211,7 @@ class HRQAggregationMetricHook(MetricHook):
 
             _, _, (pred_output, _, _), memory = agent.inference(loader, memory_keys_to_return=["vq_codes"])
 
-            with jsonlines.open(
-                agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl"
-            ) as f:
+            with jsonlines.open(agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl") as f:
                 inputs = [x["sentence"] for x in f]
             # with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/reviews.dev.jsonl") as f:
             #     scores = [x["rating"] for x in f]
@@ -823,8 +821,14 @@ class HRQAggregationMetricHook(MetricHook):
                             [
                                 1
                                 for selected_path in summary_paths[entity_id]
-                                if path[: min(len(selected_path), len(path))] == selected_path[: min(len(selected_path), len(path))]
-                                or (len(path) > 1 and len(selected_path) > 1 and path[: min(len(selected_path), len(path)) - 1] == selected_path[: min(len(selected_path), len(path)) - 1])
+                                if path[: min(len(selected_path), len(path))]
+                                == selected_path[: min(len(selected_path), len(path))]
+                                or (
+                                    len(path) > 1
+                                    and len(selected_path) > 1
+                                    and path[: min(len(selected_path), len(path)) - 1]
+                                    == selected_path[: min(len(selected_path), len(path)) - 1]
+                                )
                             ]
                         )
                         == 0
@@ -935,7 +939,6 @@ class HRQAggregationMetricHook(MetricHook):
             quantizer_index = bneck_types.index("hrqvae")
             num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
-
         space_aspect_list = ["building", "cleanliness", "food", "location", "rooms", "service"]
         aspect_keywords = defaultdict(list)
         for aspect in space_aspect_list:
@@ -944,11 +947,60 @@ class HRQAggregationMetricHook(MetricHook):
             aspect_keywords[aspect] = keywords
 
         all_aspect_keywords = [kw for kws in aspect_keywords.values() for kw in kws]
-        keywords_to_aspect = {kw: aspect for aspect, kws in aspect_keywords.items() for kw in kws}
-        
-        all_aspect_keywords += ['good', 'bad', 'ok', 'great', 'poor', 'fine', 'excellent', 'terrible', 'awful', 'disappointing', 'amazing','special', 'fantastic', 'wonderful']
-        all_aspect_keywords += ['rooms', 'bed','beds', 'cookie', 'cookies', 'cheap', 'expensive', 'positive', 'negative','quick','slow','fast','better','worse','worn','new','modern','lovely','wifi','recommend', 'restaurant','restaurants','shuttle','airport','parking','light','dark', 'luxurious', 'luxury', 'price','priced','overpriced','tired','huge','tiny']
 
+        all_aspect_keywords += [
+            "good",
+            "bad",
+            "ok",
+            "great",
+            "poor",
+            "fine",
+            "excellent",
+            "terrible",
+            "awful",
+            "disappointing",
+            "amazing",
+            "special",
+            "fantastic",
+            "wonderful",
+        ]
+        all_aspect_keywords += [
+            "rooms",
+            "bed",
+            "beds",
+            "cookie",
+            "cookies",
+            "cheap",
+            "expensive",
+            "positive",
+            "negative",
+            "quick",
+            "slow",
+            "fast",
+            "better",
+            "worse",
+            "worn",
+            "new",
+            "modern",
+            "lovely",
+            "wifi",
+            "recommend",
+            "restaurant",
+            "restaurants",
+            "shuttle",
+            "airport",
+            "parking",
+            "light",
+            "dark",
+            "luxurious",
+            "luxury",
+            "price",
+            "priced",
+            "overpriced",
+            "tired",
+            "huge",
+            "tiny",
+        ]
 
         def prefilter_condition(sentence):
             if len(sentence.split()) > 25:
@@ -968,14 +1020,16 @@ class HRQAggregationMetricHook(MetricHook):
                 return False
             return True
 
-        from allennlp.predictors.predictor import Predictor
-        import allennlp_models.structured_prediction
-        from allennlp.models.archival import load_archive
-        predictor = Predictor.from_archive(
-            load_archive("https://storage.googleapis.com/allennlp-public-models/elmo-constituency-parser-2020.02.10.tar.gz",
-            cuda_device=torch.cuda.current_device()),
-        )
-        
+        # from allennlp.predictors.predictor import Predictor
+        # import allennlp_models.structured_prediction
+        # from allennlp.models.archival import load_archive
+
+        # predictor = Predictor.from_archive(
+        #     load_archive(
+        #         "https://storage.googleapis.com/allennlp-public-models/elmo-constituency-parser-2020.02.10.tar.gz",
+        #         cuda_device=torch.cuda.current_device(),
+        #     ),
+        # )
 
         eval_sentences = [
             {"sentence": sentence, "review_id": review["review_id"], "entity_id": row["entity_id"]}
@@ -987,7 +1041,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         # eval_sentences = []
         # for i, batch_inputs in tqdm(batchify(eval_sentences_orig, batch_size=24), desc='Splitting eval'):
-        
+
         #     parses = predictor.predict_batch_json([{'sentence': sent['sentence']} for sent in batch_inputs])
         #     for parse, sent in zip(parses, batch_inputs):
         #         subsents = [node['word'] for node in parse['hierplane_tree']['root']['children'] if node['nodeType'] == 'S']
@@ -1005,8 +1059,6 @@ class HRQAggregationMetricHook(MetricHook):
         #         eval_sentences.append(row)
 
         # eval_sentences = [row for row in eval_sentences if prefilter_condition(row['sentence'])]
-
-        
 
         data_loader = JsonDataLoader(
             config=Config(config_codes), data_path=agent.data_path, dev_samples=eval_sentences
@@ -1053,7 +1105,9 @@ class HRQAggregationMetricHook(MetricHook):
                 truncation_length=None,
                 prune_min_weight=0.01,
                 prune_max_paths=None,
-                use_tfidf=True if config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", None) is not None else False,
+                use_tfidf=True
+                if config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", None) is not None
+                else False,
                 tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", 5),
                 # block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
             )
@@ -1353,7 +1407,7 @@ class HRQAggregationMetricHook(MetricHook):
             {"sentence": sentence, "summ_id": summ_id, "entity_id": row["entity_id"]}
             for row in eval_data
             for summ_id, summ in enumerate(row["reviews"])
-            for sentence in summ['sentences']
+            for sentence in summ["sentences"]
         ]
 
         # First, get the oracle codes for the reference summaries
@@ -1507,5 +1561,5 @@ class HRQAggregationMetricHook(MetricHook):
             masked_sents,
             reference_codes,
             review_sentences,
-            review_codes
+            review_codes,
         )

@@ -95,7 +95,7 @@ def batchify(input, batch_size=1, shuffle=False):
         batch = input[bix * batch_size : (bix + 1) * batch_size]
         batched.append(batch)
     return list(enumerate(batched))
-        # yield bix, batch
+    # yield bix, batch
 
 
 def initialize_truncated_normal_(tensor, mean=0, std=0.02):

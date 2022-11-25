@@ -32,7 +32,11 @@ def parse_args():
     parser.add_argument(
         "--reload_after_train", action="store_true", help="Reload model after training to do a validation run"
     )
-    parser.add_argument("--copy_chkpt", action="store_true", help="Save a copy of the checkpoint in current output dir, even if loading from elsewhere")
+    parser.add_argument(
+        "--copy_chkpt",
+        action="store_true",
+        help="Save a copy of the checkpoint in current output dir, even if loading from elsewhere",
+    )
 
     # Model loading
     parser.add_argument("--load_chkpt", type=str, metavar="CHECKPOINT", default=None, help="Path to checkpoint file")
