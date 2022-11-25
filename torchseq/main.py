@@ -95,9 +95,6 @@ def main():
 
     logger.info("** Run ID is {:} **".format(run_id))
 
-    wandb_init(config=config, run_id=run_id, path=os.path.join(args.output_path, config.tag, run_id))
-    # wandb_log({"status": "running"}, 0)
-
     data_loader = dataloader_from_config(config, data_path=args.data_path)
 
     agent = AGENT_TYPES[config.task](
@@ -116,6 +113,8 @@ def main():
         use_cuda=(not args.cpu),
     )
 
+    wandb_init(config=config, run_id=run_id, path=os.path.join(args.output_path, config.tag, run_id))
+
     # Setup Lightning
     # for optimizer in agent.optimizers.optimizers:
     #     agent.model, optimizer = self.setup(agent.model, optimizer)
@@ -131,15 +130,17 @@ def main():
     if args.load_chkpt is not None:
         logger.info("Loading from checkpoint:")
         logger.info(args.load_chkpt)
-        agent.load_checkpoint(args.load_chkpt)
+        agent.load_checkpoint(args.load_chkpt, write_pointer=not args.copy_chkpt)
         logger.info("...loaded!")
+        if args.copy_chkpt:
+            logger.info("Saving a local checkpoint copy")
+            agent.save_checkpoint()
 
     if args.train:
 
         if data_loader.train_loader is None:
             raise Exception("Selected dataset does not include a training split - cannot train!")
         logger.info("Starting training...")
-        # wandb_log({"status": "training"}, 0)
 
         # TEMP: save out the VQ embeds *before* they've been trained, for debug
         if agent.config.get_path(["bottleneck", "modular"], False):
@@ -169,7 +170,7 @@ def main():
             raise Exception("Selected dataset does not include a training split - cannot train!")
 
         set_status_mckenzie("validating")
-        # wandb_log({"status": "validating"}, step=agent.global_step)
+
         logger.info("Starting validation (on training set)...")
         _ = agent.validate(data_loader, force_save_output=True, use_train=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
@@ -193,7 +194,7 @@ def main():
                 )
 
         set_status_mckenzie("validating")
-        # wandb_log({"status": "validating"}, step=agent.global_step)
+
         logger.info("Starting validation...")
         _ = agent.validate(data_loader, force_save_output=True, save_model=False, slow_metrics=True)
         logger.info("...validation done!")
@@ -203,7 +204,7 @@ def main():
             raise Exception("Selected dataset does not include a test split - cannot run test evaluation!")
 
         set_status_mckenzie("validating")
-        # wandb_log({"status": "testing"}, step=agent.global_step)
+
         logger.info("Starting testing...")
         _ = agent.validate(data_loader, force_save_output=True, use_test=True, save_model=False, slow_metrics=True)
         logger.info("...testing done!")

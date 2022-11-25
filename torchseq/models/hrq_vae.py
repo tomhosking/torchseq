@@ -605,7 +605,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         if self._post_scale:
             quantized = quantized * sqrt(self._embedding_dim)
 
-        commitment_loss = nn.functional.mse_loss(this_input, quantized.squeeze(1), reduction="none").mean(dim=-1)
+        commitment_loss = nn.functional.mse_loss(this_input, quantized[:, 0, :], reduction="none").mean(dim=-1)
 
         Logger().log_scalar(f"hrq_{dev_str}/commitment_loss", commitment_loss.mean(), global_step)
         if self._commitment_weight > 0:
@@ -613,7 +613,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         Logger().log_scalar(
             f"hrq_{dev_str}/norm_output",
-            torch.linalg.vector_norm(quantized.squeeze(1), dim=1).mean(),
+            torch.linalg.vector_norm(quantized[:, 0, :], dim=1).mean(),
             global_step,
         )
 

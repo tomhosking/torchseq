@@ -5,8 +5,6 @@ import wandb
 
 def wandb_init(config, run_id=None, path=None):
     if "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ:
-        os.makedirs(path, exist_ok=True)
-
         # W&B hierarchy is: project > group > job_type > name > id
         wandb.init(
             project=config.tag,

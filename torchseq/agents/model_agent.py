@@ -88,8 +88,8 @@ class ModelAgent(BaseAgent):
                 )
             else:
                 os.makedirs(self.run_output_path)
-            with open(os.path.join(self.run_output_path, "config.json"), "w") as f:
-                json.dump(config.data, f, indent=4)
+                with open(os.path.join(self.run_output_path, "config.json"), "w") as f:
+                    json.dump(config.data, f, indent=4)
 
             Logger(log_path=self.run_output_path + "/logs", interval=config.training.get("log_interval", 100))
 

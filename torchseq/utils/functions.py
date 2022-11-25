@@ -90,9 +90,12 @@ def evaluating(net):
 def batchify(input, batch_size=1, shuffle=False):
     if shuffle:
         np.random.shuffle(input)
+    batched = []
     for bix in range(math.ceil((1.0 * len(input)) / batch_size)):
         batch = input[bix * batch_size : (bix + 1) * batch_size]
-        yield bix, batch
+        batched.append(batch)
+    return list(enumerate(batched))
+        # yield bix, batch
 
 
 def initialize_truncated_normal_(tensor, mean=0, std=0.02):

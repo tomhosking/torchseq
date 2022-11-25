@@ -19,7 +19,7 @@ from torchseq.utils.rouge import get_jackknife_rouge, get_pairwise_rouge
 
 import sacrebleu
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from nltk import sent_tokenize
+from nltk import sent_tokenize, word_tokenize
 
 from openTSNE import TSNE
 
@@ -158,9 +158,9 @@ class HRQAggregationMetricHook(MetricHook):
         return self.scores
 
     @abstractmethod
-    def codes_from_cache(config, agent, test=False, train=False, force_rebuild=False):
+    def codes_from_cache(config, agent, test=False, train=False, eval=False, force_rebuild=False):
 
-        split = "test" if test else ("train" if train else "dev")
+        split = "test" if test else ("train" if train else ("eval" if eval else "dev"))
         if (
             not force_rebuild
             and agent.run_output_path is not None
@@ -173,8 +173,10 @@ class HRQAggregationMetricHook(MetricHook):
         else:
             cfg_dict = copy.deepcopy(config.data)
 
+            dataset = config.eval.metrics.hrq_agg.dataset_eval if eval else config.eval.metrics.hrq_agg.dataset_all
+
             cfg_dict["json_dataset"] = {
-                "path": config.eval.metrics.hrq_agg.dataset_all,
+                "path": dataset,
                 "filename": "reviews.{split}",
                 "field_map": [
                     {"type": "copy", "from": "sentence", "to": "target"},
@@ -210,7 +212,7 @@ class HRQAggregationMetricHook(MetricHook):
             _, _, (pred_output, _, _), memory = agent.inference(loader, memory_keys_to_return=["vq_codes"])
 
             with jsonlines.open(
-                agent.data_path + "/" + config.eval.metrics.hrq_agg.dataset_all + f"/reviews.{split}.jsonl"
+                agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl"
             ) as f:
                 inputs = [x["sentence"] for x in f]
             # with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/reviews.dev.jsonl") as f:
@@ -510,9 +512,9 @@ class HRQAggregationMetricHook(MetricHook):
         pattern_types = ("-", "+", "x", "\\", "*", "o", "O", ".", "/")
 
         linecols = [
+            "tab:orange",
             "tab:blue",
             "tab:red",
-            "tab:orange",
             "tab:green",
             "red",
             "blue",
@@ -736,6 +738,7 @@ class HRQAggregationMetricHook(MetricHook):
         prune_min_weight=None,
         prune_max_paths=None,
         use_tfidf=False,
+        tfidf_weighting_scheme=2,
         block_paths=None,
     ):
         summary_paths = {}
@@ -787,11 +790,20 @@ class HRQAggregationMetricHook(MetricHook):
             for entity_id, reviews in all_review_paths.items():
                 path_weights = {}
                 for term in all_terms:
-                    df = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
-                    # path_weights[term] = df * np.sqrt(idf[term]) / len(term)
-                    path_weights[term] = df * np.sqrt(idf[term] / len(term))
-                    # path_weights[term] = df * (idf[term]) / len(term)
-                    # path_weights[term] = df * 3**(len(term)-1)
+                    tf = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
+                    if tfidf_weighting_scheme == 1:
+                        path_weights[term] = tf * np.sqrt(idf[term]) / len(term)
+                    elif tfidf_weighting_scheme == 2:
+                        path_weights[term] = tf * np.sqrt(idf[term] / len(term))
+                    elif tfidf_weighting_scheme == 3:
+                        path_weights[term] = tf * (idf[term]) / len(term)
+                    elif tfidf_weighting_scheme == 4:
+                        path_weights[term] = tf * len(term)
+                    elif tfidf_weighting_scheme == 5:
+                        path_weights[term] = tf * np.sqrt(len(term))
+                    elif tfidf_weighting_scheme == 6:
+                        path_weights[term] = tf
+                    # path_weights[term] = tf * 3**(len(term)-1)
 
                 summary_paths[entity_id], summary_path_weights[entity_id] = [], []
                 for path, score in sorted(path_weights.items(), key=lambda x: x[1], reverse=True):
@@ -811,8 +823,8 @@ class HRQAggregationMetricHook(MetricHook):
                             [
                                 1
                                 for selected_path in summary_paths[entity_id]
-                                if path[: len(selected_path)] == selected_path[: len(path)]
-                                or path[: len(selected_path) - 1] == selected_path[: len(path) - 1]
+                                if path[: min(len(selected_path), len(path))] == selected_path[: min(len(selected_path), len(path))]
+                                or (len(path) > 1 and len(selected_path) > 1 and path[: min(len(selected_path), len(path)) - 1] == selected_path[: min(len(selected_path), len(path)) - 1])
                             ]
                         )
                         == 0
@@ -923,6 +935,21 @@ class HRQAggregationMetricHook(MetricHook):
             quantizer_index = bneck_types.index("hrqvae")
             num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
 
+
+        space_aspect_list = ["building", "cleanliness", "food", "location", "rooms", "service"]
+        aspect_keywords = defaultdict(list)
+        for aspect in space_aspect_list:
+            with open(agent.data_path + f"/opagg/aspect-seeds/{aspect}.txt") as f:
+                keywords = [line.strip().split()[1] for line in f.readlines()]
+            aspect_keywords[aspect] = keywords
+
+        all_aspect_keywords = [kw for kws in aspect_keywords.values() for kw in kws]
+        keywords_to_aspect = {kw: aspect for aspect, kws in aspect_keywords.items() for kw in kws}
+        
+        all_aspect_keywords += ['good', 'bad', 'ok', 'great', 'poor', 'fine', 'excellent', 'terrible', 'awful', 'disappointing', 'amazing','special', 'fantastic', 'wonderful']
+        all_aspect_keywords += ['rooms', 'bed','beds', 'cookie', 'cookies', 'cheap', 'expensive', 'positive', 'negative','quick','slow','fast','better','worse','worn','new','modern','lovely','wifi','recommend', 'restaurant','restaurants','shuttle','airport','parking','light','dark', 'luxurious', 'luxury', 'price','priced','overpriced','tired','huge','tiny']
+
+
         def prefilter_condition(sentence):
             if len(sentence.split()) > 25:
                 return False
@@ -936,7 +963,19 @@ class HRQAggregationMetricHook(MetricHook):
                 return False
             # if sentence.lower().count(' we ') > 1 or sentence.lower().count(' i ') > 1:
             #     return False
+            overlap = set(word_tokenize(sentence.replace("\n", " ").lower())) & set(all_aspect_keywords)
+            if len(overlap) == 0:
+                return False
             return True
+
+        from allennlp.predictors.predictor import Predictor
+        import allennlp_models.structured_prediction
+        from allennlp.models.archival import load_archive
+        predictor = Predictor.from_archive(
+            load_archive("https://storage.googleapis.com/allennlp-public-models/elmo-constituency-parser-2020.02.10.tar.gz",
+            cuda_device=torch.cuda.current_device()),
+        )
+        
 
         eval_sentences = [
             {"sentence": sentence, "review_id": review["review_id"], "entity_id": row["entity_id"]}
@@ -945,6 +984,29 @@ class HRQAggregationMetricHook(MetricHook):
             for sentence in review["sentences"]
             if prefilter_condition(sentence)
         ]
+
+        # eval_sentences = []
+        # for i, batch_inputs in tqdm(batchify(eval_sentences_orig, batch_size=24), desc='Splitting eval'):
+        
+        #     parses = predictor.predict_batch_json([{'sentence': sent['sentence']} for sent in batch_inputs])
+        #     for parse, sent in zip(parses, batch_inputs):
+        #         subsents = [node['word'] for node in parse['hierplane_tree']['root']['children'] if node['nodeType'] == 'S']
+        #         if len(subsents) > 0:
+        #             eval_sentences.extend([{**sent, 'sentence': subsent} for subsent in subsents])
+        #         else:
+        #             eval_sentences.append(sent)
+        # for row in tqdm(eval_sentences_orig):
+        #     parse = predictor.predict(row['sentence'])
+        #     subsents = [node['word'] for node in parse['hierplane_tree']['root']['children'] if node['nodeType'] == 'S']
+        #     if len(subsents) > 0:
+        #         for subsent in subsents:
+        #             eval_sentences.append({**row, 'sentence': subsent})
+        #     else:
+        #         eval_sentences.append(row)
+
+        # eval_sentences = [row for row in eval_sentences if prefilter_condition(row['sentence'])]
+
+        
 
         data_loader = JsonDataLoader(
             config=Config(config_codes), data_path=agent.data_path, dev_samples=eval_sentences
@@ -956,6 +1018,9 @@ class HRQAggregationMetricHook(MetricHook):
         _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
 
         all_codes = memory["vq_codes"].tolist()
+
+        # _, outputs_with_codes = HRQAggregationMetricHook.codes_from_cache(config, agent, eval=True)
+        # all_codes = outputs_with_codes['codes']
 
         # Organise paths by entity/review, then get summary paths
         paths_by_review_by_entity = defaultdict(lambda: defaultdict(list))
@@ -977,6 +1042,7 @@ class HRQAggregationMetricHook(MetricHook):
                 prune_min_weight=None,
                 prune_max_paths=None,
                 use_tfidf=True,
+                tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_specific_weight_scheme", 2),
             )
 
             summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
@@ -987,8 +1053,9 @@ class HRQAggregationMetricHook(MetricHook):
                 truncation_length=None,
                 prune_min_weight=0.01,
                 prune_max_paths=None,
-                use_tfidf=False,
-                block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
+                use_tfidf=True if config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", None) is not None else False,
+                tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", 5),
+                # block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
             )
             # summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
             #     paths_by_review_by_entity,
@@ -1275,11 +1342,18 @@ class HRQAggregationMetricHook(MetricHook):
             with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
                 eval_data = [x for x in reader]
 
-        eval_sentences = [
+        reference_sentences = [
             {"sentence": sentence, "summ_id": summ_id, "entity_id": row["entity_id"]}
             for row in eval_data
             for summ_id, summ in enumerate(row["summaries"])
             for sentence in sent_tokenize(summ)
+        ]
+
+        review_sentences = [
+            {"sentence": sentence, "summ_id": summ_id, "entity_id": row["entity_id"]}
+            for row in eval_data
+            for summ_id, summ in enumerate(row["reviews"])
+            for sentence in summ['sentences']
         ]
 
         # First, get the oracle codes for the reference summaries
@@ -1294,15 +1368,20 @@ class HRQAggregationMetricHook(MetricHook):
         }
 
         data_loader = JsonDataLoader(
-            config=Config(config_codes), data_path=agent.data_path, dev_samples=eval_sentences
+            config=Config(config_codes), data_path=agent.data_path, dev_samples=reference_sentences
         )
-
-        # sample_outputs = instance.config.eval.get("sample_outputs", True)
-        # instance.config.eval.data["sample_outputs"] = False
 
         _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
 
-        all_codes = memory["vq_codes"].tolist()
+        reference_codes = memory["vq_codes"].tolist()
+
+        data_loader = JsonDataLoader(
+            config=Config(config_codes), data_path=agent.data_path, dev_samples=review_sentences
+        )
+
+        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+
+        review_codes = memory["vq_codes"].tolist()
 
         # Now, decode partial codes, to check how much detail is actually required
         masked_sents = []
@@ -1327,8 +1406,8 @@ class HRQAggregationMetricHook(MetricHook):
         for mask_length in range(num_heads - 1, 0, -1):
             mask = [1] * (num_heads - mask_length) + [0] * mask_length
             samples = [
-                {**x, "sentence": "", "forced_codes": all_codes[i], "head_mask": mask, "residual_mask": [0]}
-                for i, x in enumerate(eval_sentences)
+                {**x, "sentence": "", "forced_codes": reference_codes[i], "head_mask": mask, "residual_mask": [0]}
+                for i, x in enumerate(reference_sentences)
             ]
 
             masked_loader = JsonDataLoader(
@@ -1341,7 +1420,7 @@ class HRQAggregationMetricHook(MetricHook):
         # Determine best depth for oracle generation
         all_sims = []
         best_matches_unconstrained = []
-        for inputs, output, codes in zip(eval_sentences, masked_sents, all_codes):
+        for inputs, output, codes in zip(reference_sentences, masked_sents, reference_codes):
             sims = [
                 sacrebleu.sentence_bleu(output[i], [inputs["sentence"]], lowercase=True).score
                 for i in range(num_heads - 1)
@@ -1361,7 +1440,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         # Finally, construct the summaries and score them
         oracle_summaries = defaultdict(lambda: defaultdict(list))
-        for input_row, best_match in zip(eval_sentences, best_matches_unconstrained):
+        for input_row, best_match in zip(reference_sentences, best_matches_unconstrained):
             oracle_summaries[input_row["entity_id"]][input_row["summ_id"]].append(best_match)
 
         scores = []
@@ -1383,7 +1462,7 @@ class HRQAggregationMetricHook(MetricHook):
         summaries_by_depth = []
         for max_depth in range(1, num_heads + 1):
             best_matches = []
-            for inputs, output, codes in zip(eval_sentences, masked_sents, all_codes):
+            for inputs, output, codes in zip(reference_sentences, masked_sents, reference_codes):
                 sims = [
                     sacrebleu.sentence_bleu(output[i], [inputs["sentence"]], lowercase=True).score
                     for i in range(num_heads - 1)
@@ -1401,7 +1480,7 @@ class HRQAggregationMetricHook(MetricHook):
 
             # construct the summaries and score them
             oracle_summaries = defaultdict(lambda: defaultdict(list))
-            for input_row, best_match in zip(eval_sentences, best_matches):
+            for input_row, best_match in zip(reference_sentences, best_matches):
                 oracle_summaries[input_row["entity_id"]][input_row["summ_id"]].append(best_match)
 
             scores = []
@@ -1424,7 +1503,9 @@ class HRQAggregationMetricHook(MetricHook):
             best_summaries,
             best_matches_unconstrained,
             summaries_by_depth,
-            eval_sentences,
+            reference_sentences,
             masked_sents,
-            all_codes,
+            reference_codes,
+            review_sentences,
+            review_codes
         )

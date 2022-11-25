@@ -19,9 +19,9 @@ def get_pairwise_rouge(pred, ref):
     return {rtype: res[rtype].fmeasure for rtype in rouge_types}
 
 
-def get_jackknife_rouge(predictions, references):
+def get_jackknife_rouge(predictions, references, stemming=True):
     rouge_types = ["rouge1", "rouge2", "rougeL", "rougeLsum"]
-    rouge = rouge_scorer.RougeScorer(rouge_types=rouge_types, use_stemmer=True)
+    rouge = rouge_scorer.RougeScorer(rouge_types=rouge_types, use_stemmer=stemming)
     score_list = []
 
     for refs, pred in zip(
