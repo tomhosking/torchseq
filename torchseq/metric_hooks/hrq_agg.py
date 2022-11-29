@@ -209,7 +209,9 @@ class HRQAggregationMetricHook(MetricHook):
                 data_loader.test_loader if test else (data_loader.train_loader if train else data_loader.valid_loader)
             )
 
-            _, _, (pred_output, _, _), memory = agent.inference(loader, memory_keys_to_return=["vq_codes"])
+            _, _, (pred_output, _, _), memory = agent.inference(
+                loader, memory_keys_to_return=["vq_codes"], desc="Calculating encodings"
+            )
 
             with jsonlines.open(agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl") as f:
                 inputs = [x["sentence"] for x in f]
@@ -305,7 +307,9 @@ class HRQAggregationMetricHook(MetricHook):
                 config=Config(config_forced), dev_samples=masked_samples, data_path=agent.data_path
             )
 
-            _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
+            _, _, (output, _, _), _ = agent.inference(
+                forced_loader.valid_loader, desc=f"Decoding with mask len {mask_len}"
+            )
 
             output_masked[mask_len] = output
             preds_by_depth[mask_len] = []
@@ -1067,7 +1071,9 @@ class HRQAggregationMetricHook(MetricHook):
         sample_outputs = agent.config.eval.get("sample_outputs", True)
         agent.config.eval.data["sample_outputs"] = False
 
-        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+        _, _, _, memory = agent.inference(
+            data_loader.valid_loader, memory_keys_to_return=["vq_codes"], desc="Calculating encodings"
+        )
 
         all_codes = memory["vq_codes"].tolist()
 
@@ -1190,7 +1196,7 @@ class HRQAggregationMetricHook(MetricHook):
             config=Config(config_forced), data_path=agent.data_path, dev_samples=filtered_examples
         )
 
-        _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader, desc="Generating")
 
         sentences_by_entity = defaultdict(list)
         for input, sentence in zip(filtered_examples, output):
@@ -1327,7 +1333,9 @@ class HRQAggregationMetricHook(MetricHook):
                 data_path=agent.data_path, config=Config(config_gen_masked), dev_samples=samples
             )
 
-            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+            _, _, (output, _, _), _ = agent.inference(
+                masked_loader.valid_loader, desc=f"Decoding with mask length {mask_length}"
+            )
 
             if not skip_scores:
                 # refs = [x["paras"] for x in qs_by_para_split]
@@ -1425,7 +1433,9 @@ class HRQAggregationMetricHook(MetricHook):
             config=Config(config_codes), data_path=agent.data_path, dev_samples=reference_sentences
         )
 
-        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+        _, _, _, memory = agent.inference(
+            data_loader.valid_loader, memory_keys_to_return=["vq_codes"], desc="Getting reference encodings"
+        )
 
         reference_codes = memory["vq_codes"].tolist()
 
@@ -1433,7 +1443,9 @@ class HRQAggregationMetricHook(MetricHook):
             config=Config(config_codes), data_path=agent.data_path, dev_samples=review_sentences
         )
 
-        _, _, _, memory = agent.inference(data_loader.valid_loader, memory_keys_to_return=["vq_codes"])
+        _, _, _, memory = agent.inference(
+            data_loader.valid_loader, memory_keys_to_return=["vq_codes"], desc="Getting review encodings"
+        )
 
         review_codes = memory["vq_codes"].tolist()
 
@@ -1467,7 +1479,7 @@ class HRQAggregationMetricHook(MetricHook):
             masked_loader = JsonDataLoader(
                 config=Config(config_masked), data_path=agent.data_path, dev_samples=samples
             )
-            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader)
+            _, _, (output, _, _), _ = agent.inference(masked_loader.valid_loader, desc="Generating")
             masked_sents.append(output)
         masked_sents = list(zip(*masked_sents))
 

@@ -20,7 +20,13 @@ AGENT_TYPES = {
 
 
 def model_from_path(
-    path_to_model, output_path="./runs/", data_path="./data/", config_patch=None, training_mode=False, **kwargs
+    path_to_model,
+    output_path="./runs/",
+    data_path="./data/",
+    config_patch=None,
+    training_mode=False,
+    run_id=None,
+    **kwargs,
 ):
     torch.cuda.empty_cache()
 
@@ -30,14 +36,20 @@ def model_from_path(
     if config_patch is not None:
         cfg_dict = merge_cfg_dicts(cfg_dict, config_patch)
 
-    run_id = path_to_model.split("/")[-1]
+    # run_id = path_to_model.split("/")[-1] if run_id is False else run_id
 
     config = Config(cfg_dict)
 
     checkpoint_path = path_to_model + "/model/checkpoint.pt"
 
     instance = AGENT_TYPES[config.task](
-        config, run_id, output_path, data_path=data_path, cache_root=path_to_model, **kwargs
+        config,
+        run_id,
+        output_path,
+        data_path=data_path,
+        cache_root=path_to_model,
+        training_mode=training_mode,
+        **kwargs,
     )
     instance.load_checkpoint(checkpoint_path)
     if not training_mode:

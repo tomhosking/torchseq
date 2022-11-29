@@ -92,7 +92,9 @@ class SemanticParsingMetricHook(MetricHook):
 
         agent.config.eval.data["sample_outputs"] = True
 
-        _, _, (output, _, _), _ = agent.inference(data_loader.test_loader if test else data_loader.valid_loader)
+        _, _, (output, _, _), _ = agent.inference(
+            data_loader.test_loader if test else data_loader.valid_loader, desc="Generating"
+        )
 
         agent.config.eval.data["sample_outputs"] = sample_outputs
 

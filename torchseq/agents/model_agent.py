@@ -557,7 +557,9 @@ class ModelAgent(BaseAgent):
             memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
-    def inference(self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False, training_loop=False):
+    def inference(
+        self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False, training_loop=False, desc=None
+    ):
         """
         Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
         """
@@ -576,11 +578,11 @@ class ModelAgent(BaseAgent):
         for hook in metric_hooks:
             hook.on_begin_epoch(use_test)
 
+        desc = "Inference" if desc is None else desc
+
         with torch.inference_mode():
             num_samples = 0
-            for batch_idx, batch in enumerate(
-                tqdm(data_loader, desc="Validating after {:} epochs".format(self.current_epoch), disable=self.silent)
-            ):
+            for batch_idx, batch in enumerate(tqdm(data_loader, desc=desc, disable=self.silent)):
                 batch = {k: (v.to(self.device) if k[-5:] != "_text" and k[0] != "_" else v) for k, v in batch.items()}
 
                 curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
@@ -724,7 +726,12 @@ class ModelAgent(BaseAgent):
             valid_loader = data_loader.valid_loader
 
         test_loss, all_metrics, (pred_output, gold_output, gold_input), memory_values_to_return = self.inference(
-            valid_loader, memory_keys_to_return, metric_hooks, use_test, training_loop
+            valid_loader,
+            memory_keys_to_return,
+            metric_hooks,
+            use_test,
+            training_loop,
+            desc="Validating after {:} epochs".format(self.current_epoch),
         )
 
         for h_ix, codes in self.vq_codes.items():
