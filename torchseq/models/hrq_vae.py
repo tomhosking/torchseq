@@ -68,6 +68,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         pre_scale=False,
         post_scale=False,
         diversity_penalty_weight=None,
+        force_positive_embeddings=False,
         debug={},
     ):
 
@@ -126,6 +127,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._logits_warmup_steps = logits_warmup_steps
 
         self._sqrt_distances = sqrt_distances
+        self._force_positive_embeddings = force_positive_embeddings
 
         self._head_dropout = head_dropout
         self._head_dropout_keep_first = head_dropout_keep_first
@@ -187,6 +189,11 @@ class HierarchicalRefinementQuantizer(nn.Module):
             for hix, embedding in enumerate(self._embedding):
                 scale = 0.05 * init_scale * init_decay_weight**hix / sqrt(self._embedding_dim)
                 embedding.weight.data[0, :].fill_(scale)
+
+        if self._force_positive_embeddings:
+            with torch.no_grad():
+                for hix, embedding in enumerate(self._embedding):
+                    embedding.weight.data = embedding.weight.data.abs()
 
         self._kl_weight = kl_weight
         self._kl_warmup_steps = kl_warmup_steps
@@ -311,6 +318,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
             else:
                 embedding = embedding.weight
 
+            if self._force_positive_embeddings:
+                embedding = embedding.abs()
+
             distances = torch.zeros(input_shape[0], embedding.shape[0]).to(this_input.device)
             if self._learnable_priors is not None and head_ix == 0:
                 distances += self._learnable_priors[head_ix]
@@ -325,6 +335,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
                         )
                     else:
                         prev_embed = self._embedding[hix].weight
+                    if self._force_positive_embeddings:
+                        prev_embed = prev_embed.abs()
                     resid_error = resid_error - torch.matmul(all_probs[hix], prev_embed).squeeze(1)  # .detach()
 
                 # resid_error = resid_error.detach()
@@ -460,24 +472,28 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         # Now that we have the codes, calculate their embeddings
         for head_ix, embedding in enumerate(self._embedding):
+
             # If soft training, use distribution
             if self.training:
+                embedding = embedding.weight
+
+                if self._force_positive_embeddings:
+                    embedding = embedding.abs()
+
                 if self._adaptive_depth:
-                    embedding = torch.cat(
-                        [self._embedding[head_ix].weight[:1].detach(), self._embedding[head_ix].weight[1:]], dim=0
-                    )
-                else:
-                    embedding = embedding.weight
-                    # # mask grad for the first index
-                    # quantized_null = torch.matmul(
-                    #     all_probs[head_ix][:, :, :1],
-                    #     embedding.weight[:1].detach(),
-                    # )
-                    # quantized_normal = torch.matmul(
-                    #     all_probs[head_ix][:, :, 1:],
-                    #     embedding.weight[1:],
-                    # )
-                    # this_quantized = quantized_null + quantized_normal
+                    embedding = torch.cat([embedding[:1].detach(), embedding[1:]], dim=0)
+                # else:
+                #     embedding = embedding.weight
+                # # mask grad for the first index
+                # quantized_null = torch.matmul(
+                #     all_probs[head_ix][:, :, :1],
+                #     embedding.weight[:1].detach(),
+                # )
+                # quantized_normal = torch.matmul(
+                #     all_probs[head_ix][:, :, 1:],
+                #     embedding.weight[1:],
+                # )
+                # this_quantized = quantized_null + quantized_normal
                 # else:
                 this_quantized = torch.matmul(
                     all_probs[head_ix],
@@ -486,7 +502,10 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
             # otherwise use one hot
             else:
+
                 this_quantized = embedding(vq_codes[head_ix].type(torch.LongTensor).to(inputs.device)).unsqueeze(1)
+                if self._force_positive_embeddings:
+                    this_quantized = this_quantized.abs()
 
             quantized_list.append(this_quantized)
 

@@ -71,4 +71,4 @@ def get_jackknife_rouge(predictions, references, stemming=True):
 
     l1_keys = list(score_list[0].keys())
     # l2_keys = score_list[0][l1_keys[0]].keys()
-    return {key1: round(np.mean([score[key1]["fmeasure"] for score in score_list]), 5) for key1 in l1_keys}
+    return {key1: round(np.mean([score[key1]["fmeasure"] for score in score_list]) * 100, 5) for key1 in l1_keys}

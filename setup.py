@@ -41,7 +41,8 @@ setuptools.setup(
         'opentsne',
         'sentencepiece==0.1.95',
         'protobuf<4',
-        'pydantic==1.9.1'
+        'pydantic==1.9.1',
+        'truecase==0.0.14'
         # 'pytorch-lightning==1.5.9'
     ],
 )

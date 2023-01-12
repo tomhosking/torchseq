@@ -28,8 +28,19 @@ import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
 
 import logging
+from truecase import get_true_case
 
 logger = logging.getLogger("HRQAggregationMetric")
+
+
+# Check for equivalence of paths, allowing for wildcard values
+def paths_are_equal(p1, p2):
+    if len(p1) != len(p2):
+        return False
+    for x1, x2 in zip(p1, p2):
+        if x1 != x2 and x1 != "_" and x2 != "_":
+            return False
+    return True
 
 
 class AggregationTree:
@@ -96,7 +107,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if self.config.eval.metrics.hrq_agg.get("run_tsne", False):
             logger.info("Running tsne eval")
-            _, _ = HRQAggregationMetricHook.eval_tsne(
+            _ = HRQAggregationMetricHook.eval_tsne(
                 self.config,
                 agent,
                 test=use_test,
@@ -158,7 +169,16 @@ class HRQAggregationMetricHook(MetricHook):
         return self.scores
 
     @abstractmethod
-    def codes_from_cache(config, agent, test=False, train=False, eval=False, force_rebuild=False):
+    def codes_from_cache(
+        config,
+        agent,
+        test=False,
+        train=False,
+        eval=False,
+        force_rebuild=False,
+        sample_outputs=True,
+        save_to_cache=True,
+    ):
 
         split = "test" if test else ("train" if train else ("eval" if eval else "dev"))
         if (
@@ -209,9 +229,14 @@ class HRQAggregationMetricHook(MetricHook):
                 data_loader.test_loader if test else (data_loader.train_loader if train else data_loader.valid_loader)
             )
 
+            sample_outputs_prev_state = agent.config.eval.get("sample_outputs", True)
+            agent.config.eval.data["sample_outputs"] = sample_outputs
+
             _, _, (pred_output, _, _), memory = agent.inference(
                 loader, memory_keys_to_return=["vq_codes"], desc="Calculating encodings"
             )
+
+            agent.config.eval.data["sample_outputs"] = sample_outputs_prev_state
 
             with jsonlines.open(agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl") as f:
                 inputs = [x["sentence"] for x in f]
@@ -225,12 +250,17 @@ class HRQAggregationMetricHook(MetricHook):
             for k, v in sents_by_code.items():
                 sents_by_code[k] = list(v)
 
-            outputs_with_codes = {"outputs": pred_output, "codes": memory["vq_codes"].tolist(), "inputs": inputs}
+            outputs_with_codes = {
+                "outputs": pred_output if sample_outputs else None,
+                "codes": memory["vq_codes"].tolist(),
+                "inputs": inputs,
+            }
 
-            with open(agent.run_output_path + f"/sents_by_code_{split}.json", "w") as f:
-                json.dump(sents_by_code, f)
-            with open(agent.run_output_path + f"/outputs_with_codes_{split}.json", "w") as f:
-                json.dump(outputs_with_codes, f)
+            if save_to_cache:
+                with open(agent.run_output_path + f"/sents_by_code_{split}.json", "w") as f:
+                    json.dump(sents_by_code, f)
+                with open(agent.run_output_path + f"/outputs_with_codes_{split}.json", "w") as f:
+                    json.dump(outputs_with_codes, f)
 
         return sents_by_code, outputs_with_codes
 
@@ -412,33 +442,58 @@ class HRQAggregationMetricHook(MetricHook):
 
         split = "test" if test else "dev"
 
-        LIMIT = 10000
-        PLOT_LIMIT = 2000
+        LIMIT = 5000
+        PLOT_LIMIT = 250
 
-        codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
+        sent_codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
         outputs = outputs_with_codes["outputs"][:LIMIT]
 
-        num_heads = config.bottleneck.modules[0].quantizer.num_heads
+        # num_heads = config.bottleneck.modules[0].quantizer.num_heads
 
         embeddings = agent.model.bottleneck.module_list[0].quantizer._embedding
+
+        def get_embedding(path, depth=None):
+            if depth is None:
+                depth = len(path)
+            embedded = (
+                torch.cat(
+                    [
+                        embeddings[hix](torch.LongTensor([path[hix]]).to(agent.device))
+                        for hix in range(len(path[:depth]))
+                    ],
+                    dim=0,
+                )
+                .sum(dim=0)
+                .detach()
+                .cpu()
+            )
+
+            return embedded
+
+        # all_codes_d3 = [(i,j,0) for i in range(12) for j in range(12)] # for k in range(12)
+        all_codes_d3 = list(set([x[:4] for x in sent_codes]))
+        logger.info(len(all_codes_d3), " will be plotted")
+
+        # codes = all_codes_d3
+        codes = None
 
         embedded_codes = (
             torch.cat(
                 [
                     torch.cat(
-                        [embeddings[hix](torch.LongTensor([x[hix]]).to(agent.device)) for hix in range(num_heads)],
+                        [embeddings[hix](torch.LongTensor([x[hix]]).to(agent.device)) for hix in range(3)],
                         dim=0,
                     ).unsqueeze(0)
-                    for x in codes
+                    for x in all_codes_d3
                 ],
                 dim=0,
             )
             .detach()
             .cpu()
         )
-        partial_codes = torch.cat(
-            [torch.sum(embedded_codes[:, :(hix), :], dim=1, keepdim=True) for hix in range(num_heads + 1)], dim=1
-        )
+        # partial_codes = torch.cat(
+        #     [torch.sum(embedded_codes[:, :(hix), :], dim=1, keepdim=True) for hix in range(3 + 1)], dim=1
+        # )
         full_embeddings = torch.sum(embedded_codes, dim=1)
 
         with jsonlines.open(
@@ -455,16 +510,27 @@ class HRQAggregationMetricHook(MetricHook):
         paths_by_entity = defaultdict(lambda: defaultdict(int))
         paths_by_entity_probs = defaultdict(lambda: defaultdict(float))
 
-        for entity_id, review_id, path, pred_sent in zip(entity_ids, review_ids, codes, outputs):
-            for h in range(num_heads):
+        for entity_id, review_id, path, pred_sent in zip(entity_ids, review_ids, sent_codes, outputs):
+            for h in range(4):
                 paths_by_entity[entity_id][path[: h + 1]] += 1
 
         # normalise
         for entity_id in paths_by_entity.keys():
-            for h in range(num_heads):
-                total = sum([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)])
-                for k, v in paths_by_entity[entity_id].items():
-                    if len(k) == (h + 1):
+            for h in range(4):
+
+                max_paths = 4 ** (h + 1)
+                total = sum(
+                    sorted([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)], reverse=True)[
+                        :max_paths
+                    ]
+                )
+
+                for k, v in sorted(
+                    [(k, v) for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)],
+                    key=lambda x: x[1],
+                    reverse=True,
+                )[:max_paths]:
+                    if h == 0 or k[:-1] in paths_by_entity_probs[entity_id]:
                         paths_by_entity_probs[entity_id][k] = 1.0 * v / total
 
         tsne = TSNE(n_components=2)
@@ -475,12 +541,15 @@ class HRQAggregationMetricHook(MetricHook):
 
         logger.info("Transforming paths")
 
-        X_byhead_embedded = X_full_embedded.transform(partial_codes.reshape(-1, 768)).reshape(-1, num_heads + 1, 2)
+        # X_byhead_embedded = X_full_embedded.transform(partial_codes.reshape(-1, 768)).reshape(-1, num_heads + 1, 2)
 
-        colors = list(mcolors.XKCD_COLORS.values())
+        # colors = list(mcolors.XKCD_COLORS.values())
+        # colors = list(mcolors.CSS4_COLORS.values())
+        # np.random.shuffle(colors)
+        colors = list(mcolors.TABLEAU_COLORS.values())  # + list(mcolors.BASE_COLORS.values())
         np.random.shuffle(colors)
 
-        color_labels = [colors[x[0] % len(colors)] for x in codes]
+        color_labels = [colors[x[0] % len(colors)] for x in all_codes_d3]
 
         marker_types = [
             "o",
@@ -516,8 +585,8 @@ class HRQAggregationMetricHook(MetricHook):
         linecols = [
             "tab:orange",
             "tab:blue",
-            "tab:red",
             "tab:green",
+            "tab:red",
             "red",
             "blue",
             "orange",
@@ -527,20 +596,22 @@ class HRQAggregationMetricHook(MetricHook):
             "grey",
         ]
 
-        plt.figure(figsize=(18, 12))
+        logger.info("Plotting points")
+
+        plt.figure(figsize=(10, 8))
         ax = plt.gca()
 
         # unique_entities = list(set(entity_ids))
 
-        if len(codes[0]) > 1:
-            markers = [marker_types[x[1] % len(marker_types)] for x in codes]
+        if len(all_codes_d3[0]) > 1:
+            markers = [marker_types[x[1] % len(marker_types)] for x in all_codes_d3]
         else:
-            markers = [marker_types[0] for x in codes]
+            markers = [marker_types[0] for x in all_codes_d3]
 
-        if len(codes[0]) > 2 and False:
-            patterns = [pattern_types[x[2] % len(pattern_types)] for x in codes]
+        if len(all_codes_d3[0]) > 2 and False:
+            patterns = [pattern_types[x[2] % len(pattern_types)] for x in all_codes_d3]
         else:
-            patterns = [pattern_types[0] for x in codes]
+            patterns = [pattern_types[0] for x in all_codes_d3]
 
         for i, (x, y, c, m, p) in enumerate(
             zip(X_full_embedded.T[0], X_full_embedded.T[1], color_labels, markers, patterns)
@@ -551,34 +622,79 @@ class HRQAggregationMetricHook(MetricHook):
 
         # entitycols = [linecols[unique_entities.index(x) % len(linecols)] for x in entity_ids]
 
-        plt.title(agent.run_id)
+        # plt.title(agent.run_id)
 
-        logger.info("Plotting")
-        plotted = set()
-        if num_heads > 1:
-            entities_plotted = {}
-            for i in range(LIMIT):
-                # if unique_entities.index(entity_ids[i]) > 1:
-                #     continue
-                if len(entities_plotted) == 2 and entity_ids[i] not in entities_plotted:
-                    continue
-                entities_plotted[entity_ids[i]] = len(entities_plotted)
-                for hix in range(max(min(num_heads - 1, 2), 0)):
-                    if (entity_ids[i], codes[i][: hix + 1]) in plotted:
-                        continue
-                    from_coords = X_byhead_embedded[i : (i + 1), hix, :]
-                    to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
-                    ab_pairs = np.c_[from_coords, to_coords]
-                    ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
-                    alpha = np.sqrt(paths_by_entity_probs[entity_ids[i]][codes[i][: hix + 1]])
-                    plotted.add((entity_ids[i], codes[i][: hix + 1]))
-                    ax.plot(*ab_args, c=linecols[entities_plotted[entity_ids[i]]], linewidth=5, alpha=alpha)
+        logger.info("Plotting lines")
+        # plotted = set()
+        # if num_heads > 1:
+        #     entities_plotted = {}
+        #     for i in range(LIMIT):
+        #         # if unique_entities.index(entity_ids[i]) > 1:
+        #         #     continue
+        #         if len(entities_plotted) == 2 and entity_ids[i] not in entities_plotted:
+        #             continue
+        #         entities_plotted[entity_ids[i]] = len(entities_plotted)
+        #         for hix in range(max(min(num_heads - 1, 2), 0)):
+        #             if (entity_ids[i], codes[i][: hix + 1]) in plotted:
+        #                 continue
+        #             from_coords = X_byhead_embedded[i : (i + 1), hix, :]
+        #             to_coords = X_byhead_embedded[i : (i + 1), hix + 1, :]
+        #             ab_pairs = np.c_[from_coords, to_coords]
+        #             ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)
+        #             alpha = np.sqrt(paths_by_entity_probs[entity_ids[i]][codes[i][: hix + 1]])
+        #             plotted.add((entity_ids[i], codes[i][: hix + 1]))
+        #             ax.plot(*ab_args, c=linecols[entities_plotted[entity_ids[i]]], linewidth=5, alpha=alpha)
+
+        ent_count = 0
+
+        entities_to_plot = list(paths_by_entity_probs.keys())[:2]
+
+        for entity in entities_to_plot:
+            tree = paths_by_entity_probs[entity]
+            the_other_entity = entities_to_plot[-1 - 1 * ent_count]
+            if ent_count == 2:
+                break
+            ent_count += 1
+
+            for depth in range(1, 4):
+                for codes, weight in tree.items():
+                    if len(codes) == depth:
+                        # plot it!
+                        if len(codes) > 1:
+                            embedding_from = get_embedding(codes, depth - 1)
+                        else:
+                            embedding_from = np.zeros(768)
+                        from_coords = X_full_embedded.transform(embedding_from.reshape(-1, 768)).reshape(-1, 2)
+                        embedding_to = get_embedding(codes, depth)
+                        to_coords = X_full_embedded.transform(embedding_to.reshape(-1, 768)).reshape(-1, 2)
+
+                        ab_pairs = np.c_[from_coords, to_coords]
+                        ab_args = ab_pairs.reshape(-1, 2, 2).swapaxes(1, 2).reshape(-1, 2)  # + (0.2) * ent_count
+
+                        #                 print(codes, weight, ab_args)
+                        if weight < 0.1 ** (depth + 1):
+                            continue
+                        #                 alpha = np.sqrt(weight) + 0.3*depth + 0.1
+                        alpha = min(max(np.cbrt(weight), 0.2) + 0.1 * (max(2 - depth, 0)), 1.0)
+                        color = (
+                            "tab:brown"
+                            if (
+                                codes in paths_by_entity_probs[the_other_entity]
+                                and paths_by_entity_probs[the_other_entity][codes] > 0.1 ** (depth + 1)
+                            )
+                            else linecols[ent_count - 1]
+                        )
+                        ax.plot(*ab_args, c=color, linewidth=12 / (1.5 + depth), alpha=alpha)  #
+        ax.set_xticks([])
+        ax.set_yticks([])
+
         plt.savefig(agent.run_output_path + "/tsne_entity_overlay.pdf", bbox_inches="tight")
+        # plt.savefig("../../plots/acl23/tsne_entity_overlay.pdf", bbox_inches="tight")
 
         if show_plot:
             plt.show()
 
-        return {}, []
+        return {"probability_tree": paths_by_entity_probs}
 
     @abstractmethod
     def get_feature_entropies(codes, features, num_heads):
@@ -742,6 +858,9 @@ class HRQAggregationMetricHook(MetricHook):
         use_tfidf=False,
         tfidf_weighting_scheme=2,
         block_paths=None,
+        term_score_weights=None,
+        allow_wildcards=False,
+        silent=True,
     ):
         summary_paths = {}
         summary_path_weights = {}
@@ -774,6 +893,10 @@ class HRQAggregationMetricHook(MetricHook):
                     for max_len in range(1, max_path_depth + 1):
                         term = path[:max_len]
                         terms_by_doc[entity_id][term] += 1
+                        if allow_wildcards:
+                            for wild_ix in range(max_len - 1):  # don't add wildcards to the end
+                                wildcard_term = term[:wild_ix] + tuple(["_"]) + term[(wild_ix + 1) :]
+                                terms_by_doc[entity_id][wildcard_term] += 1
 
                 # Starting with the most specific terms, check whether their ancestors have no other descendants (ie, prefer the more specific term)
                 for term, count in sorted(terms_by_doc[entity_id].items(), key=lambda x: len(x[0]), reverse=True):
@@ -789,10 +912,18 @@ class HRQAggregationMetricHook(MetricHook):
                     len(all_review_paths) / sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
                 )
 
-            for entity_id, reviews in all_review_paths.items():
+            for entity_id, reviews in tqdm(all_review_paths.items(), desc="Calculating term scores", disable=silent):
                 path_weights = {}
-                for term in all_terms:
+                for term in terms_by_doc[entity_id].keys():
                     tf = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
+
+                    if term_score_weights is not None:
+                        # Multiply by the term weights, with backoff
+                        for path_len in range(len(term), 0, -1):
+                            if term[:path_len] in term_score_weights:
+                                tf *= term_score_weights[term[:path_len]]
+                                break
+
                     if tfidf_weighting_scheme == 1:
                         path_weights[term] = tf * np.sqrt(idf[term]) / len(term)
                     elif tfidf_weighting_scheme == 2:
@@ -805,6 +936,14 @@ class HRQAggregationMetricHook(MetricHook):
                         path_weights[term] = tf * np.sqrt(len(term))
                     elif tfidf_weighting_scheme == 6:
                         path_weights[term] = tf
+                    elif tfidf_weighting_scheme == 7:
+                        path_weights[term] = tf * (idf[term]) / np.sqrt(len(term))
+                    elif tfidf_weighting_scheme == 8:
+                        path_weights[term] = tf * (idf[term])
+                    elif tfidf_weighting_scheme == 9:
+                        path_weights[term] = tf * np.sqrt(idf[term])
+                    elif tfidf_weighting_scheme == 10:
+                        path_weights[term] = np.sqrt(tf) * idf[term]
                     # path_weights[term] = tf * 3**(len(term)-1)
 
                 summary_paths[entity_id], summary_path_weights[entity_id] = [], []
@@ -825,13 +964,21 @@ class HRQAggregationMetricHook(MetricHook):
                             [
                                 1
                                 for selected_path in summary_paths[entity_id]
-                                if path[: min(len(selected_path), len(path))]
-                                == selected_path[: min(len(selected_path), len(path))]
+                                # if path[: min(len(selected_path), len(path))]
+                                # == selected_path[: min(len(selected_path), len(path))]
+                                if paths_are_equal(
+                                    path[: min(len(selected_path), len(path))],
+                                    selected_path[: min(len(selected_path), len(path))],
+                                )
                                 or (
                                     len(path) > 1
                                     and len(selected_path) > 1
-                                    and path[: min(len(selected_path), len(path)) - 1]
-                                    == selected_path[: min(len(selected_path), len(path)) - 1]
+                                    # and path[: min(len(selected_path), len(path)) - 1]
+                                    # == selected_path[: min(len(selected_path), len(path)) - 1]
+                                    and paths_are_equal(
+                                        path[: min(len(selected_path), len(path)) - 1],
+                                        selected_path[: min(len(selected_path), len(path)) - 1],
+                                    )
                                 )
                             ]
                         )
@@ -910,7 +1057,7 @@ class HRQAggregationMetricHook(MetricHook):
     """
 
     @abstractmethod
-    def eval_generate_summaries_and_score(config, agent, test=False, eval_data=None):
+    def eval_generate_summaries_and_score(config, agent, test=False, eval_data=None, term_score_weights=None):
         split = "test" if test else "dev"
 
         if eval_data is None:
@@ -1006,8 +1153,10 @@ class HRQAggregationMetricHook(MetricHook):
             "tiny",
         ]
 
-        def prefilter_condition(sentence):
-            if len(sentence.split()) > 25:
+        def prefilter_condition(sentence, hotel_aspect_filter=True, amazon_filter=False, min_length=0, max_length=25):
+            if len(sentence.split()) > max_length:
+                return False
+            if len(sentence.split()) < min_length:
                 return False
             if sum(i.isalpha() for i in sentence) / len(sentence) < 0.5:
                 return False
@@ -1017,10 +1166,14 @@ class HRQAggregationMetricHook(MetricHook):
                 " stayed" in sentence.lower() or " visited" in sentence.lower()
             ):  # or " my wife and" in sentence.lower() or " my husband and" in sentence.lower()
                 return False
+            if amazon_filter and (sentence.lower()[:7] == "this is" or sentence.lower()[:6] == "i love"):
+                return False
+            if "i bought this" in sentence.lower():
+                return False
             # if sentence.lower().count(' we ') > 1 or sentence.lower().count(' i ') > 1:
             #     return False
             overlap = set(word_tokenize(sentence.replace("\n", " ").lower())) & set(all_aspect_keywords)
-            if len(overlap) == 0:
+            if len(overlap) == 0 and hotel_aspect_filter:
                 return False
             return True
 
@@ -1038,9 +1191,25 @@ class HRQAggregationMetricHook(MetricHook):
         eval_sentences = [
             {"sentence": sentence, "review_id": review["review_id"], "entity_id": row["entity_id"]}
             for row in eval_data
-            for review in row["reviews"]
-            for sentence in review["sentences"]
-            if prefilter_condition(sentence)
+            for rev_id, review in enumerate(row["reviews"])
+            for sentence in (
+                review["sentences"][:-1]
+                if config.eval.metrics.hrq_agg.get("summary_skip_last", False)
+                else review["sentences"]
+            )
+            if prefilter_condition(
+                sentence,
+                hotel_aspect_filter=config.eval.metrics.hrq_agg.get("summary_hotel_aspect_filter", True),
+                amazon_filter=config.eval.metrics.hrq_agg.get("summary_amazon_filter", False),
+                max_length=config.eval.metrics.hrq_agg.get("summary_max_sentence_length", 25),
+                min_length=config.eval.metrics.hrq_agg.get("summary_min_sentence_length", 0),
+            )
+            and (
+                sentence not in [sent for rev in row["reviews"][:rev_id] for sent in rev["sentences"]]
+                or not config.eval.metrics.hrq_agg.get("summary_dedupe_sentences", False)
+            )
+            and len(review["sentences"]) >= config.eval.metrics.hrq_agg.get("summary_min_review_sentences", 0)
+            and len(review["sentences"]) <= config.eval.metrics.hrq_agg.get("summary_max_review_sentences", 1000)
         ]
 
         # eval_sentences = []
@@ -1087,7 +1256,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         if config.eval.metrics.hrq_agg.get("summary_smart_heuristic", False):
             # Get some generic, some specific
-
+            logger.info("Selecting specific terms...")
             (
                 summary_paths_specific,
                 summary_path_weights_specific,
@@ -1101,8 +1270,11 @@ class HRQAggregationMetricHook(MetricHook):
                 prune_max_paths=None,
                 use_tfidf=True,
                 tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_specific_weight_scheme", 2),
+                silent=agent.silent,
+                allow_wildcards=config.eval.metrics.hrq_agg.get("summary_allow_wildcards", False),
+                term_score_weights=term_score_weights,
             )
-
+            logger.info("Selecting generic terms...")
             summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 2),
@@ -1116,6 +1288,10 @@ class HRQAggregationMetricHook(MetricHook):
                 else False,
                 tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", 5),
                 # block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
+                block_paths={k: v for k, v in summary_paths_specific.items()},
+                allow_wildcards=config.eval.metrics.hrq_agg.get("summary_allow_wildcards", False),
+                silent=agent.silent,
+                term_score_weights=term_score_weights,
             )
             # summary_paths_generic, summary_path_weights_generic = HRQAggregationMetricHook.select_entity_summary_paths(
             #     paths_by_review_by_entity,
@@ -1135,15 +1311,19 @@ class HRQAggregationMetricHook(MetricHook):
                     summary_path_weights_generic[ent_id] + summary_path_weights_specific[ent_id]
                 )
         else:
+            logger.info("Selecting summary terms...")
             summary_paths, summary_path_weights = HRQAggregationMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 4),
-                6,
+                8,
                 path_limit=config.eval.metrics.hrq_agg.get("summary_path_limit", 6),
                 truncation_length=config.eval.metrics.hrq_agg.get("summary_truncation_length", None),
                 prune_min_weight=config.eval.metrics.hrq_agg.get("summary_prune_min_weight", 0.01),
                 prune_max_paths=config.eval.metrics.hrq_agg.get("summary_prune_max", None),
                 use_tfidf=config.eval.metrics.hrq_agg.get("summary_use_tfidf", False),
+                tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_tfidf_weight_scheme", 5),
+                silent=agent.silent,
+                term_score_weights=term_score_weights,
             )
 
         # # Identify top clusters per entity
@@ -1168,6 +1348,10 @@ class HRQAggregationMetricHook(MetricHook):
             for path in summary_paths[entity_id]:
                 mask = [1] * len(path) + [0] * (num_heads - len(path))
                 # print(path)
+                if "_" in path:
+                    path = list(path)
+                    mask[path.index("_")] = 0
+                    path[path.index("_")] = 0
                 filtered_examples.append(
                     {
                         "entity_id": entity_id,
@@ -1200,7 +1384,11 @@ class HRQAggregationMetricHook(MetricHook):
 
         sentences_by_entity = defaultdict(list)
         for input, sentence in zip(filtered_examples, output):
-            sentences_by_entity[input["entity_id"]].append(sentence)
+            sentences_by_entity[input["entity_id"]].append(get_true_case(sentence))
+
+        # if config.eval.metrics.hrq_agg.get("summary_dedupe_output", False):
+        #     for ent_id, sents in sentences_by_entity.items():
+        #         sentences_by_entity[ent_id] = list(set(sents))
 
         # Extractive summaries
         sentences_by_path = defaultdict(lambda: defaultdict(list))
@@ -1210,7 +1398,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         all_evidence = []
         all_evidence_paths = []
-        for row in eval_data:
+        for row in tqdm(eval_data, desc="Selecting ROUGE centroids for extractive summary", disable=agent.silent):
             summary_sentences = []
             summary_evidence = []
             summary_evidence_paths = []
@@ -1220,9 +1408,8 @@ class HRQAggregationMetricHook(MetricHook):
                 path_evidence = []
                 path_evidence_paths = []
                 for codes, sents in sentences_by_path[entity].items():
-                    if path == codes[: len(path)]:
-                        # if len(summary_sentences) <= i:
-                        #     summary_sentences.append(sents[0])
+                    # if path == codes[: len(path)]:
+                    if paths_are_equal(path, codes[: len(path)]):
                         path_evidence.extend(sents)
                         path_evidence_paths.extend([codes for _ in sents])
 
@@ -1246,7 +1433,7 @@ class HRQAggregationMetricHook(MetricHook):
                     scores.append([])
                     for y in path_evidence:
                         rouge = get_pairwise_rouge(x, y)["rouge2"]
-                        scores[-1].append(rouge * 100)
+                        scores[-1].append(rouge)
                     # print(scores)
                     scores[-1] = np.mean(scores[-1])
 
@@ -1254,21 +1441,39 @@ class HRQAggregationMetricHook(MetricHook):
                 summary_sentences.append(path_evidence[max_ix])
                 summary_evidence.append(path_evidence)
                 summary_evidence_paths.append(path_evidence_paths)
+
+            # post process the extractive summaries
+            summary_sentences = [
+                get_true_case(sent) + ("." if sent[-1] not in ["!", "?", ".", ","] else "")
+                for sent in summary_sentences
+            ]
+
+            if config.eval.metrics.hrq_agg.get("summary_dedupe_output", False):
+                summary_sentences = list(set(summary_sentences))
+
             extractive_summs.append(" ".join(summary_sentences))
             all_evidence.append(summary_evidence)
             all_evidence_paths.append(summary_evidence_paths)
 
         gold_summs = [ent["summaries"] for ent in eval_data]
-        pred_summs = [" ".join(sentences_by_entity[ent["entity_id"]]) for ent in eval_data]
+        pred_summs = [
+            " ".join(
+                list(set(sentences_by_entity[ent["entity_id"]]))
+                if config.eval.metrics.hrq_agg.get("summary_dedupe_output", False)
+                else sentences_by_entity[ent["entity_id"]]
+            )
+            for ent in eval_data
+        ]
 
-        scores = {k: v * 100 for k, v in get_jackknife_rouge(pred_summs, gold_summs).items()}
+        scores = {k: v for k, v in get_jackknife_rouge(pred_summs, gold_summs).items()}
 
-        extractive_scores = {k: v * 100 for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
+        extractive_scores = {k: v for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
 
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
         return {"abstractive": scores, "extractive": extractive_scores}, {
             "summaries": pred_summs,
+            "abstractive_sentences": [sentences_by_entity[ent["entity_id"]] for ent in eval_data],
             "paths": [summary_paths[ent["entity_id"]] for ent in eval_data],
             "weights": [summary_path_weights[ent["entity_id"]] for ent in eval_data],
             "extractive_summaries": extractive_summs,
@@ -1370,7 +1575,7 @@ class HRQAggregationMetricHook(MetricHook):
             inters = []
             intras = []
 
-            for codes, sents in tqdm(list(sents_by_cluster.items())[:2000]):
+            for codes, sents in tqdm(list(sents_by_cluster.items())[:2000], disable=agent.silent):
                 sents = list(sents)
                 if len(sents) == 1:
                     continue
@@ -1381,14 +1586,14 @@ class HRQAggregationMetricHook(MetricHook):
                 other_sents = other_sents[:1000]
                 inter_refs = [other_sents] * len(sents[:1000])
                 inter_score = sacrebleu.corpus_bleu(sents[:1000], list(zip(*inter_refs)), lowercase=True).score
-                #     inter_rouge = get_jackknife_rouge(sents[:1000], inter_refs)['rouge2'] * 100
+                #     inter_rouge = get_jackknife_rouge(sents[:1000], inter_refs)['rouge2']
                 #     inter_rouges.append(inter_rouge)
 
                 inters.append(inter_score)
 
                 refs = [[s for s in sents[:100] if s != sent] for sent in sents[:100]]
                 intra_score = sacrebleu.corpus_bleu(sents[:100], list(zip(*refs)), lowercase=True).score
-                #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2'] * 100
+                #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2']
                 intras.append(intra_score)
             scores[num_heads - mask_len] = (np.mean(intras), np.mean(inters))
 
@@ -1521,7 +1726,7 @@ class HRQAggregationMetricHook(MetricHook):
 
             best_summaries.append(oracle_summaries[row["entity_id"]][np.argmax(scores[-1])])
 
-        best_score = np.mean(np.max(scores, axis=1))
+        best_score = np.mean([np.max(s) for s in scores])
 
         # Now get the best summaries with limited depths
         truncated_scores = {}
@@ -1561,7 +1766,7 @@ class HRQAggregationMetricHook(MetricHook):
                 summaries_this_depth.append(oracle_summaries[row["entity_id"]][np.argmax(scores[-1])])
             summaries_by_depth.append(summaries_this_depth)
 
-            truncated_scores[max_depth] = np.mean(np.max(scores, axis=1))
+            truncated_scores[max_depth] = np.mean([np.max(s) for s in scores])
 
         return (
             best_score,
