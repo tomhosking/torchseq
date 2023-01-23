@@ -121,6 +121,9 @@ class BottleneckAutoencoderModel(nn.Module):
         if memory is None:
             memory = {}
 
+        if "forced_encoding" in batch:
+            memory["encoding"] = batch["forced_encoding"]
+
         # First pass? Construct the encoding
         if "encoding" not in memory:
             encoding, memory = self.seq_encoder(

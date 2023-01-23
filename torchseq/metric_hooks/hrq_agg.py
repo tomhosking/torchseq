@@ -179,16 +179,18 @@ class HRQAggregationMetricHook(MetricHook):
         sample_outputs=True,
         save_to_cache=True,
     ):
-
-        split = "test" if test else ("train" if train else ("eval" if eval else "dev"))
+        if eval:
+            raise Exception("codes_from_cache not yet implemented for eval datasets!")
+        split = "test" if test else ("train" if train else "dev")
+        cache_key = split + ("_eval" if eval else "")
         if (
             not force_rebuild
             and agent.run_output_path is not None
-            and os.path.exists(agent.run_output_path + f"/sents_by_code_{split}.json")
+            and os.path.exists(agent.run_output_path + f"/sents_by_code_{cache_key}.json")
         ):
-            with open(agent.run_output_path + f"/sents_by_code_{split}.json") as f:
+            with open(agent.run_output_path + f"/sents_by_code_{cache_key}.json") as f:
                 sents_by_code = json.load(f)
-            with open(agent.run_output_path + f"/outputs_with_codes_{split}.json") as f:
+            with open(agent.run_output_path + f"/outputs_with_codes_{cache_key}.json") as f:
                 outputs_with_codes = json.load(f)
         else:
             cfg_dict = copy.deepcopy(config.data)
@@ -197,7 +199,7 @@ class HRQAggregationMetricHook(MetricHook):
 
             cfg_dict["json_dataset"] = {
                 "path": dataset,
-                "filename": "reviews.{split}",
+                "filename": "{split}" if eval else "reviews.{split}",
                 "field_map": [
                     {"type": "copy", "from": "sentence", "to": "target"},
                     {"type": "copy", "from": "sentence", "to": "source"},
@@ -257,9 +259,9 @@ class HRQAggregationMetricHook(MetricHook):
             }
 
             if save_to_cache:
-                with open(agent.run_output_path + f"/sents_by_code_{split}.json", "w") as f:
+                with open(agent.run_output_path + f"/sents_by_code_{cache_key}.json", "w") as f:
                     json.dump(sents_by_code, f)
-                with open(agent.run_output_path + f"/outputs_with_codes_{split}.json", "w") as f:
+                with open(agent.run_output_path + f"/outputs_with_codes_{cache_key}.json", "w") as f:
                     json.dump(outputs_with_codes, f)
 
         return sents_by_code, outputs_with_codes
