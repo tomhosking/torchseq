@@ -1,6 +1,6 @@
 class MetricHook:
 
-    type = None  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
+    type: str  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     def __init__(self, config, tokenizer, src_field=None, tgt_field=None):
         self.config = config

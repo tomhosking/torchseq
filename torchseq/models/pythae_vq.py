@@ -1,3 +1,4 @@
+from typing import Optional
 from math import sqrt, exp
 import torch
 import torch.nn as nn
@@ -37,7 +38,7 @@ class VQVAEConfig:
     kl_loss_factor: float = 0.0
     normalize_inputs: bool = False
     batchnorm_inputs: bool = False
-    normalize_embeds: float = None
+    normalize_embeds: Optional[float] = None
     demean_inputs: bool = False
     noise_inputs: bool = False
     noise_outputs: bool = False
@@ -52,6 +53,10 @@ class VQVAEConfig:
 
 
 class Quantizer(nn.Module):
+
+    cluster_size: torch.Tensor
+    input_mean: torch.Tensor
+
     def __init__(self, model_config: VQVAEConfig):
 
         nn.Module.__init__(self)

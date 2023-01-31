@@ -75,7 +75,7 @@ def init():
     app.agent.model.eval()
 
 
-def main(_):
+def main():
     init()
     with app.app_context():
         app.run(host="0.0.0.0", port=5004, processes=1)
