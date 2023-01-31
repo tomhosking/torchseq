@@ -21,7 +21,7 @@ class BaseAgent:
         # set cuda flag
         self.cuda_available = torch.cuda.is_available()
         if self.cuda_available and not use_cuda:
-            self.logger.warn("You have a CUDA device, so you should probably enable CUDA")
+            self.logger.warning("You have a CUDA device, so you should probably enable CUDA")
 
         if use_cuda and not self.cuda_available:
             self.logger.error("Use CUDA is set to true, but not CUDA devices were found!")

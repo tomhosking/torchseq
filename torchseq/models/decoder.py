@@ -62,7 +62,7 @@ class SequenceDecoder(nn.Module):
                 self.pretrained_decoder.requires_grad = False
 
             if self.config.decoder.num_layers > 0:
-                self.logger.warn("Using non-zero decoder layers with a pretrained decoder - are you sure?")
+                self.logger.warning("Using non-zero decoder layers with a pretrained decoder - are you sure?")
         else:
             self.pretrained_decoder = None
 

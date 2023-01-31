@@ -68,7 +68,7 @@ def main():
         cfg_dict = json.load(f)
 
     if check_config(cfg_dict):
-        logger.warn("Config is outdated! Run the migration script to update it")
+        logger.warning("Config is outdated! Run the migration script to update it")
 
     if args.patch is not None and len(args.patch) > 0:
         for mask_path in args.patch:
@@ -219,7 +219,7 @@ def main():
 #     args = parse_args()
 #     device = "cpu" if args.cpu else "gpu"
 #     if torch.cuda.device_count() > 1:
-#         logger.warn("Multiple ({:}) GPUs available:  not currently supported!!!".format(torch.cuda.device_count()))
+#         logger.warning("Multiple ({:}) GPUs available:  not currently supported!!!".format(torch.cuda.device_count()))
 
 #     # num_devices = torch.cuda.device_count()
 

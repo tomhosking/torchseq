@@ -26,7 +26,7 @@ class Seq2SeqAgent(ModelAgent):
         super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, cache_root)
 
         if self.config.get("bottleneck", {}).get("use_templ_encoding", False):
-            self.logger.warn("Using a Seq2Seq agent for exemplar guided tasks is deprecated!")
+            self.logger.warning("Using a Seq2Seq agent for exemplar guided tasks is deprecated!")
 
         self.tgt_field = "target" if not self.config.training.data.get("flip_pairs", False) else "source"
 
@@ -58,6 +58,9 @@ class Seq2SeqAgent(ModelAgent):
 
         # define model
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
+            self.logger.warning(
+                "PretrainedAdapterModel is deprecated! The standard model now supports pretrained encoders and decoders"
+            )
             self.model = PretrainedAdapterModel(
                 self.config,
                 self.input_tokenizer,

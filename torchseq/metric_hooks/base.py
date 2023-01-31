@@ -1,6 +1,3 @@
-from lib2to3.pgen2 import token
-
-
 class MetricHook:
 
     type = None  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
