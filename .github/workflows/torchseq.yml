@@ -41,7 +41,7 @@ jobs:
     - name: Check types
       run: |
         pip install mypy
-        make types
+        mypy ./torchseq --install-types --non-interactive
     # - name: Upload coverage
     #   run: |
     #     make coverage
