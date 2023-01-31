@@ -16,7 +16,7 @@ syntax:
 	flake8 ./torchseq --count --select=E9,F63,F7,F82 --show-source --statistics
 
 types:
-	mypy torchseq/
+	mypy ./torchseq
 
 # Run tests for the library
 test:
