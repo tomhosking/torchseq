@@ -41,7 +41,6 @@ jobs:
     - name: Check types
       run: |
         pip install mypy
-        mypy --install-types  
         make types
     # - name: Upload coverage
     #   run: |
