@@ -1,3 +1,4 @@
+from typing import Dict, Union, Tuple
 import math
 import logging
 
@@ -8,12 +9,18 @@ from transformers import BartModel, BertModel, RobertaModel, MBartModel
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.config import Config
 from torchseq.utils.functions import initialize_truncated_normal_, init_bert_params
 
 import torchseq.models.transformer as custom_transformer
 
 
 class SequenceEncoder(nn.Module):
+
+    config: Config
+    tokenizer: Tokenizer
+    embeddings: nn.Embedding
+
     def __init__(self, config, tokenizer, embeddings=None, freeze_embeddings=False):
         super().__init__()
         self.config = config
@@ -22,7 +29,7 @@ class SequenceEncoder(nn.Module):
         # Embedding layers
         if embeddings is not None:
             self.embeddings = embeddings
-            self.embeddings.force_device = True
+            self.embeddings.force_device = True  # type: ignore # dynamic attr
         elif not config.encoder.get("bert_encoder", False) and config.encoder.get("pretrained_encoder", None) is None:
             self.embeddings = nn.Embedding(
                 tokenizer.vocab_size,
@@ -41,7 +48,7 @@ class SequenceEncoder(nn.Module):
                     # )
             self.embeddings.weight.requires_grad = not freeze_embeddings
             self.embeddings.cpu()
-            self.embeddings.force_device = True
+            self.embeddings.force_device = True  # type: ignore # dynamic attr
 
         if self.config.encoder.embedding_dim != config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]):
             self.embedding_projection = nn.utils.weight_norm(
@@ -122,7 +129,14 @@ class SequenceEncoder(nn.Module):
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
 
-    def forward(self, input_seq, input_seq_len, memory, include_position=True):
+    # def forward(self, input_seq, input_seq_len, memory, include_position=True):
+    def forward(
+        self,
+        input_seq: torch.Tensor,
+        input_seq_len: torch.Tensor,
+        memory: Dict[str, torch.Tensor],
+        include_position: bool = True,
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         max_input_len = input_seq.shape[1]
 
         # Set up some masks
@@ -170,7 +184,7 @@ class SequenceEncoder(nn.Module):
             # BERT expects a mask that's 1 unmasked, 0 for masked
             bert_padding_mask = (~padding_mask).long()
 
-            bert_typeids = {}
+            bert_typeids: Dict = {}
 
             bert_encoding = self.pretrained_encoder(
                 input_ids=input_seq.to(input_seq.device), attention_mask=bert_padding_mask, **bert_typeids
@@ -190,7 +204,7 @@ class SequenceEncoder(nn.Module):
             encoding = self.encoder_projection(torch.cat([encoding, input_embedded], dim=-1))
 
         if self.config.encoder.get("pre_residual", False):
-            input_toks_resid = self.embeddings(input_seq.to(self.embeddings.device)).to(input_seq.device)
+            input_toks_resid = self.embeddings(input_seq.to(self.embeddings.weight.device)).to(input_seq.device)
             input_toks_resid = self.token_projection(input_toks_resid)
             input_toks_resid = self.positional_embeddings(input_toks_resid)
             encoding = torch.cat([encoding, input_toks_resid], dim=-1)

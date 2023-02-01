@@ -1,3 +1,4 @@
+from typing import Dict, Union, Optional, cast, Tuple
 import math
 
 import torch
@@ -6,12 +7,19 @@ import torch.nn as nn
 from torchseq.models.positional_embeddings import PositionalEncoding
 from torchseq.models.multihead_output import MultiHeadOutput
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.config import Config
 from torchseq.utils.functions import initialize_truncated_normal_, init_bert_params
 from transformers import BartModel, BertModel, RobertaModel, MBartModel
 
 
 class SequenceDecoder(nn.Module):
-    def __init__(self, config, tokenizer, embeddings=None):
+
+    config: Config
+    tokenizer: Tokenizer
+    embeddings: nn.Embedding
+    output_projection: Union[nn.Linear, MultiHeadOutput]
+
+    def __init__(self, config: Config, tokenizer: Tokenizer, embeddings: Optional[nn.Embedding] = None):
         super().__init__()
         self.config = config
         self.tokenizer = tokenizer
@@ -19,6 +27,7 @@ class SequenceDecoder(nn.Module):
         # Embedding layers
         if embeddings is not None:
             self.embeddings = embeddings
+            self.embeddings.force_device = True  # type: ignore # dynamic attr
         else:
             self.embeddings = nn.Embedding(
                 tokenizer.vocab_size,
@@ -41,7 +50,7 @@ class SequenceDecoder(nn.Module):
                 else config.get("freeze_embeddings", False)
             )
             self.embeddings.cpu()
-            self.embeddings.force_device = True
+            self.embeddings.force_device = True  # type: ignore # dynamic attr
 
         self.pretrained_model_slug = None
         if config.decoder.get("pretrained_decoder", None) is not None:
@@ -62,7 +71,7 @@ class SequenceDecoder(nn.Module):
                 self.pretrained_decoder.requires_grad = False
 
             if self.config.decoder.num_layers > 0:
-                self.logger.warning("Using non-zero decoder layers with a pretrained decoder - are you sure?")
+                raise Exception("Using non-zero decoder layers with a pretrained decoder - are you sure?")
         else:
             self.pretrained_decoder = None
 
@@ -130,7 +139,9 @@ class SequenceDecoder(nn.Module):
 
         self.positional_embeddings = PositionalEncoding(config.decoder.embedding_dim)
 
-    def forward(self, output_seq, memory):
+    def forward(
+        self, output_seq: torch.Tensor, memory: Dict[str, torch.Tensor]
+    ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
 
         output_max_len = output_seq.size()[-1]
 
@@ -149,9 +160,9 @@ class SequenceDecoder(nn.Module):
 
         if self.pretrained_model_slug is None:
             # Embed the output so far
-            output_embedded = self.embeddings(output_seq).to(output_seq.device) * math.sqrt(
-                self.config.decoder.embedding_dim
-            )
+            output_embedded = self.embeddings(output_seq.to(self.embeddings.weight.device)).to(
+                output_seq.device
+            ) * math.sqrt(self.config.decoder.embedding_dim)
 
             # if self.config.raw_embedding_dim != self.config.decoder.embedding_dim:
             #     output_embedded = self.embedding_projection(output_embedded)

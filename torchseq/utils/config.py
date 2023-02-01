@@ -1,7 +1,13 @@
+from typing import Dict, Any, no_type_check, TYPE_CHECKING
+from copy import deepcopy
+
 # A simple class to convert a (nested) dictionary to an object
 
 
-class Config(object):
+@no_type_check
+class Config:
+    d: Dict[str, Any]
+
     def __init__(self, d):
         self.data = d
         for a, b in d.items():
@@ -10,7 +16,13 @@ class Config(object):
             else:
                 setattr(self, a, Config(b) if isinstance(b, dict) else b)
 
-    def get(self, key, default=None):
+    # Include for typing
+    if TYPE_CHECKING:
+
+        def __getattr__(self, name: str) -> Any:
+            pass
+
+    def get(self, key, default=None) -> Any:
         return self.data.get(key, default)
 
     def get_first(self, keys):
@@ -31,9 +43,10 @@ class Config(object):
 
 
 def merge_cfg_dicts(main_cfg, cfg_mask):
+    main_cfg = deepcopy(main_cfg)
     for k, v in cfg_mask.items():
         if k in main_cfg and isinstance(main_cfg[k], dict) and isinstance(cfg_mask[k], dict):
-            merge_cfg_dicts(main_cfg[k], cfg_mask[k])
+            main_cfg[k] = merge_cfg_dicts(main_cfg[k], cfg_mask[k])
         elif k == "name" and isinstance(cfg_mask[k], str) and "%" in cfg_mask[k]:
             main_cfg[k] = cfg_mask[k].replace("%", main_cfg[k])
         else:

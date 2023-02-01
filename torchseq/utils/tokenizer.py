@@ -95,12 +95,12 @@ FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
 
 
 class Tokenizer:
-    pad_id = None
-    embedding_dim = None
-    bos_id = None
-    eos_id = None
-    mask_id = None
-    unk_id = None
+    pad_id: int
+    embedding_dim: int
+    bos_id: int
+    eos_id: int
+    mask_id: int
+    unk_id: int
 
     model_slug = None
 
