@@ -20,8 +20,9 @@ class SequenceEncoder(nn.Module):
     config: Config
     tokenizer: Tokenizer
     embeddings: nn.Embedding
+    encoder: Union[custom_transformer.TransformerEncoder, nn.TransformerEncoder]
 
-    def __init__(self, config, tokenizer, embeddings=None, freeze_embeddings=False):
+    def __init__(self, config: Config, tokenizer: Tokenizer, embeddings=None, freeze_embeddings=False):
         super().__init__()
         self.config = config
         self.tokenizer = tokenizer
@@ -100,7 +101,7 @@ class SequenceEncoder(nn.Module):
             )
 
         if self.config.encoder.data.get("pre_ln", False):
-            encoder_layer = custom_transformer.TransformerEncoderLayer(
+            encoder_layer_custom = custom_transformer.TransformerEncoderLayer(
                 config.encoder.embedding_dim
                 + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim),
                 nhead=config.encoder.num_heads,
@@ -110,7 +111,7 @@ class SequenceEncoder(nn.Module):
             )
             encoder_norm = nn.LayerNorm(config.encoder.embedding_dim)
             self.encoder = custom_transformer.TransformerEncoder(
-                encoder_layer, config.encoder.num_layers, encoder_norm
+                encoder_layer_custom, config.encoder.num_layers, encoder_norm
             )
         else:
             encoder_layer = nn.TransformerEncoderLayer(
@@ -129,7 +130,6 @@ class SequenceEncoder(nn.Module):
         # Position encoding
         self.positional_embeddings = PositionalEncoding(config.encoder.embedding_dim)
 
-    # def forward(self, input_seq, input_seq_len, memory, include_position=True):
     def forward(
         self,
         input_seq: torch.Tensor,
