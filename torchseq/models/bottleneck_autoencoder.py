@@ -123,7 +123,7 @@ class BottleneckAutoencoderModel(nn.Module):
 
         if "forced_encoding" in batch:
             memory["encoding"] = batch["forced_encoding"]
-            memory["encoding_mask"] = None # TODO: This won't work for forced encodings longer than 1!
+            memory["encoding_mask"] = None  # TODO: This won't work for forced encodings longer than 1!
 
             # print(batch['forced_encoding'].shape)
 
