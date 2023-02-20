@@ -42,6 +42,9 @@ class AQAgent(ModelAgent):
 
         # define models
         if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
+            self.logger.warning(
+                "PretrainedAdapterModel is deprecated! The standard model now supports pretrained encoders and decoders"
+            )
             self.model = PretrainedAdapterModel(
                 self.config,
                 self.input_tokenizer,

@@ -12,3 +12,7 @@ coverage:
         target: 5%
 ignore:
   - ".aqenv/*"
+  - "torchseq/args.py"
+  - "torchseq/main.py"
+  - "torchseq/metric_hooks/*"
+  - "torchseq/utils/config_migration.py"

@@ -5,7 +5,7 @@ import numpy as np
 
 
 class Cache:
-    def __init__(self, output_path=None):
+    def __init__(self, output_path=''):
 
         self.path = os.path.join(output_path, "cache")
         os.makedirs(self.path, exist_ok=True)

@@ -12,6 +12,7 @@ __pycache__
 /baselines
 /plots
 /wandb
+/cache
 
 .ipynb_checkpoints/
 *.DS_Store

@@ -1,4 +1,4 @@
-__version__ = "2.4.0"
+__version__ = "3.0.0a"
 
 
 from .utils.model_loader import model_from_path
