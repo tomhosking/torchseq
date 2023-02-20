@@ -11,6 +11,7 @@ Subpackages
    torchseq.datasets
    torchseq.metric_hooks
    torchseq.models
+   torchseq.pretrained
    torchseq.utils
 
 Submodules

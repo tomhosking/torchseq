@@ -76,14 +76,6 @@ torchseq.datasets.paraphrase\_pair module
    :undoc-members:
    :show-inheritance:
 
-torchseq.datasets.preprocessed\_loader module
----------------------------------------------
-
-.. automodule:: torchseq.datasets.preprocessed_loader
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 torchseq.datasets.qa\_dataset module
 ------------------------------------
 

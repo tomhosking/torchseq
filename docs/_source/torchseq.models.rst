@@ -45,14 +45,6 @@ torchseq.models.bottleneck\_autoencoder module
    :undoc-members:
    :show-inheritance:
 
-torchseq.models.cross\_entropy module
--------------------------------------
-
-.. automodule:: torchseq.models.cross_entropy
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
 torchseq.models.decoder module
 ------------------------------
 
@@ -69,10 +61,26 @@ torchseq.models.encoder module
    :undoc-members:
    :show-inheritance:
 
+torchseq.models.hrq\_vae module
+-------------------------------
+
+.. automodule:: torchseq.models.hrq_vae
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 torchseq.models.kl\_divergence module
 -------------------------------------
 
 .. automodule:: torchseq.models.kl_divergence
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.models.lang\_predict\_loss module
+------------------------------------------
+
+.. automodule:: torchseq.models.lang_predict_loss
    :members:
    :undoc-members:
    :show-inheritance:
@@ -89,6 +97,14 @@ torchseq.models.lr\_schedule module
 -----------------------------------
 
 .. automodule:: torchseq.models.lr_schedule
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.models.modular\_bottleneck module
+------------------------------------------
+
+.. automodule:: torchseq.models.modular_bottleneck
    :members:
    :undoc-members:
    :show-inheritance:
@@ -141,6 +157,14 @@ torchseq.models.pretrained\_adapter module
    :undoc-members:
    :show-inheritance:
 
+torchseq.models.pythae\_vq module
+---------------------------------
+
+.. automodule:: torchseq.models.pythae_vq
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 torchseq.models.ranger module
 -----------------------------
 
@@ -173,10 +197,26 @@ torchseq.models.vmf module
    :undoc-members:
    :show-inheritance:
 
+torchseq.models.vq\_code\_predictor module
+------------------------------------------
+
+.. automodule:: torchseq.models.vq_code_predictor
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 torchseq.models.vq\_vae module
 ------------------------------
 
 .. automodule:: torchseq.models.vq_vae
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.models.vq\_vae\_legacy module
+--------------------------------------
+
+.. automodule:: torchseq.models.vq_vae_legacy
    :members:
    :undoc-members:
    :show-inheritance:

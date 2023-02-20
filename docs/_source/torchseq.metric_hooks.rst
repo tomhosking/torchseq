@@ -20,10 +20,34 @@ torchseq.metric\_hooks.default module
    :undoc-members:
    :show-inheritance:
 
+torchseq.metric\_hooks.hrq\_agg module
+--------------------------------------
+
+.. automodule:: torchseq.metric_hooks.hrq_agg
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 torchseq.metric\_hooks.qg\_metric module
 ----------------------------------------
 
 .. automodule:: torchseq.metric_hooks.qg_metric
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.metric\_hooks.rouge module
+-----------------------------------
+
+.. automodule:: torchseq.metric_hooks.rouge
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.metric\_hooks.semparse module
+--------------------------------------
+
+.. automodule:: torchseq.metric_hooks.semparse
    :members:
    :undoc-members:
    :show-inheritance:

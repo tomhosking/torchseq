@@ -4,10 +4,34 @@ torchseq.utils package
 Submodules
 ----------
 
+torchseq.utils.cache module
+---------------------------
+
+.. automodule:: torchseq.utils.cache
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
 torchseq.utils.config module
 ----------------------------
 
 .. automodule:: torchseq.utils.config
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.utils.config\_migration module
+---------------------------------------
+
+.. automodule:: torchseq.utils.config_migration
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.utils.easy\_generate module
+------------------------------------
+
+.. automodule:: torchseq.utils.easy_generate
    :members:
    :undoc-members:
    :show-inheritance:
@@ -60,10 +84,18 @@ torchseq.utils.metrics module
    :undoc-members:
    :show-inheritance:
 
-torchseq.utils.multi\_bleu module
----------------------------------
+torchseq.utils.model\_loader module
+-----------------------------------
 
-.. automodule:: torchseq.utils.multi_bleu
+.. automodule:: torchseq.utils.model_loader
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.utils.optimizer\_group module
+--------------------------------------
+
+.. automodule:: torchseq.utils.optimizer_group
    :members:
    :undoc-members:
    :show-inheritance:
@@ -72,6 +104,14 @@ torchseq.utils.perplexity module
 --------------------------------
 
 .. automodule:: torchseq.utils.perplexity
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.utils.rouge module
+---------------------------
+
+.. automodule:: torchseq.utils.rouge
    :members:
    :undoc-members:
    :show-inheritance:
@@ -112,6 +152,14 @@ torchseq.utils.tokenizer\_wordlevel module
 ------------------------------------------
 
 .. automodule:: torchseq.utils.tokenizer_wordlevel
+   :members:
+   :undoc-members:
+   :show-inheritance:
+
+torchseq.utils.wandb module
+---------------------------
+
+.. automodule:: torchseq.utils.wandb
    :members:
    :undoc-members:
    :show-inheritance:
