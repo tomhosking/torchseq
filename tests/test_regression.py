@@ -150,8 +150,8 @@ def test_qg_transformer():
 @test_utils.slow
 def test_qg_bart():
 
-    CONFIG = "./models/examples/20210223_191015_qg_bart/config.json"
-    CHKPT = "./models/examples/20210223_191015_qg_bart/model/checkpoint.pt"
+    CONFIG = "./models/examples/qg_bart_v2/config.json"
+    CHKPT = "./models/examples/qg_bart_v2/model/checkpoint.pt"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -185,7 +185,9 @@ def test_qg_bart():
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 25.918) < 1e-2, "BLEU score is different to expected!"
 
-    pred_output = generate(agent, samples=[{"c": "Creme Puff was the oldest cat.", "a": "Creme Puff", "a_pos": 0}])
+    pred_output = generate(
+        agent, samples=[{"c": "Creme Puff was the oldest cat.", "a": "Creme Puff", "a_pos": 0, "q": ""}]
+    )
 
     assert pred_output[0] == "Who was the oldest cat?"
 
@@ -344,7 +346,7 @@ def test_hrq_codepred():
 
 @test_utils.slow
 def test_mbart():
-    CONFIG = "./configs/mbart_ae_v2.json"
+    CONFIG = "./configs/mbart.json"
     DATA_PATH = "./data/"
     OUTPUT_PATH = "./runs/"
     SEED = 123
@@ -358,7 +360,7 @@ def test_mbart():
         {
             "source": "What is the weight of an average moose?",
             "src_lang": "en_XX",
-            "target": "What is the weight of an average moose?",
+            "target": "Quel est le poids d'une moose moyenne?",
             "tgt_lang": "fr_XX",
         }
     ]

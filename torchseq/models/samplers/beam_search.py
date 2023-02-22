@@ -41,7 +41,7 @@ class BeamSearchSampler(nn.Module):
 
         if MBART_HACK:
             # lang_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(batch["tgt_lang"][0]).to(self.device)
-            lang_token = batch["tgt_lang"].unsqueeze(-1).unsqueeze(-1).expand(-1, beam_width, -1)
+            lang_token = batch["tgt_lang"].unsqueeze(-1).expand(-1, beam_width, -1)
             eos_token = torch.LongTensor(curr_batch_size, beam_width, 1).fill_(self.tokenizer.eos_id).to(self.device)
             output_seq = torch.cat([eos_token, lang_token], dim=-1)
             scores = torch.cat([scores, scores], dim=-1)
