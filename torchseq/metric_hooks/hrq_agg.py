@@ -450,7 +450,7 @@ class HRQAggregationMetricHook(MetricHook):
         sent_codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
         outputs = outputs_with_codes["outputs"][:LIMIT]
 
-        # num_heads = config.bottleneck.modules[0].quantizer.num_heads
+        num_heads = config.bottleneck.modules[0].quantizer.num_heads
 
         embeddings = agent.model.bottleneck.module_list[0].quantizer._embedding
 
@@ -483,7 +483,10 @@ class HRQAggregationMetricHook(MetricHook):
             torch.cat(
                 [
                     torch.cat(
-                        [embeddings[hix](torch.LongTensor([x[hix]]).to(agent.device)) for hix in range(3)],
+                        [
+                            embeddings[hix](torch.LongTensor([x[hix]]).to(agent.device))
+                            for hix in range(min(3, num_heads))
+                        ],
                         dim=0,
                     ).unsqueeze(0)
                     for x in all_codes_d3
@@ -1020,7 +1023,11 @@ class HRQAggregationMetricHook(MetricHook):
                 total = sum(path_weights.nodes.values())
                 for k, v in path_weights.nodes.items():
                     path_weights.nodes[k] = v / total
-                while (min(path_weights.values())) < prune_min_weight:
+                if len(path_weights) == 0:
+                    print("Agg tree has no contents!")
+                    print(all_paths)
+                    print(path_weights)
+                while (min(path_weights.values())) < prune_min_weight and len(path_weights) > path_limit:
                     remaining_paths = [x for x in path_weights.items()]  # if len(x[0]) > 1
                     if len(remaining_paths) == 0:
                         break

@@ -11,11 +11,11 @@ from torchseq.utils.sari import SARIsent
 import sacrebleu
 
 
-def tokenize(text):
-    # return text.split(' ')
-    sents = sent_tokenize(text)
-    tokens = [tok.lower() for sent in sents for tok in TreebankWordTokenizer().tokenize(sent)]
-    return tokens
+# def tokenize(text):
+#     # return text.split(' ')
+#     sents = sent_tokenize(text)
+#     tokens = [tok.lower() for sent in sents for tok in TreebankWordTokenizer().tokenize(sent)]
+#     return tokens
 
 
 # # takes a single untokenised string as input

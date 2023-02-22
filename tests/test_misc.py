@@ -9,6 +9,7 @@ from . import utils as test_utils
 
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.singleton import Singleton
+import torchseq.utils.functions as tsfunctions
 
 
 def test_config():
@@ -74,3 +75,29 @@ def test_cache():
     assert cache.load("tensor").equal(data_tensor)
 
     assert cache.load("missing") is None
+
+
+def test_functions():
+    # topk
+    input_probs = torch.Tensor([[0.1, 0.2, 0.3, 0.4], [0.13, 0.7, 0.17, 0.0]])
+
+    assert tsfunctions.top_k_top_p_filtering(input_probs, top_k=2).equal(
+        torch.tensor([[-torch.inf, -torch.inf, 0.3000, 0.4000], [-torch.inf, 0.7000, 0.1700, -torch.inf]])
+    )
+
+    assert tsfunctions.top_k_top_p_filtering(input_probs, top_k=2, filter_value=0).equal(
+        torch.tensor([[0.0000, 0.0000, 0.3000, 0.4000], [0.0000, 0.7000, 0.1700, 0.0000]])
+    )
+
+    assert tsfunctions.top_k_top_p_filtering(input_probs, top_p=0.5, filter_value=0).equal(
+        torch.tensor([[0.0000, 0.0000, 0.3000, 0.4000], [0.0000, 0.7000, 0.1700, 0.0000]])
+    )
+
+    x = torch.Tensor([[0.0, 0.0, 0.0, 1.0], [0.13, 0.7, 0.17, 0.0]])
+    y = torch.Tensor([[0.0, 0.0, 0.0, 1.0]])
+
+    assert tsfunctions.cos_sim(x, y).equal(torch.tensor([[1.0], [0.0000]]))
+
+    test_data = list(range(6))
+
+    assert list(tsfunctions.batchify(test_data, 4)) == [(0, [0, 1, 2, 3]), (1, [4, 5])]

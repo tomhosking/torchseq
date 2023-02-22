@@ -12,6 +12,7 @@ from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
 from torchseq.utils.seed import set_seed
+from torchseq.utils.easy_generate import generate
 
 from torchseq.datasets.builder import dataloader_from_config
 
@@ -184,6 +185,10 @@ def test_qg_bart():
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 25.918) < 1e-2, "BLEU score is different to expected!"
 
+    pred_output = generate(agent, samples=[{"c": "Creme Puff was the oldest cat.", "a": "Creme Puff", "a_pos": 0}])
+
+    assert pred_output[0] == "Who was the oldest cat?"
+
 
 @test_utils.slow
 def test_separator():
@@ -335,3 +340,37 @@ def test_hrq_codepred():
 
     # Now check the output (for first 100 samples)
     assert pred_output[0] == examples[0]["tgt"]
+
+
+@test_utils.slow
+def test_mbart():
+    CONFIG = "./configs/mbart_ae_v2.json"
+    DATA_PATH = "./data/"
+    OUTPUT_PATH = "./runs/"
+    SEED = 123
+
+    # Most of this is copied from main.py
+    use_cuda = torch.cuda.is_available()
+
+    assert use_cuda, "This test needs to run on GPU!"
+
+    examples = [
+        {
+            "source": "What is the weight of an average moose?",
+            "src_lang": "en_XX",
+            "target": "What is the weight of an average moose?",
+            "tgt_lang": "fr_XX",
+        }
+    ]
+
+    with open(CONFIG) as f:
+        cfg_dict = json.load(f)
+    config = Config(cfg_dict)
+
+    set_seed(SEED)
+
+    agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=False)
+
+    pred_output = generate(agent, samples=examples)
+
+    assert pred_output[0] == examples[0]["target"]

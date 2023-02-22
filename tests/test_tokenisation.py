@@ -67,3 +67,26 @@ def test_roberta_basic():
         2,
     ], "RoBERTa tok ids are wrong for basic example!"
     assert decoded == TEST_STRING, "RoBERTa tokenisation isn't reversible for basic example!"
+
+
+def test_auto():
+    tokenizer = Tokenizer("xlnet-base-cased")
+
+    TEST_STRING = "This is a test sentence."
+
+    tokenized = tokenizer.tokenise(TEST_STRING)
+    decoded = tokenizer.decode(torch.LongTensor([tok["id"] for tok in tokenized]))
+
+    assert [tok["id"] for tok in tokenized] == [
+        1,
+        122,
+        27,
+        24,
+        934,
+        3833,
+        9,
+        4,
+        3,
+        2,
+    ], "Auto tok ids are wrong for basic example!"
+    assert decoded == TEST_STRING, "Auto tokenisation isn't reversible for basic example!"

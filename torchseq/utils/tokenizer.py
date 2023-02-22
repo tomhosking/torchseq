@@ -2,6 +2,7 @@ import os
 import torch
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
+from tokenizers import Tokenizer as HFTokenizer
 from transformers import BartModel, BertModel, RobertaModel
 from transformers import MBart50TokenizerFast
 
@@ -171,7 +172,7 @@ class Tokenizer:
 
             self.has_embeddings = False
 
-        else:
+        elif model_slug[:5] == "bert-":
             self.engine = BertWordPieceTokenizer.from_file(
                 os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.txt".format(model_slug.split("/")[-1])),
                 lowercase=(model_slug[-8:] == "-uncased"),
@@ -183,6 +184,17 @@ class Tokenizer:
 
             self.bos_id = self.engine.token_to_id("[CLS]")
             self.eos_id = self.engine.token_to_id("[SEP]")
+        else:
+            self.engine = HFTokenizer.from_pretrained(model_slug)
+
+            # TODO: How can we generically work out what the special tokens are? Otherwise they need to be passed in via config
+
+            self.pad_id = self.engine.token_to_id("<pad>")
+            self.mask_id = self.engine.token_to_id("<mask>")
+            self.unk_id = self.engine.token_to_id("<unk>")
+
+            self.bos_id = self.engine.token_to_id("<s>")
+            self.eos_id = self.engine.token_to_id("</s>")
 
         # Vocab size from PretrainedFastTokenize is __len__ attr
         if "mbart-" in model_slug:

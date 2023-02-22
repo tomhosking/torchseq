@@ -40,6 +40,8 @@ def test_rouge():
     rouge = get_jackknife_rouge(sys, refs)
     assert "rouge2" in rouge
     assert "rougeL" in rouge
+
+    # NOTE: This test is intrinsic - the rouge value was obtained using the same rouge implementation, so is only a check for regression!
     assert abs(rouge["rouge2"] - 30.741) < 0.001, "Rouge score for jackknife examples differs from reference!"
 
 
@@ -68,3 +70,8 @@ def test_fleiss():
     assert fleiss(np.array(bad)) == -1.0
     assert fleiss(np.array(good)) == 1
     assert fleiss(np.array(random)) == 0
+
+
+def test_misc():
+
+    assert metrics.normalize_answer("a  Very oLd   cat! ") == "very old cat"

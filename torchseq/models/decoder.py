@@ -33,7 +33,7 @@ class SequenceDecoder(nn.Module):
                 tokenizer.vocab_size,
                 config.get_first(["output_raw_embedding_dim", "raw_embedding_dim"]),
             )
-            if self.tokenizer.has_embeddings and self.config.encoder.get("init_embeds_from_tokenizer", True):
+            if self.tokenizer.has_embeddings and self.config.decoder.get("init_embeds_from_tokenizer", True):
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
 
@@ -91,8 +91,6 @@ class SequenceDecoder(nn.Module):
 
         projection_init = None
         if self.pretrained_model_slug is not None:
-            # TODO: reuse the model from earlier
-            # bart_model = MBartModel.from_pretrained(self.pretrained_model_slug)
             projection_init = full_pretrained_model.shared.weight.data
             del full_pretrained_model
         elif (
@@ -125,7 +123,7 @@ class SequenceDecoder(nn.Module):
                 bias=False,
             ).cpu()
             # Init output projection layer with embedding matrix
-            if projection_init is not None and self.config.decoder.get("init_embeds_from_tokenizer", True):
+            if projection_init is not None:  # and self.config.decoder.get("init_embeds_from_tokenizer", True)
                 self.output_projection.weight.data = projection_init
             else:
                 if self.config.decoder.get("init_embeds_like_bert", False):

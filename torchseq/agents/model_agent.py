@@ -447,7 +447,8 @@ class ModelAgent(BaseAgent):
 
             # Gradient accumulation
             for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
-                if steps >= opt.optim_batch_size:
+                # Trigger if the threshold is exceeded OR if this is the last (partial) batch
+                if steps >= opt.optim_batch_size or batch_idx == len(pbar) - 1:
                     opt.step()
                     opt.zero_grad()
                     sched.step()
