@@ -1,18 +1,27 @@
+from typing import Dict, Union, Tuple
 import torch
 import torch.nn as nn
 
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
 from torchseq.utils.functions import onehot
+from torchseq.utils.config import Config
 
 
+# TODO: This is a very old and very horrible implementation of beam search! Tidy it up at some point!s
 class BeamSearchSampler(nn.Module):
-    def __init__(self, config, tokenizer, device):
+    config: Config
+    device: Union[str, torch.device]
+    tokenizer: Tokenizer
+
+    def __init__(self, config: Config, tokenizer: Tokenizer, device: Union[str, torch.device]):
         super(BeamSearchSampler, self).__init__()
         self.config = config
         self.device = device
         self.tokenizer = tokenizer
 
-    def forward(self, model, batch, tgt_field):
+    def forward(
+        self, model: nn.Module, batch: Dict[str, torch.Tensor], tgt_field: str
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
         max_output_len = self.config.eval.data.get("max_out_len", 32)
 
@@ -63,7 +72,7 @@ class BeamSearchSampler(nn.Module):
         batch_tiled = {k: (_tile_batch(x) if k[-5:] != "_text" and k[0] != "_" else x) for k, x in batch.items()}
 
         seq_ix = 0
-        memory = {}
+        memory: Dict[str, torch.Tensor] = {}
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
 
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)

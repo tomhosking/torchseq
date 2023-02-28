@@ -1,20 +1,28 @@
+from typing import Dict, Union, Tuple
 import torch
 import torch.nn as nn
 
 from torchseq.utils.tokenizer import Tokenizer, FAIRSEQ_LANGUAGE_CODES
+from torchseq.utils.config import Config
 
 
 class GreedySampler(nn.Module):
-    def __init__(self, config, tokenizer, device):
+    config: Config
+    device: Union[str, torch.device]
+    tokenizer: Tokenizer
+
+    def __init__(self, config: Config, tokenizer: Tokenizer, device: Union[str, torch.device]):
         super(GreedySampler, self).__init__()
         self.config = config
         self.device = device
         self.tokenizer = tokenizer
 
-    def forward(self, model, batch, tgt_field):
+    def forward(
+        self, model: nn.Module, batch: Dict[str, torch.Tensor], tgt_field: str
+    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, Dict[str, torch.Tensor]]:
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
-        max_output_len = batch[tgt_field].size()[1]
+        max_output_len = self.config.eval.data.get("max_out_len", 32)
 
         BART_HACK = self.config.eval.data.get("prepend_eos", False)
         MBART_HACK = self.config.eval.data.get("prepend_langcode", False)
@@ -41,7 +49,7 @@ class GreedySampler(nn.Module):
             output = torch.cat([eos_token, lang_token], dim=-1)
 
         seq_ix = 0
-        memory = {}
+        memory: Dict[str, torch.Tensor] = {}
         while torch.sum(output_done) < curr_batch_size and seq_ix < max_output_len:
 
             new_logits, memory = model(batch, output, memory)

@@ -1,17 +1,25 @@
+from typing import Dict, Union, Tuple
 import torch
 import torch.nn as nn
 
 from torchseq.utils.tokenizer import Tokenizer
+from torchseq.utils.config import Config
 
 
 class TeacherForcedSampler(nn.Module):
-    def __init__(self, config, tokenizer, device):
+    config: Config
+    device: Union[str, torch.device]
+    tokenizer: Tokenizer
+
+    def __init__(self, config: Config, tokenizer: Tokenizer, device: Union[str, torch.device]):
         super(TeacherForcedSampler, self).__init__()
         self.config = config
         self.device = device
         self.tokenizer = tokenizer
 
-    def forward(self, model, batch, tgt_field):
+    def forward(
+        self, model: nn.Module, batch: Dict[str, torch.Tensor], tgt_field: str
+    ) -> Tuple[torch.Tensor, torch.Tensor, None, Dict[str, torch.Tensor]]:
         curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
         max_output_len = batch[tgt_field].size()[1]
 
@@ -60,7 +68,7 @@ class TeacherForcedSampler(nn.Module):
             # print(output[0])
             # exit()
 
-        memory = {}
+        memory: Dict[str, torch.Tensor] = {}
         pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=memory)
 
         if BART_HACK or MBART_HACK:
