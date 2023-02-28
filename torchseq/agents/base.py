@@ -2,6 +2,8 @@ import logging
 
 import torch
 
+# import torch._dynamo
+
 from torchseq.utils.functions import to_device_unless_marked
 
 # This project was originally based off this template:
@@ -41,6 +43,10 @@ class BaseAgent:
             self.model.apply(to_device_unless_marked(self.device))
 
             self.loss.to(self.device)
+
+            # TODO: Enable for pytorch 2.0
+            # torch._dynamo.config.verbose = True
+            # self.model = torch.compile(self.model, backend="inductor")  #
 
         else:
             self.device = torch.device("cpu")

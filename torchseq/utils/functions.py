@@ -22,7 +22,7 @@ def onehot(indexes, N=None, ignore_index=None):
 
 
 # FROM: https://gist.github.com/thomwolf/1a5a29f6962089e871b94cbd09daf317
-def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-float("Inf")):
+def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-torch.inf):
     """Filter a distribution of logits using top-k and/or nucleus (top-p) filtering
     Args:
         logits: logits distribution shape (vocabulary size)

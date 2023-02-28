@@ -53,7 +53,7 @@ class DiverseBeamSearchSampler(nn.Module):
             torch.FloatTensor(
                 curr_batch_size, beam_width, self.config.prepro.get_first(["output_vocab_size", "vocab_size"])
             )
-            .fill_(float("-inf"))
+            .fill_(-torch.inf)
             .to(self.device)
         )
         pad_probs[:, :, self.tokenizer.pad_id] = float("0")

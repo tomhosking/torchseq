@@ -143,11 +143,14 @@ class SequenceDecoder(nn.Module):
 
         output_max_len = output_seq.size()[-1]
 
-        tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-inf")).to(output_seq.device)
-        tgt_mask = torch.triu(tgt_mask, diagonal=1)
+        # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(-torch.inf).to(output_seq.device)
+        # tgt_mask = torch.triu(tgt_mask, diagonal=1)
+        tgt_mask = torch.ones(output_max_len, output_max_len, dtype=torch.bool).triu_(diagonal=1).to(output_seq.device)
+        # is_causal = True
 
         if self.config.decoder.data.get("attention_limit", None) is not None:
             tgt_mask = torch.tril(tgt_mask, diagonal=self.config.decoder.data.get("attention_limit", 0))
+            # is_causal = False
 
         # ie how many indices are non-pad
         output_len = torch.sum(torch.ne(output_seq, self.tokenizer.pad_id), dim=-1)
@@ -172,6 +175,8 @@ class SequenceDecoder(nn.Module):
             output_seq = self.decoder(
                 output_embedded,
                 memory["encoding"],
+                # is_causal=is_causal,
+                # tgt_mask=(None if is_causal else tgt_mask),
                 tgt_mask=tgt_mask,
                 tgt_key_padding_mask=output_pad_mask,
                 memory_key_padding_mask=memory["encoding_mask"],

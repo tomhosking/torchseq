@@ -30,7 +30,7 @@ class TeacherForcedSampler(nn.Module):
 
         logits = (
             torch.FloatTensor(curr_batch_size, 1, self.config.prepro.get_first(["output_vocab_size", "vocab_size"]))
-            .fill_(float("-1e18"))
+            .fill_(-torch.inf)
             .to(self.device)
         )
 

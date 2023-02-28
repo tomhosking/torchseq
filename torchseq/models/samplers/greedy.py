@@ -31,10 +31,10 @@ class GreedySampler(nn.Module):
         output = torch.LongTensor(curr_batch_size, 1).fill_(self.tokenizer.bos_id).to(self.device)
         logits = (
             torch.FloatTensor(curr_batch_size, 1, self.config.prepro.get_first(["output_vocab_size", "vocab_size"]))
-            .fill_(float("-inf"))
+            .fill_(-torch.inf)
             .to(self.device)
         )
-        logits[:, :, self.tokenizer.bos_id] = float("inf")
+        logits[:, :, self.tokenizer.bos_id] = 1e12
 
         output_done = torch.BoolTensor(curr_batch_size).fill_(False).to(self.device)
         padding = torch.LongTensor(curr_batch_size).fill_(self.tokenizer.pad_id).to(self.device)

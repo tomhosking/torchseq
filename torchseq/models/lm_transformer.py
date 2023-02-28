@@ -80,7 +80,7 @@ class TransformerLanguageModel(nn.Module):
 
         src_mask = (
             torch.FloatTensor(max_ctxt_len, max_ctxt_len)
-            .fill_(float("-inf") if self.config.directional_masks else 0.0)
+            .fill_(-torch.inf if self.config.directional_masks else 0.0)
             .to(self.device)
         )
         src_mask = torch.triu(src_mask, diagonal=1)

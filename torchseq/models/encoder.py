@@ -140,18 +140,24 @@ class SequenceEncoder(nn.Module):
         max_input_len = input_seq.shape[1]
 
         # Set up some masks
-        src_mask = (
-            torch.FloatTensor(max_input_len, max_input_len)
-            .fill_(float("-inf") if self.config.directional_masks else 0.0)
-            .to(input_seq.device)
-        )
-        src_mask = torch.triu(src_mask, diagonal=1)
+        # src_mask = (
+        #     torch.FloatTensor(max_input_len, max_input_len)
+        #     .fill_(-torch.inf if self.config.directional_masks else 0.0)
+        #     .to(input_seq.device)
+        # )
+        # src_mask = torch.triu(src_mask, diagonal=1)
+        src_mask = torch.ones(max_input_len, max_input_len, dtype=torch.bool)
+        if self.config.directional_masks:
+            src_mask = src_mask.triu_(diagonal=1).to(input_seq.device)
+        # is_causal = True
 
         if self.config.encoder.data.get("attention_limit", None) is not None:
             src_mask = torch.tril(src_mask, diagonal=self.config.encoder.data.get("attention_limit", 0))
+            # is_causal = False
 
         if self.config.encoder.data.get("no_diagonal_attn", False):
-            src_mask += float("-inf") * torch.eye(max_input_len)
+            src_mask += -torch.inf * torch.eye(max_input_len)
+            # is_causal = False
 
         padding_mask = (torch.arange(max_input_len)[None, :].cpu() >= input_seq_len[:, None].cpu()).to(
             input_seq.device
@@ -177,7 +183,13 @@ class SequenceEncoder(nn.Module):
 
             memory["seq_embedded_positioned"] = input_embedded.detach()
 
-            encoding = self.encoder(input_embedded, mask=src_mask, src_key_padding_mask=padding_mask).contiguous()
+            encoding = self.encoder(
+                input_embedded,
+                # is_causal=is_causal,
+                # mask=(None if is_causal else src_mask),
+                mask=src_mask,
+                src_key_padding_mask=padding_mask,
+            ).contiguous()
 
         else:
 
@@ -195,7 +207,14 @@ class SequenceEncoder(nn.Module):
 
             if self.config.encoder.num_layers > 0:
 
-                encoding = self.encoder(bert_encoding, mask=src_mask, src_key_padding_mask=padding_mask).contiguous()
+                encoding = self.encoder(
+                    bert_encoding,
+                    # is_causal=is_causal,
+                    # mask=(None if is_causal else src_mask),
+                    mask=src_mask,
+                    src_key_padding_mask=padding_mask,
+                ).contiguous()
+
             else:
                 encoding = bert_encoding
 
@@ -377,7 +396,7 @@ class ContextAnswerEncoder(nn.Module):
         if "encoding" not in memory:
             src_mask = (
                 torch.FloatTensor(max_ctxt_len, max_ctxt_len)
-                .fill_(float("-inf") if self.config.directional_masks else 0.0)
+                .fill_(-torch.inf if self.config.directional_masks else 0.0)
                 .to(ctxt_seq.device)
             )
             src_mask = torch.triu(src_mask, diagonal=1)
