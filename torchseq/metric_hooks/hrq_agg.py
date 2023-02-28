@@ -895,7 +895,7 @@ class HRQAggregationMetricHook(MetricHook):
             for entity_id, reviews in all_review_paths.items():
                 all_paths = [tuple(path) for paths in reviews.values() for path in paths]
                 for path in all_paths:
-                    for max_len in range(1, max_path_depth + 1):
+                    for max_len in range(1, min(max_path_depth + 1, len(path) + 1)):
                         term = path[:max_len]
                         terms_by_doc[entity_id][term] += 1
                         if allow_wildcards:
