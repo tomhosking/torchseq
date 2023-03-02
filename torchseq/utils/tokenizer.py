@@ -1,9 +1,10 @@
 import os
 import torch
+import logging
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
 from tokenizers import Tokenizer as HFTokenizer
-from transformers import BartModel, BertModel, RobertaModel
+from transformers import BartModel, BertModel, RobertaModel, AutoModel, AutoTokenizer
 from transformers import MBart50TokenizerFast
 
 from torchseq.utils.singleton import Singleton
@@ -94,6 +95,8 @@ FAIRSEQ_LANGUAGE_CODES = {  # NOTE(SS): resize embeddings will break this
     "sl_SI": 250052,
 }
 
+logger = logging.getLogger("Toknzr")
+
 
 class Tokenizer:
     pad_id: int
@@ -118,6 +121,11 @@ class Tokenizer:
         self.has_embeddings = True
 
         if "mbart-" in model_slug:
+            if model_slug != "facebook/mbart-large-50-many-to-many-mmt":
+                logger.warn(
+                    "Using mBART-50 tokenizer when model_slug was {:}\nCheck that this is still OK!".format(model_slug)
+                )
+
             self.engine = MBart50TokenizerFast.from_pretrained(
                 "facebook/mbart-large-50-many-to-many-mmt", src_lang="en_XX", tgt_lang="en_XX", add_prefix_space=True
             )
@@ -187,14 +195,15 @@ class Tokenizer:
         else:
             self.engine = HFTokenizer.from_pretrained(model_slug)
 
-            # TODO: How can we generically work out what the special tokens are? Otherwise they need to be passed in via config
+            # Special token IDs are available through the standard (slow) HF tokenizer
+            temp_engine = AutoTokenizer.from_pretrained(model_slug)
 
-            self.pad_id = self.engine.token_to_id("<pad>")
-            self.mask_id = self.engine.token_to_id("<mask>")
-            self.unk_id = self.engine.token_to_id("<unk>")
+            self.pad_id = temp_engine.pad_token_id
+            self.mask_id = temp_engine.mask_token_id
+            self.unk_id = temp_engine.unk_token_id
 
-            self.bos_id = self.engine.token_to_id("<s>")
-            self.eos_id = self.engine.token_to_id("</s>")
+            self.bos_id = temp_engine.bos_token_id
+            self.eos_id = temp_engine.eos_token_id
 
         # Vocab size from PretrainedFastTokenize is __len__ attr
         if "mbart-" in model_slug:
@@ -220,10 +229,37 @@ class Tokenizer:
     def decode(self, token_id_tensor):
         return self.engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
 
-    def get_embeddings(self):
-        return torch.load(
-            os.path.join(self.data_path, "pretrained-vocabs/{:}.embeddings.pt".format(self.model_slug.split("/")[-1]))
-        ).cpu()
+    def get_embeddings(self) -> torch.Tensor:
+        if self.has_embeddings:
+            # Get local first
+            if os.path.exists(
+                os.path.join(
+                    self.data_path, "pretrained-vocabs/{:}.embeddings.pt".format(self.model_slug.split("/")[-1])
+                )
+            ):
+                logger.info("Loading embeddings from local disk")
+                return torch.load(
+                    os.path.join(
+                        self.data_path, "pretrained-vocabs/{:}.embeddings.pt".format(self.model_slug.split("/")[-1])
+                    )
+                ).cpu()
+            else:
+                # Fall back to HF
+                logger.info("Attempting to load embeddings from HF hub")
+                model = AutoModel.from_pretrained(self.model_slug).to("cpu")
+                model_type = model.config.model_type
+                if model_type in ["bert", "roberta"]:
+                    return model.embeddings.weight.data
+                elif model_type in ["bart", "mbart"]:
+                    return model.encoder.embed_tokens
+                else:
+                    raise Exception(
+                        "Tried to get_embeddings() for a tokenizer with no local embeddings and unknown model_type: {:}".format(
+                            model_type
+                        )
+                    )
+        else:
+            raise Exception("Tried to get_embeddings() for a tokenizer with has_embeddings==False!")
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
 

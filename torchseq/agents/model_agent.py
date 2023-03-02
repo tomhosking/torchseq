@@ -316,7 +316,7 @@ class ModelAgent(BaseAgent):
         """
         raise NotImplementedError("Your model is missing a text_to_batch method!")
 
-    def step_train(self, batch, tgt_field):
+    def step_train(self, batch, tgt_field) -> torch.Tensor:
         """
         Run a single training step
         """
@@ -328,6 +328,8 @@ class ModelAgent(BaseAgent):
 
         if self.config.training.get("xe_loss", True):
             elementwise_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
+            if elementwise_loss.isnan_().any():
+                self.logger.error("NaN loss detected! Aborting training")
             this_loss += elementwise_loss[:, 1:].sum(dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
 
         if "loss" in memory:
@@ -339,7 +341,7 @@ class ModelAgent(BaseAgent):
 
         return this_loss
 
-    def train(self, data_loader):
+    def train(self, data_loader) -> None:
         """
         Main training loop
         :return:
@@ -787,7 +789,7 @@ class ModelAgent(BaseAgent):
             else:
                 self.logger.info("Early stopping lag active: saving...")
 
-            if save_model:
+            if save_model and self.run_id is not None:
                 self.save_checkpoint()
 
         self.update_dashboard()

@@ -80,6 +80,8 @@ def test_paraphrasing_vae():
         cfg_dict = json.load(f)
 
         cfg_dict["eval"]["truncate_dataset"] = 100
+        cfg_dict["training"]["truncate_dataset"] = 10
+        cfg_dict["training"]["num_epochs"] = 1
         cfg_dict["eval"]["vae_use_map"] = True
 
         config = Config(cfg_dict)
@@ -101,6 +103,17 @@ def test_paraphrasing_vae():
     assert abs(loss.item() - 2.22916) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
     assert abs(metrics["bleu"] - 36.18769) < 1e-2, "BLEU score is different to expected!"
+
+    # Try a short training run, to check no exceptions are thrown
+    # TODO: check the result of training is roughly OK?
+    set_seed(SEED)
+
+    if config.task == "aq":
+        agent = AQAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=True)
+    elif config.task in ["para", "autoencoder"]:
+        agent = Seq2SeqAgent(config, None, OUTPUT_PATH, DATA_PATH, silent=True, training_mode=True)
+    agent.model.train()
+    agent.train(data_loader)
 
     # Targets for full dataset:
     # assert abs(loss.item() - ???) < 1e-3, "Loss is different to expected!"

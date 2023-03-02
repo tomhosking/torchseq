@@ -140,24 +140,20 @@ class SequenceEncoder(nn.Module):
         max_input_len = input_seq.shape[1]
 
         # Set up some masks
-        # src_mask = (
-        #     torch.FloatTensor(max_input_len, max_input_len)
-        #     .fill_(-torch.inf if self.config.directional_masks else 0.0)
-        #     .to(input_seq.device)
-        # )
-        # src_mask = torch.triu(src_mask, diagonal=1)
-        src_mask = torch.ones(max_input_len, max_input_len, dtype=torch.bool)
+        src_mask = torch.zeros(max_input_len, max_input_len, dtype=torch.bool).to(input_seq.device)
+        # is_causal = False # ready for pt2
+
         if self.config.directional_masks:
-            src_mask = src_mask.triu_(diagonal=1).to(input_seq.device)
-        # is_causal = True
+            src_mask = src_mask.logical_not().triu_(diagonal=1)
+            # is_causal = True
 
         if self.config.encoder.data.get("attention_limit", None) is not None:
+            raise Exception("attention_limit no longer supported!")
             src_mask = torch.tril(src_mask, diagonal=self.config.encoder.data.get("attention_limit", 0))
-            # is_causal = False
 
         if self.config.encoder.data.get("no_diagonal_attn", False):
+            raise Exception("no_diagonal_attn no longer supported!")
             src_mask += -torch.inf * torch.eye(max_input_len)
-            # is_causal = False
 
         padding_mask = (torch.arange(max_input_len)[None, :].cpu() >= input_seq_len[:, None].cpu()).to(
             input_seq.device
@@ -166,7 +162,6 @@ class SequenceEncoder(nn.Module):
         memory["encoding_mask"] = padding_mask
 
         if self.pretrained_encoder is None:
-            # Embed the input (this is ignored if you use the `bert_encoder` but done anyway for maybe residual connection)
             input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
 
             if self.config.encoder.embedding_dim != self.config.get_first(
@@ -192,7 +187,6 @@ class SequenceEncoder(nn.Module):
             ).contiguous()
 
         else:
-
             # BERT expects a mask that's 1 unmasked, 0 for masked
             bert_padding_mask = (~padding_mask).long()
 
