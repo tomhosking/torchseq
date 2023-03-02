@@ -1,16 +1,15 @@
-.PHONY: docs test coverage
+.PHONY: docs test coverage syntax types test check
 
 
 # Check that source code meets quality standards
-check:
-	black --check --line-length 119 --target-version py36 tests torchseq
-	flake8  --config .flake8 tests torchseq
-	mypy ./torchseq --install-types --non-interactive
-	pytest --cov=./torchseq ./tests
+check: formatcheck syntax types test
 
 # Format source code automatically
 format:
 	black --line-length 119 --target-version py36 tests torchseq
+
+formatcheck:
+	black --check --line-length 119 --target-version py36 tests torchseq
 
 # Check syntax
 syntax:
