@@ -72,7 +72,7 @@ class BaseAgent:
         """
         raise NotImplementedError
 
-    def train(self):
+    def train(self, data_loader) -> None:
         """
         Main training loop
         :return:

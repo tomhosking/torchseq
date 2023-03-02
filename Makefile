@@ -5,7 +5,8 @@
 check:
 	black --check --line-length 119 --target-version py36 tests torchseq
 	flake8  --config .flake8 tests torchseq
-
+	mypy ./torchseq --install-types --non-interactive
+	pytest --cov=./torchseq ./tests
 
 # Format source code automatically
 format:

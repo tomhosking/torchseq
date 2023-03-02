@@ -49,6 +49,11 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
+
+    model: torch.nn.Module
+    loss: torch.nn.Module
+    tgt_field: str
+
     def __init__(
         self,
         config,

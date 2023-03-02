@@ -1,3 +1,4 @@
+from typing import Union
 import os
 import torch
 import logging
@@ -106,14 +107,11 @@ class Tokenizer:
     mask_id: int
     unk_id: int
 
-    model_slug = None
+    model_slug: str
 
-    engine = None
+    engine: Union[Tokenizer, HFTokenizer, WordLevelTokenizer] = None
 
     def __init__(self, model_slug, data_path="./data/"):
-        if model_slug is None:
-            raise Exception("Tokenizer needs to be initialized with a model name before use!")
-
         self.model_slug = model_slug
         self.data_path = data_path
 
@@ -229,7 +227,7 @@ class Tokenizer:
     def decode(self, token_id_tensor):
         return self.engine.decode(token_id_tensor.tolist(), skip_special_tokens=True)
 
-    def get_embeddings(self) -> torch.Tensor:
+    def get_embeddings(self):
         if self.has_embeddings:
             # Get local first
             if os.path.exists(
