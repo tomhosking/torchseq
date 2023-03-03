@@ -185,13 +185,14 @@ class JsonDataset(Dataset):
             return value
 
     @staticmethod
-    def pad_and_order_sequences(pad_id):
+    def pad_and_order_sequences(pad_ids_by_field, default_pad_id):
         def _pad_and_order_sequences(batch):
             keys = batch[0].keys()
             max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
 
             for x in batch:
                 for k in keys:
+                    pad_id = pad_ids_by_field.get(k, default_pad_id)
                     if k[0] == "_":
                         continue
                     if k == "a_pos":

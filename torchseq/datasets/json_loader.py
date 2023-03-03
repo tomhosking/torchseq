@@ -22,10 +22,10 @@ class JsonDataLoader:
         self.input_tokenizer = Tokenizer(config.prepro.get_first(["input_tokenizer", "tokenizer"]), data_path)
         self.output_tokenizer = Tokenizer(config.prepro.get_first(["output_tokenizer", "tokenizer"]), data_path)
 
-        if self.input_tokenizer.pad_id != self.output_tokenizer.pad_id:
-            raise Exception(
-                "Input and output tokenizers are using pad tokens with different ids! This isn't currently supported :("
-            )
+        pad_ids = {"input": self.input_tokenizer.pad_id, "output": self.output_tokenizer.pad_id}
+        pad_ids_by_field = {
+            f.get("to"): pad_ids[f.get("tokenizer", "input")] for f in self.config.json_dataset.data["field_map"]
+        }
 
         self._train = JsonDataset(
             config=config,
@@ -84,7 +84,7 @@ class JsonDataLoader:
                 batch_size=config.training.batch_size,
                 shuffle=self.config.training.data.get("shuffle_data", True),
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )
 
@@ -94,7 +94,7 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )
         if self._test.exists:
@@ -103,6 +103,6 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
                 worker_init_fn=init_worker,
             )
