@@ -163,3 +163,7 @@ def init_bert_params(module):
                 normal_(module.in_proj_weight.data)
 
     module.apply(_init_bert_params)
+
+
+def gaussian_kl(mu, logvar):
+    return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)

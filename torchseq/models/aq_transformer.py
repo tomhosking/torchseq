@@ -3,7 +3,7 @@ import math
 import torch
 import torch.nn as nn
 
-from torchseq.models.encoder import ContextAnswerEncoder
+from torchseq.models.ctxtans_encoder import ContextAnswerEncoder
 from torchseq.models.decoder import SequenceDecoder
 
 

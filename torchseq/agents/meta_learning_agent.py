@@ -14,7 +14,6 @@ from torchseq.agents.model_agent import ModelAgent
 from torchseq.utils.logging import Logger
 
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
-from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 
 
 """
@@ -51,13 +50,18 @@ class MetaLearningAgent(ModelAgent):
         )
 
         # define model
-        if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
-            self.model = PretrainedAdapterModel(
-                self.config,
-                self.input_tokenizer,
-                self.output_tokenizer,
-                src_field=self.src_field,
-                tgt_field=self.tgt_field,
+        if self.config.get("model", None) == "exemplar_guided" or self.config.get("bottleneck", {}).get(
+            "use_templ_encoding", False
+        ):
+            if (
+                self.config.get("bottleneck", {}).get("use_templ_encoding", False)
+                and self.config.get("model", None) != "exemplar_guided"
+            ):
+                self.logger.warn(
+                    'Using ExemplarGuided model based on auto detection from config - please set model="exemplar_guided" explicitly!'
+                )
+            self.model = ExemplarGuidedAutoencoderModel(
+                self.config, self.input_tokenizer, self.output_tokenizer, src_field=self.src_field
             )
         else:
             self.model = BottleneckAutoencoderModel(

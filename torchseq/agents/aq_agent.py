@@ -12,7 +12,6 @@ from torchseq.agents.model_agent import ModelAgent
 
 from torchseq.models.aq_transformer import TransformerAqModel
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
-from torchseq.models.pretrained_adapter import PretrainedAdapterModel
 from torchseq.models.suppression_loss import SuppressionLoss
 
 
@@ -42,18 +41,7 @@ class AQAgent(ModelAgent):
         )
 
         # define models
-        if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
-            self.logger.warning(
-                "PretrainedAdapterModel is deprecated! The standard model now supports pretrained encoders and decoders"
-            )
-            self.model = PretrainedAdapterModel(
-                self.config,
-                self.input_tokenizer,
-                self.output_tokenizer,
-                src_field=self.src_field,
-                tgt_field=self.tgt_field,
-            )
-        elif self.config.get("model", None) == "seq2seq":
+        if self.config.get("model", None) == "seq2seq":
             self.model = BottleneckAutoencoderModel(
                 self.config,
                 self.input_tokenizer,

@@ -28,7 +28,10 @@ class Config:
     def get_first(self, keys):
         for key in keys:
             if key in self.data:
-                return self.data[key]
+                if isinstance(self.data[key], dict):
+                    return Config(self.data[key])
+                else:
+                    return self.data[key]
         else:
             raise KeyError
 

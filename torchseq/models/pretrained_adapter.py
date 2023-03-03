@@ -44,6 +44,7 @@ def combine_masks(key_padding_mask, causal_lm_mask, targ_size):
 class PretrainedAdapterModel(nn.Module):
     def __init__(self, config, input_tokenizer, output_tokenizer, src_field="source", tgt_field="source"):
         super().__init__()
+        raise Exception("PretrainedAdapterModel is fully deprecated!")
         self.config = config
         self.input_tokenizer = input_tokenizer
         self.output_tokenizer = output_tokenizer

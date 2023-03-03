@@ -5,7 +5,7 @@ from torch import nn
 from torchseq.agents.model_agent import ModelAgent
 
 from torchseq.models.bottleneck_autoencoder import BottleneckAutoencoderModel
-from torchseq.models.pretrained_adapter import PretrainedAdapterModel
+from torchseq.models.exemplar_guided_autoencoder import ExemplarGuidedAutoencoderModel
 from torchseq.models.suppression_loss import SuppressionLoss
 from torchseq.utils.loss_dropper import LossDropper
 
@@ -24,9 +24,6 @@ class Seq2SeqAgent(ModelAgent):
         use_cuda=True,
     ):
         super().__init__(config, run_id, output_path, data_path, silent, training_mode, verbose, cache_root)
-
-        if self.config.get("bottleneck", {}).get("use_templ_encoding", False):
-            self.logger.warning("Using a Seq2Seq agent for exemplar guided tasks is deprecated!")
 
         self.tgt_field = "target" if not self.config.training.data.get("flip_pairs", False) else "source"
 
@@ -57,16 +54,19 @@ class Seq2SeqAgent(ModelAgent):
         )
 
         # define model
-        if self.config.data.get("model", None) is not None and self.config.model == "pretrained_adapter":
-            self.logger.warning(
-                "PretrainedAdapterModel is deprecated! The standard model now supports pretrained encoders and decoders"
-            )
-            self.model = PretrainedAdapterModel(
-                self.config,
-                self.input_tokenizer,
-                self.output_tokenizer,
-                src_field=self.src_field,
-                tgt_field=self.tgt_field,
+
+        if self.config.get("model", None) == "exemplar_guided" or self.config.get("bottleneck", {}).get(
+            "use_templ_encoding", False
+        ):
+            if (
+                self.config.get("bottleneck", {}).get("use_templ_encoding", False)
+                and self.config.get("model", None) != "exemplar_guided"
+            ):
+                self.logger.warn(
+                    'Using ExemplarGuided model based on auto detection from config - please set model="exemplar_guided" explicitly!'
+                )
+            self.model = ExemplarGuidedAutoencoderModel(
+                self.config, self.input_tokenizer, self.output_tokenizer, src_field=self.src_field
             )
         else:
             self.model = BottleneckAutoencoderModel(

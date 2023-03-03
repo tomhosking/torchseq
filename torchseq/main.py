@@ -13,7 +13,6 @@ from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.agents.meta_learning_agent import MetaLearningAgent
-from torchseq.agents.exemplar_agent import ExemplarGuidedAgent
 from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.config_migration import check_config

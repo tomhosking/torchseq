@@ -6,7 +6,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.hrq_vae import HierarchicalRefinementQuantizer
 from torchseq.models.pythae_vq import PythaeQuantizerWrapper
-from torchseq.models.kl_divergence import gaussian_kl
+from torchseq.utils.functions import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 

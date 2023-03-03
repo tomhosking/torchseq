@@ -5,7 +5,7 @@ from transformers import BartModel, BertModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae_legacy import VectorQuantizerMultiHeadLegacy
-from torchseq.models.kl_divergence import gaussian_kl
+from torchseq.utils.functions import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
 
