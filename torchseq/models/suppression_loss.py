@@ -13,7 +13,6 @@ class SuppressionLoss(nn.Module):
         self.config = config
 
     def forward(self, logits, penalty_sequence, pad_id):
-
         penalty_onehot = onehot(
             penalty_sequence,
             N=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),

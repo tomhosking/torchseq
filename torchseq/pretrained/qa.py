@@ -17,7 +17,6 @@ def ceiling_division(n, d):
 
 class PreTrainedQA:
     def __init__(self, device=None):
-
         self.device = torch.device("cuda") if device is None else device
         self.tokenizer = BertTokenizerFast.from_pretrained("bert-base-uncased")
         self.model = BertForQuestionAnswering.from_pretrained(
@@ -35,7 +34,6 @@ class PreTrainedQA:
         return " ".join(all_tokens[torch.argmax(start_scores) : torch.argmax(end_scores) + 1])
 
     def infer_batch(self, question_list, context_list, silent=False):
-
         MAX_LEN = 384
         CHUNK_STRIDE = 128
 
@@ -56,7 +54,6 @@ class PreTrainedQA:
         for bix in tqdm(
             range(ceiling_division(len(tokenized["input_ids"]), BATCH_SIZE)), desc="QA model", disable=silent
         ):
-
             res = self.model(
                 self.pad_batch(tokenized["input_ids"][bix * BATCH_SIZE : (bix + 1) * BATCH_SIZE]),
                 token_type_ids=self.pad_batch(tokenized["token_type_ids"][bix * BATCH_SIZE : (bix + 1) * BATCH_SIZE]),

@@ -36,7 +36,6 @@ class Seq2SeqAgent(ModelAgent):
             "newsqa",
             "naturalquestions",
         ]:
-
             self.src_field = "q"
             self.tgt_field = "q"
         else:

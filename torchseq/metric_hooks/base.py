@@ -7,7 +7,6 @@ from torchseq.agents.base import BaseAgent
 
 
 class MetricHook:
-
     type: str  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
     config: Config
     tokenizer: Tokenizer

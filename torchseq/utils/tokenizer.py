@@ -260,7 +260,6 @@ class Tokenizer:
             raise Exception("Tried to get_embeddings() for a tokenizer with has_embeddings==False!")
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
-
         if "mbart-" in self.model_slug:
             output = self.engine(text, return_offsets_mapping=True, add_special_tokens=False)
 

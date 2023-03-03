@@ -32,7 +32,6 @@ class QATriple:
         src_lang=None,
         tgt_lang=None,
     ):
-
         self.o_tag = o_tag
 
         # How many sentences either side of the answer should we keep?

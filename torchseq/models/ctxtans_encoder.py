@@ -210,7 +210,6 @@ class ContextAnswerEncoder(nn.Module):
 
             # Fwd pass through encoder
             if self.pretrained_model_slug is not None:
-
                 # BERT expects a mask that's 1 unmasked, 0 for masked
                 bert_context_mask = (~context_mask).double()
 

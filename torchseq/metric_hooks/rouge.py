@@ -10,7 +10,6 @@ import rouge
 
 
 class RougeMetricHook(MetricHook):
-
     type = "live"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -33,7 +32,6 @@ class RougeMetricHook(MetricHook):
             self.inputs.extend(batch[self.src_field + "_text"])
 
     def on_end_epoch(self, _, use_test=False):
-
         evaluator = rouge.Rouge(
             metrics=[
                 "rouge-l",

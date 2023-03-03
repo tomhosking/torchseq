@@ -24,7 +24,6 @@ from collections import Counter
 
 
 def ReadInFile(filename):
-
     with open(filename) as f:
         lines = f.readlines()
         lines = [x.strip() for x in lines]
@@ -179,7 +178,6 @@ def SARIsent(ssent, csent, rsents):
 
 
 def main():
-
     ssent = "About 95 species are currently accepted ."
     csent1 = "About 95 you now get in ."
     csent2 = "About 95 species are now agreed ."

@@ -12,7 +12,6 @@ class TopkReducer(nn.Module):
         self.pad_id = pad_id
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
-
         # Skip sorting for now - this is unnecessary compute - if a sampling method that does not return sorted output appears this will need to change!
         #  if sort:
         #     # Sort with lowest scores first - we want to minimise overlap

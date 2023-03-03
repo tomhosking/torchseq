@@ -18,7 +18,6 @@ def ceiling_division(n, d):
 
 class PretrainedLM:
     def __init__(self):
-
         # Load pre-trained model tokenizer (vocabulary)
         self.tokenizer = GPT2Tokenizer.from_pretrained("gpt2")
 
@@ -31,7 +30,6 @@ class PretrainedLM:
             self.model.to(torch.device("cuda"))
 
     def get_log_prob(self, sentences, silent=False):
-
         if len(sentences) > 32:
             log_probs = []
             for b in tqdm(range(ceiling_division(len(sentences), 32)), desc="LM log probs", disable=silent):
@@ -52,7 +50,6 @@ class PretrainedLM:
         return tok_batch, mask_batch
 
     def get_seq_log_prob(self, batch):
-
         tokens, mask = batch
 
         # Convert inputs to PyTorch tensors

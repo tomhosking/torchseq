@@ -13,7 +13,6 @@ from torchseq.pretrained.lm import PretrainedLM
 
 @test_utils.slow
 def test_qa():
-
     use_cuda = torch.cuda.is_available()
 
     instance = PreTrainedQA(device=("cuda" if use_cuda else "cpu"))
@@ -30,7 +29,6 @@ def test_qa():
 
 @test_utils.slow
 def test_lm():
-
     instance = PretrainedLM()
 
     preds = instance.get_log_prob(

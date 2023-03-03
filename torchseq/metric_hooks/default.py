@@ -5,7 +5,6 @@ import torch
 
 
 class DefaultMetricHook(MetricHook):
-
     type = "live"
 
     # def __init__(self, config, tokenizer, src_field=None, tgt_field=None):
@@ -15,7 +14,6 @@ class DefaultMetricHook(MetricHook):
         self.scores = {"ppl": []}
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-
         self.scores["ppl"].extend(
             get_perplexity(
                 logits,

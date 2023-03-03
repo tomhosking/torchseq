@@ -13,7 +13,6 @@ import torchseq.utils.functions as tsfunctions
 
 
 def test_config():
-
     main_cfg_dict = {
         "name": "model_name",
         "int": 1,

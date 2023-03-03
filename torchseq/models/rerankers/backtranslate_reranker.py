@@ -35,7 +35,6 @@ class BacktranslateReranker(nn.Module):
         self.loss = nn.CrossEntropyLoss(ignore_index=pad_id, reduction="none")
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
-
         # Flatten to a single (large) batch
         candidates_flattened = torch.flatten(candidates, 0, 1)
         lengths_flattened = torch.flatten(lengths)

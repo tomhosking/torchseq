@@ -16,7 +16,6 @@ import numpy as np
 
 
 def test_bleu():
-
     refs = ["The dog bit the man.", "It was not unexpected.", "The man bit him first."]
     sys = ["The dog bit the man.", "It wasn't surprising.", "The man had just bitten him."]
     bleu = metrics.bleu_corpus(sys, refs)
@@ -24,7 +23,6 @@ def test_bleu():
 
 
 def test_rouge():
-
     refs = ["The dog bit the man.", "It was not unexpected.", "The man bit him first."]
     sys = ["The dog bit the man.", "It wasn't surprising.", "The man had just bitten him."]
     rouge = get_pairwise_rouge(sys[0], refs[0])
@@ -53,14 +51,12 @@ def test_meteor():
 
 
 def test_f1():
-
     assert metrics.f1("same", "same") == 1.0, "F1 failed for correct example!"
     assert metrics.f1("same", "diff") == 0.0, "F1 failed for wrong example!"
     assert metrics.f1("tok1 tok2", "tok1 tok3") == 0.5, "F1 failed for overlapping example!"
 
 
 def test_fleiss():
-
     bad = [[1, 1], [1, 1], [1, 1]]
 
     good = [[2, 0], [0, 2], [2, 0]]
@@ -73,5 +69,4 @@ def test_fleiss():
 
 
 def test_misc():
-
     assert metrics.normalize_answer("a  Very oLd   cat! ") == "very old cat"

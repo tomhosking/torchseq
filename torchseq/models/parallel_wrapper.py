@@ -12,7 +12,6 @@ class ParallelModel(nn.Module):
         self.tgt_field = tgt_field
 
     def forward(self, batch, *args, **kwargs):
-
         res = self.model(batch, *args, **kwargs)
 
         this_loss = self.loss(res[0].permute(0, 2, 1), batch[self.tgt_field])

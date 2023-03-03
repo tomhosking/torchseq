@@ -180,7 +180,6 @@ class VQCodePredictor(nn.Module):
                         prev_oh = onehot(torch.tensor(combo[-1]).to(logits.device), N=self.config.output_dim) * 1.0
                         curr_logits = logits[h_ix, :] + self.transitions[h_ix - 1](prev_oh).detach()
                     elif self.config.get("autoregressive_lstm", False):
-
                         seq_init = torch.zeros(1, 1, seq_dim).to(encoding.device)
                         seq_embedded = [
                             embed(torch.tensor(x).to(encoding.device)).unsqueeze(0).unsqueeze(1)

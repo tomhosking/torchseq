@@ -24,7 +24,6 @@ class CombinationReranker(nn.Module):
         )
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
-
         # store the original seq probs
         nll_scores = scores
 

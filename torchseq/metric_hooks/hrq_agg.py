@@ -76,7 +76,6 @@ class AggregationTree:
 
 
 class HRQAggregationMetricHook(MetricHook):
-
     type = "slow"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -89,7 +88,6 @@ class HRQAggregationMetricHook(MetricHook):
         pass
 
     def on_end_epoch(self, agent, use_test=False):
-
         # Populate caches
         logger.info("Populating HRQ caches - this may take a while!")
         _, _ = HRQAggregationMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
@@ -268,7 +266,6 @@ class HRQAggregationMetricHook(MetricHook):
 
     @abstractmethod
     def eval_nli(config, agent, test=False, show_plot=False):
-
         split = "test" if test else "dev"
 
         cfg_dict = copy.deepcopy(config.data)
@@ -522,7 +519,6 @@ class HRQAggregationMetricHook(MetricHook):
         # normalise
         for entity_id in paths_by_entity.keys():
             for h in range(4):
-
                 max_paths = 4 ** (h + 1)
                 total = sum(
                     sorted([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)], reverse=True)[
@@ -705,7 +701,6 @@ class HRQAggregationMetricHook(MetricHook):
     def get_feature_entropies(codes, features, num_heads):
         entropies_by_depth = {}
         for d in range(num_heads):
-
             features_by_code = defaultdict(Counter)
             for feature, code in zip(features, codes):
                 features_by_code[code[: (d + 1)]][feature] += 1
@@ -1610,7 +1605,6 @@ class HRQAggregationMetricHook(MetricHook):
 
     @abstractmethod
     def eval_oracle_summaries(config, agent, test=False, eval_data=None):
-
         split = "test" if test else "dev"
 
         if eval_data is None:

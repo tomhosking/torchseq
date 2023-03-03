@@ -49,7 +49,6 @@ cudnn.benchmark = False
 
 
 class ModelAgent(BaseAgent):
-
     model: torch.nn.Module
     loss: torch.nn.Module
     tgt_field: str
@@ -477,7 +476,6 @@ class ModelAgent(BaseAgent):
 
                 # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
                 if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
-
                     with torch.inference_mode():
                         greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
 
@@ -761,7 +759,6 @@ class ModelAgent(BaseAgent):
                 and (self.current_epoch - self.best_epoch) <= self.config.training.early_stopping_lag > 0
             )
         ):
-
             self.all_metrics_at_best = {"nll": test_loss.item(), "epoch": self.current_epoch, **all_metrics}
 
             wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()}, step=self.global_step)

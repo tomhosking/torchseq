@@ -19,7 +19,6 @@ from torchseq.datasets.builder import dataloader_from_config
 
 @test_utils.slow
 def test_bert_embeds():
-
     CONFIG = "./models/examples/20210222_145021_qg_bert/config.json"
     CHKPT = "./models/examples/20210222_145021_qg_bert/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -64,7 +63,6 @@ def test_bert_embeds():
 
 @test_utils.slow
 def test_paraphrasing_vae():
-
     CONFIG = "./models/examples/20210222_152157_paraphrasing_vae/config.json"
     CHKPT = "./models/examples/20210222_152157_paraphrasing_vae/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -123,7 +121,6 @@ def test_paraphrasing_vae():
 
 @test_utils.slow
 def test_qg_transformer():
-
     CONFIG = "./models/examples/20210222_145034_qg_transformer/config.json"
     CHKPT = "./models/examples/20210222_145034_qg_transformer/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -162,7 +159,6 @@ def test_qg_transformer():
 
 @test_utils.slow
 def test_qg_bart():
-
     CONFIG = "./models/examples/qg_bart_v2/config.json"
     CHKPT = "./models/examples/qg_bart_v2/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -207,7 +203,6 @@ def test_qg_bart():
 
 @test_utils.slow
 def test_separator():
-
     CONFIG = "./models/examples/separator-wa/config.json"
     CHKPT = "./models/examples/separator-wa/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -255,7 +250,6 @@ def test_separator():
 
 @test_utils.slow
 def test_hrq():
-
     CONFIG = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
     CHKPT = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"
@@ -310,7 +304,6 @@ def test_hrq():
 
 @test_utils.slow
 def test_hrq_codepred():
-
     CONFIG = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/config_usehrq.json"
     CHKPT = "./models/examples/hrqvae_v2/20220109_182050_wa_base_jointtrained_TEST/model/checkpoint.pt"
     DATA_PATH = "./data/"

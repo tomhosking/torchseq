@@ -24,7 +24,6 @@ logger = logging.getLogger("SepAEMetric")
 
 
 class SepAEMetricHook(MetricHook):
-
     type = "slow"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -581,7 +580,6 @@ class SepAEMetricHook(MetricHook):
 
     @abstractmethod
     def populate_cache(config, agent, MAX_SAMPLES=int(1e10)):
-
         dataset_all = config.eval.metrics.sep_ae.flattened_dataset
 
         infer_codes = agent.config.bottleneck.code_predictor.data.get("infer_codes", False)
@@ -916,7 +914,6 @@ class SepAEMetricHook(MetricHook):
         test_samples=None,
         skip_scores=False,
     ):
-
         sample_outputs = agent.config.eval.get("sample_outputs", True)
 
         # Generate encodings

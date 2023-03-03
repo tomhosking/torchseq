@@ -135,7 +135,6 @@ def main():
             agent.save_checkpoint()
 
     if args.train:
-
         if data_loader.train_loader is None:
             raise Exception("Selected dataset does not include a training split - cannot train!")
         logger.info("Starting training...")

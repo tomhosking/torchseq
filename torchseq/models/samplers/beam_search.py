@@ -74,7 +74,6 @@ class BeamSearchSampler(nn.Module):
         seq_ix = 0
         memory: Dict[str, torch.Tensor] = {}
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
-
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
             new_logits = new_logits.view(
                 curr_batch_size,
@@ -107,7 +106,6 @@ class BeamSearchSampler(nn.Module):
                 # print(scores)
                 # exit()
             else:
-
                 top_expansions = torch.topk(new_probs, k=beam_expansion, dim=-1, largest=True)
 
                 expanded_beam_ixs = torch.cat(

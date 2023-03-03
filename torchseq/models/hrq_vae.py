@@ -71,7 +71,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
         force_positive_embeddings=False,
         debug={},
     ):
-
         super(HierarchicalRefinementQuantizer, self).__init__()
 
         if demean_inputs:
@@ -310,7 +309,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
             self._kmeans_history = None
 
         for head_ix, embedding in enumerate(self._embedding):
-
             if self._adaptive_depth:
                 embedding = torch.cat(
                     [self._embedding[head_ix].weight[:1].detach(), self._embedding[head_ix].weight[1:]], dim=0
@@ -350,7 +348,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
                         - 2 * torch.matmul(resid_error, embedding.t())
                     )
             else:
-
                 if self._cos_sim:
                     distances += cos_sim(this_input, embedding)
                 else:
@@ -372,7 +369,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 logits = logits * logits_weight
 
             if self.training:
-
                 # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
                 gumbel_sched_weight = exp(
                     -float(global_step)
@@ -472,7 +468,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         # Now that we have the codes, calculate their embeddings
         for head_ix, embedding in enumerate(self._embedding):
-
             # If soft training, use distribution
             if self.training:
                 embedding = embedding.weight
@@ -502,7 +497,6 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
             # otherwise use one hot
             else:
-
                 this_quantized = embedding(vq_codes[head_ix].type(torch.LongTensor).to(inputs.device)).unsqueeze(1)
                 if self._force_positive_embeddings:
                     this_quantized = this_quantized.abs()

@@ -5,7 +5,6 @@ from torchseq.utils.tokenizer import Tokenizer
 
 
 def test_bert_uncased_basic():
-
     TEST_STRING = "This is a test sentence."
 
     tokenizer = Tokenizer("bert-base-uncased")
@@ -27,7 +26,6 @@ def test_bert_uncased_basic():
 
 
 def test_bert_cased_basic():
-
     TEST_STRING = "This is a test sentence."
 
     tokenizer = Tokenizer("bert-base-cased")

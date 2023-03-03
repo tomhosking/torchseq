@@ -16,7 +16,6 @@ import torchseq.models.transformer as custom_transformer
 
 
 class SequenceEncoder(nn.Module):
-
     global_config: Config
     encoder_config: Config
     tokenizer: Tokenizer
@@ -48,7 +47,6 @@ class SequenceEncoder(nn.Module):
             if self.tokenizer.has_embeddings and self.encoder_config.get("init_embeds_from_tokenizer", True):
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
-
                 if self.encoder_config.get("init_embeds_like_bert", False):
                     init_bert_params(self.embeddings)
                 else:
@@ -211,7 +209,6 @@ class SequenceEncoder(nn.Module):
                 bert_encoding = bert_encoding.detach()
 
             if self.encoder_config.num_layers > 0:
-
                 encoding = self.encoder(
                     bert_encoding,
                     # is_causal=is_causal,

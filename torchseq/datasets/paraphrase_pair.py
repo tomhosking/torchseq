@@ -3,7 +3,6 @@ from torchseq.utils.tokenizer import Tokenizer
 
 class ParaphrasePair:
     def __init__(self, sent1_text, sent2_text, template=None, is_paraphrase=True, tok_window=64):
-
         if "artist appear below the euro symbol" in sent2_text:
             print("Found the dodgy pair", sent1_text, sent2_text)
 

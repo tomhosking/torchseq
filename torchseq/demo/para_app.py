@@ -26,7 +26,6 @@ def index():
 
 @app.route("/api/generate")
 def generate():
-
     s1 = request.args["sem_input"]
 
     # s1 = "(l-punct (l-nsubj (l-cop w-1-what w-2-is) (l-acl (l-det (l-BIND w-4-plague v-w-4-plague) w-3-another) (l-nsubj (l-xcomp w-5-thought (l-mark (l-aux (l-dobj w-8-spread (l-det (l-amod w-11-way w-10-same) w-9-the)) w-7-have) w-6-to)) v-w-4-plague))) w-12-?)"
@@ -36,7 +35,6 @@ def generate():
     # query = {"source": s1, "c": s1, "a": ";", "a_pos": 0, "q": s1, "target": s1, "sem_input": s1, "tgt": s1, "syn_input": s1}
     query = {"sem_input": s1, "tgt": "", "syn_input": s1, "question": "?", "answer": s1}
     if "template" in request.args:
-
         template = request.args["template"]
         print("Template: ", template)
         query["template"] = template

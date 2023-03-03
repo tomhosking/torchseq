@@ -24,7 +24,6 @@ logger = logging.getLogger("SemParseMetricHook")
 
 
 class SemanticParsingMetricHook(MetricHook):
-
     type = "slow"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):

@@ -26,7 +26,6 @@ class LangmodellingDataset(Dataset):
         if test and not os.path.exists(os.path.join(self.path, "sentences.{:}.txt".format(self.variant))):
             self.exists = False
         else:
-
             # TODO: Can we get the length without reading the whole file?
             with open(os.path.join(self.path, "sentences.{:}.txt".format(self.variant))) as f:
                 # for line in f:
@@ -99,7 +98,6 @@ class LangmodellingDataset(Dataset):
 
 class LangmodellingInstance:
     def __init__(self, sent_text, tok_window=256):
-
         self._doc = Tokenizer().tokenise(sent_text)
 
         if len(self._doc) > tok_window:

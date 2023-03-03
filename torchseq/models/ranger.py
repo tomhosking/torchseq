@@ -98,7 +98,6 @@ class Ranger(Optimizer):
 
         # Evaluate averages and grad, update param tensors
         for group in self.param_groups:
-
             for p in group["params"]:
                 if p.grad is None:
                     continue

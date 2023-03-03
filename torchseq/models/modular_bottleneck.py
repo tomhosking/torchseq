@@ -86,7 +86,6 @@ class ModularBottleneck(nn.Module):
             self.post_transform = None
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
-
         # if head_mask is not None:
         #     print('hm in bottleneck')
 
@@ -194,7 +193,6 @@ class BottleneckPart(nn.Module):
 
         # VQ-VAE bottleneck
         if config.get("type", None) == "vqvae":
-
             # num_quantizer_heads = config.get("quantizer_heads", 1)
 
             quantizer_kwargs = config.get("quantizer", {})
@@ -240,7 +238,6 @@ class BottleneckPart(nn.Module):
 
         # Quantize
         if self.config.get("type", None) in ["vqvae", "hrqvae", "pythae:vqvae"]:
-
             if self.config.get("type", None) == "hrqvae":
                 vq_loss, encoding_post, quantizer_indices = self.quantizer(
                     encoding_post, global_step, forced_codes, head_mask, residual_mask
@@ -280,7 +277,6 @@ class BottleneckPart(nn.Module):
 
         # Reparameterise for VAE
         if self.config.get("variational", False) or self.config.get("type", None) == "vae":
-
             if self.config.get("pooling", False):
                 mu = encoding_post
                 logvar = self.logvar_pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)

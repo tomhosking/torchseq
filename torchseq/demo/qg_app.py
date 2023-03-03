@@ -21,7 +21,6 @@ def index():
 
 @app.route("/api/generate")
 def generate():
-
     context = request.args["context"]
     answer = request.args["answer"]
     a_pos = context.find(answer)
@@ -46,7 +45,6 @@ def ping():
 
 
 def init():
-
     # MODEL_SLUG = "20200220_161434_bert_embeds_para_pbkagsq_ft_squad"
 
     # MODEL_PATH = f'./runs/augmented/{MODEL_SLUG}/'

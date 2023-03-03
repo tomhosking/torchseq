@@ -66,7 +66,6 @@ class DiverseBeamSearchSampler(nn.Module):
         seq_ix = 0
         memory = {}
         while torch.sum(output_done) < curr_batch_size * beam_width and seq_ix < max_output_len:
-
             new_logits, memory = model(batch_tiled, output_seq.view(curr_batch_size * beam_width, -1), memory)
             new_logits = new_logits.view(
                 curr_batch_size,
@@ -99,7 +98,6 @@ class DiverseBeamSearchSampler(nn.Module):
                 # print(scores)
                 # exit()
             else:
-
                 scores_by_group = list(scores.chunk(num_groups, dim=1))
                 output_by_group = list(output_seq.chunk(num_groups, dim=1))
                 new_log_probs_by_group = list(new_log_probs.chunk(num_groups, dim=1))

@@ -16,7 +16,6 @@ class QaReranker(nn.Module):
         self.qa_model = PreTrainedQA(device=self.device)
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
-
         # First, stringify
         output_strings = [
             [self.tokenizer.decode(candidates.data[i][j][: lengths[i][j]]) for j in range(len(lengths[i]))]

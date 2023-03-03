@@ -102,7 +102,6 @@ class PoolingBottleneck(nn.Module):
             )
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
-
         if self.input_projection is not None:
             encoding = self.input_projection(encoding)
 
@@ -210,7 +209,6 @@ class PoolingBottleneck(nn.Module):
 
         # Reparameterise for VAE
         if self.config.bottleneck.get("variational", False):
-
             mu = encoding_pooled
             logvar = self.encoder_logvar_pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(
                 1
@@ -238,7 +236,6 @@ class PoolingBottleneck(nn.Module):
 
                 kl_loss = torch.mean(gaussian_kl(mu[:, :, :splice_ix], logvar[:, :, :splice_ix]), dim=1)
             else:
-
                 encoding_pooled = reparameterize_gaussian(mu, logvar, var_weight=var_weight)
 
                 kl_loss = torch.mean(gaussian_kl(mu, logvar), dim=1)

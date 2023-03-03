@@ -82,7 +82,6 @@ class QADataset(Dataset):
         roberta_style_encoding=False,
         include_lang_codes=False,
     ):
-
         src_lang = x.get("src_lang", "en_XX")
         tgt_lang = x.get("tgt_lang", "en_XX")
 

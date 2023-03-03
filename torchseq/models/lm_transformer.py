@@ -62,7 +62,6 @@ class TransformerLanguageModel(nn.Module):
         self.positional_embeddings_enc = PositionalEncoding(config.encoder.embedding_dim)
 
     def forward(self, batch, output, memory=None, tgt_field=None):
-
         if memory is None:
             memory = dict()
 

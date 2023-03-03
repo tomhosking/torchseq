@@ -59,7 +59,6 @@ class VectorQuantizerMultiHead(nn.Module):
         soft_gumbel=False,
         kl_weight=None,
     ):
-
         # residual_head_range=(0, 0),
         super(VectorQuantizerMultiHead, self).__init__()
 
@@ -126,7 +125,6 @@ class VectorQuantizerMultiHead(nn.Module):
         self._head_dropout_keep_first = head_dropout_keep_first
 
         if hierarchical:
-
             if self._hierarchical_balance_dims:
                 dim_weights = [2**x for x in range(self._num_heads)]
                 total_dim = self._embedding_dim * self._num_heads
@@ -316,7 +314,6 @@ class VectorQuantizerMultiHead(nn.Module):
                         - 2 * torch.matmul(resid_error, self._embedding[head_ix].weight.t())
                     )
             else:
-
                 if self._cos_sim:
                     distances += cos_sim(this_input, self._embedding[head_ix].weight)
                 elif self._use_code_classifier:
@@ -348,7 +345,6 @@ class VectorQuantizerMultiHead(nn.Module):
                 logits += torch.log(all_probs[-1] + 1e-10).squeeze(1).repeat_interleave(self._num_embeddings, dim=1)
 
             if self._use_transitions and len(all_probs) > 0:
-
                 if self._transitions_embed:
                     prev_quantized = torch.matmul(all_probs[head_ix - 1], self._embedding[head_ix - 1].weight.detach())
                     trans_logits = self._transitions[head_ix - 1](prev_quantized).squeeze(1)
@@ -364,7 +360,6 @@ class VectorQuantizerMultiHead(nn.Module):
                 all_distances.append(distances)
 
             if self._use_gumbel and self.training:
-
                 # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
                 gumbel_sched_weight = exp(-float(global_step) / float(self._temp_schedule_gamma))
                 gumbel_temp = (
@@ -391,7 +386,6 @@ class VectorQuantizerMultiHead(nn.Module):
                 and (self._ema_schedule_steps is None or global_step <= self._ema_schedule_steps)
             ):
                 with torch.no_grad():
-
                     curr_decay = 1 - (1 - self._decay) * (
                         1
                         if self._ema_schedule_steps is None

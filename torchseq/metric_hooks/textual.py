@@ -10,7 +10,6 @@ import sacrebleu
 
 
 class TextualMetricHook(MetricHook):
-
     type = "live"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -36,7 +35,6 @@ class TextualMetricHook(MetricHook):
             self.inputs.extend(batch[self.src_field + "_text"])
 
     def on_end_epoch(self, _, use_test=False):
-
         # Flip and pad the references
         max_num_refs = max([len(x) for x in self.gold_targets])
         self.gold_targets = [x + [x[0]] * (max_num_refs - len(x)) for x in self.gold_targets]

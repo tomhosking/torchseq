@@ -52,7 +52,6 @@ class JsonDataset(Dataset):
             self.exists = False
             self.samples = []
         else:
-
             # TODO: Can we get the length without reading the whole file?
             if os.path.exists(os.path.join(self.path, "{:}.json".format(self.variant))):
                 with open(os.path.join(self.path, "{:}.json".format(self.variant))) as f:
@@ -97,7 +96,6 @@ class JsonDataset(Dataset):
         drop_target_lang_codes=False,
         mask_prob=0.0,
     ):
-
         src_lang = obj.get("src_lang", "en_XX")
         tgt_lang = obj.get("tgt_lang", "en_XX")
 
@@ -152,7 +150,6 @@ class JsonDataset(Dataset):
 
             # HACK: hard coded field name!
             if f["to"] == "source" and mask_prob > 0:
-
                 probs = torch.rand(*batch[f["to"]].shape, device=batch[f["to"]].device)
                 mask = torch.logical_and(
                     torch.logical_and(probs < mask_prob, batch[f["to"]] > 3), batch[f["to"]] < 250000
@@ -178,7 +175,6 @@ class JsonDataset(Dataset):
     @staticmethod
     def _tokenize_if_string(value, tokenizer, tok_window):
         if isinstance(value, str):
-
             _doc = tokenizer.tokenise(value)
 
             if len(_doc) > tok_window:

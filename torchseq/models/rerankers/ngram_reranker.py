@@ -15,7 +15,6 @@ class NgramReranker(nn.Module):
         self.src_field = src_field
 
     def forward(self, candidates, lengths, batch, tgt_field, scores=None, sort=True, top1=True):
-
         # Get k-hot representations of the ref and candidate sequences
         # Also add in the "beam" dimension
         refs_k_hot = (

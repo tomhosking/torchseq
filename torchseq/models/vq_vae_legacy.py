@@ -40,7 +40,6 @@ class VectorQuantizerMultiHeadLegacy(nn.Module):
         only_final=False,
         subtract_previous=False,
     ):
-
         # residual_head_range=(0, 0),
         super(VectorQuantizerMultiHeadLegacy, self).__init__()
 
@@ -94,12 +93,10 @@ class VectorQuantizerMultiHeadLegacy(nn.Module):
         vq_codes = []
         all_encodings = []
         for head_ix, embedding in enumerate(self._embedding):
-
             this_input = flat_input[:, head_ix, :]
             if head_ix >= self._residual_head_range[0] and head_ix < self._residual_head_range[1]:
                 quantized_list.append(this_input)
             else:
-
                 this_input = flat_input[:, head_ix, :]
 
                 # Calculate distances
@@ -171,7 +168,6 @@ class VectorQuantizerMultiHeadLegacy(nn.Module):
 
         code_entropy_loss = 0
         if self._code_entropy_weight > 0:
-
             # h_ix x bsz
             cooccur_ixs = list(zip(*vq_codes))
             cooccur_mask = torch.zeros_like(self._code_cooccurrence)

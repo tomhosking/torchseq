@@ -5,7 +5,6 @@ import torch
 
 
 class QGMetricHook(MetricHook):
-
     type = "slow"
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -15,7 +14,6 @@ class QGMetricHook(MetricHook):
         self.scores = {"qg_metric": []}
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-
         # Calc QG metric
         # Calculate metric from "On the Importance of Diversity in Question Generation for QA"
         omega = 0.7

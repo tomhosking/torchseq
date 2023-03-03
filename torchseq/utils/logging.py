@@ -11,7 +11,6 @@ from wandb import Histogram as wbHistogram
 
 
 class Logger(metaclass=Singleton):
-
     writer = None
     step = 0
 

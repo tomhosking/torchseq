@@ -53,12 +53,10 @@ class VQVAEConfig:
 
 
 class Quantizer(nn.Module):
-
     cluster_size: torch.Tensor
     input_mean: torch.Tensor
 
     def __init__(self, model_config: VQVAEConfig):
-
         nn.Module.__init__(self)
 
         self.model_config = model_config
@@ -97,7 +95,6 @@ class Quantizer(nn.Module):
             self.register_buffer("input_mean", torch.zeros(self.embedding_dim))
 
     def forward(self, z: torch.Tensor, step: int = 0):
-
         if self.model_config.noise_inputs and self.training:
             noise = torch.empty_like(z).normal_() * 0.1
 
@@ -155,7 +152,6 @@ class Quantizer(nn.Module):
         quantized = quantized.reshape_as(z)
 
         if self.use_ema and self.training:
-
             n_i = torch.sum(one_hot_encoding, dim=0)
 
             self.cluster_size = self.cluster_size * self.decay + n_i * (1 - self.decay)
@@ -314,7 +310,6 @@ class PythaeQuantizerWrapper(Quantizer):
         demean_inputs=False,
         noise_inputs=False,
     ):
-
         config = VQVAEConfig(
             latent_dim=embedding_dim,
             num_embeddings=num_embeddings,

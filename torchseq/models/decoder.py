@@ -13,7 +13,6 @@ from transformers import BartModel, BertModel, RobertaModel, MBartModel
 
 
 class SequenceDecoder(nn.Module):
-
     config: Config
     tokenizer: Tokenizer
     embeddings: nn.Embedding
@@ -36,7 +35,6 @@ class SequenceDecoder(nn.Module):
             if self.tokenizer.has_embeddings and self.config.decoder.get("init_embeds_from_tokenizer", True):
                 self.embeddings.weight.data = self.tokenizer.get_embeddings()
             else:
-
                 if self.config.decoder.get("init_embeds_like_bert", False):
                     init_bert_params(self.embeddings)
                 else:
@@ -140,7 +138,6 @@ class SequenceDecoder(nn.Module):
     def forward(
         self, output_seq: torch.Tensor, memory: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
-
         output_max_len = output_seq.size()[-1]
 
         # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(-torch.inf).to(output_seq.device)
@@ -183,7 +180,6 @@ class SequenceDecoder(nn.Module):
             )
 
         else:
-
             # Build some masks
             tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(output_seq.device)
             # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('0')).to(self.device)
