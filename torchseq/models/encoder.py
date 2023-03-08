@@ -136,6 +136,9 @@ class SequenceEncoder(nn.Module):
                 encoder_layer, encoder_config.num_layers, encoder_norm, enable_nested_tensor=True
             )
 
+        if self.encoder_config.get("init_like_bert", False):
+            init_bert_params(self.encoder)
+
         # Position encoding
         self.positional_embeddings = PositionalEncoding(encoder_config.embedding_dim)
 

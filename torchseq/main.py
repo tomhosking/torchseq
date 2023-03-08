@@ -158,6 +158,7 @@ def main():
 
         if args.reload_after_train:
             logger.info("Training done - reloading saved model")
+            torch.cuda.empty_cache()
             save_path = os.path.join(agent.run_output_path, "model", "checkpoint.pt")
             agent.load_checkpoint(save_path, write_pointer=False)
             logger.info("...loaded!")

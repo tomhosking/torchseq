@@ -32,14 +32,24 @@ class ModularBottleneck(nn.Module):
 
         self.module_list = nn.ModuleList(modules)
 
-        if config.bottleneck.get("input_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
-            self.input_projection = nn.Linear(config.bottleneck.input_dim, config.bottleneck.embedding_dim, bias=False)
+        if config.bottleneck.get(
+            "input_dim", config.bottleneck.embedding_dim
+        ) != config.bottleneck.embedding_dim or config.bottleneck.get("input_projection", False):
+            self.input_projection = nn.Linear(
+                config.bottleneck.get("input_dim", config.bottleneck.embedding_dim),
+                config.bottleneck.embedding_dim,
+                bias=False,
+            )
         else:
             self.input_projection = None
 
-        if config.bottleneck.get("output_dim", config.bottleneck.embedding_dim) != config.bottleneck.embedding_dim:
+        if config.bottleneck.get(
+            "output_dim", config.bottleneck.embedding_dim
+        ) != config.bottleneck.embedding_dim or config.bottleneck.get("output_projection", False):
             self.output_projection = nn.Linear(
-                config.bottleneck.embedding_dim, config.bottleneck.output_dim, bias=False
+                config.bottleneck.embedding_dim,
+                config.bottleneck.get("output_dim", config.bottleneck.embedding_dim),
+                bias=False,
             )
         else:
             self.output_projection = None

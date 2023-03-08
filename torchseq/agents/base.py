@@ -15,6 +15,8 @@ class BaseAgent:
     This base class will contain the base functions to be overloaded by any agent you will implement.
     """
 
+    cuda: bool
+
     def __init__(self, config):
         self.config = config
         self.logger = logging.getLogger("Agent")
