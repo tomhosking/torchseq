@@ -348,6 +348,10 @@ class ModelAgent(BaseAgent):
 
         return this_loss
 
+    # This is expected to be overwritten by Lightning (if used)
+    def backward(self, loss):
+        return loss.backward()
+
     def train(self, data_loader) -> None:
         """
         Main training loop
@@ -428,7 +432,8 @@ class ModelAgent(BaseAgent):
 
         for batch_idx, batch in enumerate(pbar):
             # TRAIN STEP BEGINS
-            batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
+            if not self.use_lightning:
+                batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
             curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 
@@ -447,8 +452,8 @@ class ModelAgent(BaseAgent):
                     }
                 )
 
-            loss.backward()
-            # self.backward(loss)
+            # loss.backward()
+            self.backward(loss)
 
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
@@ -592,7 +597,10 @@ class ModelAgent(BaseAgent):
         with torch.inference_mode():
             num_samples = 0
             for batch_idx, batch in enumerate(tqdm(data_loader, desc=desc, disable=self.silent)):
-                batch = {k: (v.to(self.device) if k[-5:] != "_text" and k[0] != "_" else v) for k, v in batch.items()}
+                if not self.use_lightning:
+                    batch = {
+                        k: (v.to(self.device) if k[-5:] != "_text" and k[0] != "_" else v) for k, v in batch.items()
+                    }
 
                 curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
 

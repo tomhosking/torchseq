@@ -16,6 +16,7 @@ class BaseAgent:
     """
 
     cuda: bool
+    use_lightning: bool = False
 
     def __init__(self, config):
         self.config = config
@@ -47,8 +48,9 @@ class BaseAgent:
             self.loss.to(self.device)
 
             # TODO: Enable for pytorch 2.0
-            # torch._dynamo.config.verbose = True
-            # self.model = torch.compile(self.model, backend="inductor")  #
+            # torch._dynamo.config.verbose = False
+            # torch._dynamo.config.log_level = logging.WARN
+            # self.step_train = torch.compile(self.step_train)  #, backend="inductor",fullgraph=True
 
         else:
             self.device = torch.device("cpu")

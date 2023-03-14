@@ -42,7 +42,7 @@ setuptools.setup(
         'sentencepiece==0.1.95',
         'protobuf<4',
         'pydantic==1.9.1',
-        'truecase==0.0.14'
-        # 'pytorch-lightning==1.5.9'
+        'truecase==0.0.14',
+        'lightning==1.9.4'
     ],
 )

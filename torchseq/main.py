@@ -21,7 +21,8 @@ from torchseq.utils.model_loader import AGENT_TYPES
 
 from torchseq.datasets.builder import dataloader_from_config
 
-# from pytorch_lightning.lite import LightningLite
+from lightning.fabric import Fabric
+
 import transformers
 
 
@@ -39,6 +40,10 @@ def main():
     logger = logging.getLogger("CLI")
 
     args = parse_args()
+
+    # TODO: Bundle this inside the agent, alongside the rest of the device mapping code. Will need to handle dataloaders, though.
+    fabric = Fabric(accelerator="cpu" if args.cpu else "cuda", devices=torch.cuda.device_count(), strategy="ddp")
+    fabric.launch()
 
     if args.version:
         print(torchseq.__version__)
@@ -114,16 +119,18 @@ def main():
     wandb_init(config=config, run_id=run_id, path=os.path.join(args.output_path, config.tag, run_id))
 
     # Setup Lightning
-    # for optimizer in agent.optimizers.optimizers:
-    #     agent.model, optimizer = self.setup(agent.model, optimizer)
-    # agent.backward = self.backward
+    agent.use_lightning = True
+    for optimizer in agent.optimizers.optimizers:
+        agent.model, optimizer = fabric.setup(agent.model, optimizer)
 
-    # if data_loader._train.exists:
-    #     data_loader.train_loader = self.setup_dataloaders(data_loader.train_loader)
-    # if data_loader._valid.exists:
-    #     data_loader.valid_loader = self.setup_dataloaders(data_loader.valid_loader)
-    # if data_loader._test.exists:
-    #     data_loader.test_loader = self.setup_dataloaders(data_loader.test_loader)
+    agent.backward = fabric.backward
+
+    if data_loader._train.exists:
+        data_loader.train_loader = fabric.setup_dataloaders(data_loader.train_loader)
+    if data_loader._valid.exists:
+        data_loader.valid_loader = fabric.setup_dataloaders(data_loader.valid_loader)
+    if data_loader._test.exists:
+        data_loader.test_loader = fabric.setup_dataloaders(data_loader.test_loader)
 
     if args.load_chkpt is not None:
         logger.info("Loading from checkpoint:")

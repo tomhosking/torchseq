@@ -41,7 +41,8 @@ class PositionalEncoding(nn.Module):
         pe = pe.unsqueeze(0).transpose(0, 1)
         # if not batch_first:
         #     pe = pe.transpose(0, 1)
-        self.register_buffer("pe", pe)
+        # self.register_buffer("pe", pe)
+        self.pe = nn.Parameter(pe, requires_grad=False)
         self.batch_first = batch_first
 
     def forward(self, x):
