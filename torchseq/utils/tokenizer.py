@@ -135,7 +135,7 @@ class Tokenizer:
             self.bos_id = self.engine.bos_token_id
             self.eos_id = self.engine.eos_token_id
 
-        elif "bart-" in model_slug or "roberta-" in model_slug:
+        elif "bart-" in model_slug or "roberta-" in model_slug or "codeberta" in model_slug:
             self.engine = ByteLevelBPETokenizer.from_file(
                 os.path.join(self.data_path, "pretrained-vocabs/{:}-vocab.json".format(model_slug.split("/")[-1])),
                 os.path.join(self.data_path, "pretrained-vocabs/{:}-merges.txt".format(model_slug.split("/")[-1])),

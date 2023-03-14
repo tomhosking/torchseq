@@ -6,10 +6,10 @@ check: formatcheck syntax types test
 
 # Format source code automatically
 format:
-	black --line-length 119 --target-version py36 tests torchseq
+	black --line-length 119 --target-version py38 tests torchseq
 
 formatcheck:
-	black --check --line-length 119 --target-version py36 tests torchseq
+	black --check --line-length 119 --target-version py38 tests torchseq
 
 # Check syntax
 syntax:
