@@ -196,6 +196,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
         self._kl_weight = kl_weight
         self._kl_warmup_steps = kl_warmup_steps
+        self._kl_loss = torch.nn.KLDivLoss(reduction="none")
 
         if learnable_priors:
             self._learnable_priors = nn.ParameterList(
@@ -392,7 +393,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
             posterior = torch.nn.functional.softmax(logits, dim=-1)
             # if head_ix == 0:
             #     print(posterior.max(dim=1).indices, posterior.min(dim=1).indices, posterior.mean(dim=1))
-            kl_loss = torch.nn.KLDivLoss(reduction="none")
+
             if self._learnable_priors is not None and head_ix == 0:
                 prior = (
                     torch.softmax(self._learnable_priors[head_ix], dim=-1).unsqueeze(0).expand(posterior.shape[0], -1)
@@ -405,7 +406,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
             kl_warmup_weight = (
                 min(float(global_step) / float(self._kl_warmup_steps), 1.0) if self._kl_warmup_steps > 0 else 1.0
             )
-            kl = kl_loss(nn.functional.log_softmax(logits, dim=-1), prior).sum(dim=-1)
+            kl = self._kl_loss(nn.functional.log_softmax(logits, dim=-1), prior).sum(dim=-1)
             Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/kl", kl.mean(), global_step)
             if self._kl_weight > 0:
                 loss += kl * self._kl_weight * kl_warmup_weight

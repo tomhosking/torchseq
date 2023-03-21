@@ -84,7 +84,9 @@ class JsonDataLoader:
                 batch_size=config.training.batch_size,
                 shuffle=self.config.training.data.get("shuffle_data", True),
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(
+                    self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
+                ),
                 worker_init_fn=init_worker,
             )
 
@@ -94,7 +96,9 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(
+                    self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
+                ),
                 worker_init_fn=init_worker,
             )
         if self._test.exists:
@@ -103,6 +107,8 @@ class JsonDataLoader:
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
                 num_workers=2,
-                collate_fn=JsonDataset.pad_and_order_sequences(pad_ids_by_field, self.input_tokenizer.pad_id),
+                collate_fn=JsonDataset.pad_and_order_sequences(
+                    self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
+                ),
                 worker_init_fn=init_worker,
             )

@@ -43,6 +43,6 @@ setuptools.setup(
         'protobuf<4',
         'pydantic==1.9.1',
         'truecase==0.0.14',
-        'lightning==1.9.4'
+        'lightning==2.0.0'
     ],
 )

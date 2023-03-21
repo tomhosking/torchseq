@@ -131,6 +131,7 @@ class JsonDataset(Dataset):
                 transformed[f["to"]],
                 (output_tokenizer if f.get("tokenizer", "input") == "output" else input_tokenizer),
                 tok_window,
+                is_list=f.get("type", "copy") == "group",
             )
 
             if include_lang_codes:
@@ -144,7 +145,10 @@ class JsonDataset(Dataset):
                         batch[f["to"]] = torch.LongTensor(field_values.tolist())
                 else:
                     batch[f["to"]] = torch.LongTensor(field_values)
-                batch[f["to"] + "_len"] = torch.LongTensor([len(batch[f["to"]])])
+                if f.get("type", "copy") == "group":
+                    batch[f["to"] + "_len"] = torch.LongTensor([len(x) for x in batch[f["to"]]])
+                else:
+                    batch[f["to"] + "_len"] = torch.LongTensor([len(batch[f["to"]])])
             else:
                 batch[f["to"]] = field_values
 
@@ -167,14 +171,20 @@ class JsonDataset(Dataset):
     def _transform(value, transform_type="copy"):
         if transform_type == "sample":
             return np.random.choice(value)
-        elif transform_type == "copy":
+        elif transform_type in ["copy", "group"]:
             return value
         else:
             raise Exception(f"Unrecognised transform type in JsonDataset: {transform_type}")
 
     @staticmethod
-    def _tokenize_if_string(value, tokenizer, tok_window):
-        if isinstance(value, str):
+    def _tokenize_if_string(value, tokenizer, tok_window, is_list=False):
+        if is_list:
+            pad_id = tokenizer.pad_id
+            tokenized_list = [JsonDataset._tokenize_if_string(val, tokenizer, tok_window, False) for val in value]
+            max_len = max([len(toks) for toks in tokenized_list])
+            tokenized_and_padded = [toks + [pad_id] * (max_len - len(toks)) for toks in tokenized_list]
+            return tokenized_and_padded
+        elif isinstance(value, str):
             _doc = tokenizer.tokenise(value)
 
             if len(_doc) > tok_window:
@@ -185,30 +195,65 @@ class JsonDataset(Dataset):
             return value
 
     @staticmethod
-    def pad_and_order_sequences(pad_ids_by_field, default_pad_id):
+    def pad_and_order_sequences(field_map, pad_ids_by_field, default_pad_id):
         def _pad_and_order_sequences(batch):
-            keys = batch[0].keys()
+            special_keys = set(["tgt_lang", "src_lang"])
+            field_map_by_tgt_key = {f["to"]: f for f in field_map}
+            keys = list(batch[0].keys() & (field_map_by_tgt_key.keys() | special_keys))
             max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
 
-            for x in batch:
-                for k in keys:
+            for k in keys:
+                for ix, x in enumerate(batch):
                     pad_id = pad_ids_by_field.get(k, default_pad_id)
                     if k[0] == "_":
                         continue
                     if k == "a_pos":
-                        x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=0)
+                        x[k] = F.pad(x[k], pad=(0, max_lens[k] - len(x[k])), value=0)
+                    elif field_map_by_tgt_key.get(k, {}).get("type", "copy") == "group":
+                        max_len = max([len(z) for y in batch for z in y[k]])
+
+                        x[k] = F.pad(x[k], pad=(0, max_len - x[k].shape[1]), value=pad_id)
+                        x[k + "_group"] = torch.full((x[k].shape[0],), ix)
                     elif k[-5:] != "_text":
-                        x[k] = F.pad(x[k], (0, max_lens[k] - len(x[k])), value=pad_id)
+                        x[k] = F.pad(x[k], pad=(0, max_lens[k] - len(x[k])), value=pad_id)
+
+                    # if field_map_by_tgt_key.get(k, {}).get('type', 'copy') == 'group':
+                    # Expand the group and add group_ids
+                    # print(x[k].shape)
+                    # x[k] = x[k].reshape((-1, *x[k].shape[2:]))
+
+                    # print(k)
+                    # print(x[k].shape)
+                    # print(x[k+'_group'].shape)
+                    # print(x[k])
+                    # print(x[k+'_group'])
+                    # exit()
 
             tensor_batch = {}
             for k in keys:
-                if k[-5:] != "_text" and k[0] != "_":
-                    tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
-                    if k[-4:] == "_len":
-                        tensor_batch[k] = tensor_batch[k].squeeze(dim=1)
-                else:
-                    tensor_batch[k] = [x[k] for x in batch]
+                if k[0] != "_":
+                    if field_map_by_tgt_key.get(k, {}).get("type", "copy") == "group":
+                        tensor_batch[k] = torch.cat([x[k] for x in batch], 0)
+                        tensor_batch[k + "_group"] = torch.cat([x[k + "_group"] for x in batch], 0)
+                        tensor_batch[k + "_len"] = torch.stack([y for x in batch for y in x[k + "_len"]], 0).squeeze(
+                            dim=1
+                        )
+                        tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
+                    else:
+                        tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
+                        if k + "_len" in batch[0]:
+                            tensor_batch[k + "_len"] = torch.stack([x[k + "_len"] for x in batch], 0).squeeze(dim=1)
+                        if k + "_text" in batch[0]:
+                            tensor_batch[k + "_text"] = [x[k + "_text"] for x in batch]
 
+                # if field_map_by_tgt_key.get(k, {}).get('type', 'copy') == 'group':
+                # tensor_batch[k] = tensor_batch[k].reshape(-1, tensor_batch[k].shape[2])
+                # tensor_batch[k+'_group'] = batch[k+'_group'].reshape(-1)
+                # print(tensor_batch[k+'_text'])
+                # print(tensor_batch[k+'_group'])
+                # exit()
+            # print({k: len(x) for k, x in tensor_batch.items()})
+            # exit()
             return tensor_batch
 
         return _pad_and_order_sequences
