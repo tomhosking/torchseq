@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-import torch._dynamo
+# import torch._dynamo
 
 from torchseq.utils.functions import to_device_unless_marked
 
