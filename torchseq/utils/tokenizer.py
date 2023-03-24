@@ -109,7 +109,7 @@ class Tokenizer:
 
     model_slug: str
 
-    engine: Union[HFTokenizer, WordLevelTokenizer] = None
+    engine: Union[HFTokenizer, WordLevelTokenizer]
 
     def __init__(self, model_slug, data_path="./data/"):
         self.model_slug = model_slug

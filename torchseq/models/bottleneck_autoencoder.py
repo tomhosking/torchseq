@@ -1,4 +1,4 @@
-from gc import freeze
+from typing import Optional
 import torch
 import torch.nn as nn
 
@@ -6,14 +6,20 @@ from torchseq.models.encoder import SequenceEncoder
 from torchseq.models.decoder import SequenceDecoder
 from torchseq.models.bottleneck import PoolingBottleneck
 from torchseq.models.modular_bottleneck import ModularBottleneck
+from torchseq.models.contrastive_loss import ContrastiveLoss
 from torchseq.utils.logging import Logger
-from torchseq.utils.functions import cos_sim, onehot
-from torchseq.models.lr_schedule import get_hyperbolic_schedule, get_tanh_schedule
-from torchseq.models.vq_code_predictor import VQCodePredictor
+
+# from torchseq.utils.functions import cos_sim, onehot
+# from torchseq.models.lr_schedule import get_hyperbolic_schedule, get_tanh_schedule
+# from torchseq.models.vq_code_predictor import VQCodePredictor
 from torchseq.models.pooling import MultiHeadedPooling
 
 
 class BottleneckAutoencoderModel(nn.Module):
+    contrastive_loss: Optional[ContrastiveLoss]
+    seq_encoder: SequenceEncoder
+    seq_decoder: SequenceDecoder
+
     def __init__(self, config, input_tokenizer, output_tokenizer, src_field="source"):
         super().__init__()
         self.config = config
@@ -31,6 +37,11 @@ class BottleneckAutoencoderModel(nn.Module):
         )
 
         self.seq_decoder = SequenceDecoder(config, self.output_tokenizer)
+
+        if self.config.training.get("contrastive_loss", None) is not None:
+            self.contrastive_loss = ContrastiveLoss(self.config.training.contrastive_loss.get("metric", "euclidean"))
+        else:
+            self.contrastive_loss = None
 
         if self.config.encoder.get("freeze", False):
             for p in self.seq_encoder.parameters():
@@ -107,6 +118,13 @@ class BottleneckAutoencoderModel(nn.Module):
             prebn_encoding_pooled = memory["encoding_pooled"]
 
             memory["encoding"] = encoding_pooled
+
+            if self.contrastive_loss is not None:
+                cont_loss = self.contrastive_loss(encoding_pooled, batch[self.src_field + "_group"])
+
+                if self.training:
+                    Logger().log_scalar("train/contrastive_loss", cont_loss.mean(), batch["_global_step"])
+                memory["loss"] += cont_loss * self.config.training.contrastive_loss.get("weight", 1.0)
 
         # Fwd pass through decoder block
         logits, memory = self.seq_decoder(output, memory)
