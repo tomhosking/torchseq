@@ -235,9 +235,9 @@ class JsonDataset(Dataset):
                     if field_map_by_tgt_key.get(k, {}).get("type", "copy") == "group":
                         tensor_batch[k] = torch.cat([x[k] for x in batch], 0)
                         tensor_batch[k + "_group"] = torch.cat([x[k + "_group"] for x in batch], 0)
-                        tensor_batch[k + "_len"] = torch.stack([y for x in batch for y in x[k + "_len"]], 0).squeeze(
-                            dim=1
-                        )
+                        tensor_batch[k + "_len"] = torch.stack(
+                            [y.unsqueeze(0) for x in batch for y in x[k + "_len"]], 0
+                        ).squeeze(dim=1)
                         tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
                     else:
                         tensor_batch[k] = torch.stack([x[k] for x in batch], 0)

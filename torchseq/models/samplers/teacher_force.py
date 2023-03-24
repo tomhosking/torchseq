@@ -71,6 +71,13 @@ class TeacherForcedSampler(nn.Module):
         memory: Dict[str, torch.Tensor] = {}
         pred_logits, memory = model(batch, output, tgt_field=tgt_field, memory=memory)
 
+        # import torch._dynamo as dynamo
+
+        # explanation, out_guards, graphs, ops_per_graph, break_reasons, explanation_verbose = dynamo.explain(
+        #     model, batch=batch, output=output, tgt_field=tgt_field, memory=memory
+        # )
+        # print(explanation_verbose)
+
         if BART_HACK or MBART_HACK:
             output = output[:, 1:]
 

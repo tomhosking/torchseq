@@ -2,7 +2,7 @@ import logging
 
 import torch
 
-# import torch._dynamo
+import torch._dynamo
 
 from torchseq.utils.functions import to_device_unless_marked
 
@@ -50,7 +50,8 @@ class BaseAgent:
             # TODO: Enable for pytorch 2.0
             # torch._dynamo.config.verbose = False
             # torch._dynamo.config.log_level = logging.WARN
-            # self.step_train = torch.compile(self.step_train)  #, backend="inductor",fullgraph=True
+            # torch._dynamo.reset()
+            # self.model = torch.compile(self.model, dynamic=True)  #, backend="inductor",fullgraph=True, mode='reduce-overhead',
 
         else:
             self.device = torch.device("cpu")

@@ -61,7 +61,7 @@ class Seq2SeqAgent(ModelAgent):
                 self.config.get("bottleneck", {}).get("use_templ_encoding", False)
                 and self.config.get("model", None) != "exemplar_guided"
             ):
-                self.logger.warn(
+                self.logger.warning(
                     'Using ExemplarGuided model based on auto detection from config - please set model="exemplar_guided" explicitly!'
                 )
             self.model = ExemplarGuidedAutoencoderModel(

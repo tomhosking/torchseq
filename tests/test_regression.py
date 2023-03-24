@@ -18,7 +18,7 @@ from torchseq.datasets.builder import dataloader_from_config
 
 
 @test_utils.slow
-def test_bert_embeds():
+def test_qg_bert_embeds():
     CONFIG = "./models/examples/20210222_145021_qg_bert/config.json"
     CHKPT = "./models/examples/20210222_145021_qg_bert/model/checkpoint.pt"
     DATA_PATH = "./data/"
