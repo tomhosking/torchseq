@@ -23,7 +23,7 @@ class ContrastiveLoss(nn.Module):
         loss = torch.zeros(encodings.shape[0])
         if self.metric == "euclidean":
             loss = (encodings - encodings.transpose(0, 1)) ** 2
-            loss = loss.mean(dim=-1) # remove data dim
+            loss = loss.mean(dim=-1)  # remove data dim
         elif self.metric == "cosine":
             raise Exception("Cosine metric not yet implemented")
         else:
@@ -31,6 +31,6 @@ class ContrastiveLoss(nn.Module):
 
         # TODO: check reduction here - should probs evenly weight +ve and -ve, and work out actual counts of each
         loss = -1 * loss * group_mask + loss * (group_mask.logical_not())
-        loss = loss.mean(dim=-1) # remove "other batch" dim
+        loss = loss.mean(dim=-1)  # remove "other batch" dim
 
         return loss
