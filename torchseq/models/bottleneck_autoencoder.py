@@ -119,7 +119,7 @@ class BottleneckAutoencoderModel(nn.Module):
 
             memory["encoding"] = encoding_pooled
 
-            if self.contrastive_loss is not None:
+            if self.contrastive_loss is not None and self.src_field + "_group" in batch:
                 cont_loss = self.contrastive_loss(encoding_pooled, batch[self.src_field + "_group"])
 
                 if self.training:

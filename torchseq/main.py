@@ -21,7 +21,7 @@ from torchseq.utils.model_loader import AGENT_TYPES
 
 from torchseq.datasets.builder import dataloader_from_config
 
-from lightning.fabric import Fabric
+import lightning
 
 import transformers
 
@@ -41,9 +41,9 @@ def main():
 
     args = parse_args()
 
-    # TODO: Bundle this inside the agent, alongside the rest of the device mapping code. Will need to handle dataloaders, though.
-    fabric = Fabric(accelerator="cpu" if args.cpu else "cuda", devices=torch.cuda.device_count(), strategy="ddp")
-    fabric.launch()
+    if args.amp:
+        logger.info("Using matmul precision = high")
+        torch.set_float32_matmul_precision("high")
 
     if args.version:
         print(torchseq.__version__)
@@ -119,18 +119,36 @@ def main():
     wandb_init(config=config, run_id=run_id, path=os.path.join(args.output_path, config.tag, run_id))
 
     # Setup Lightning
-    agent.use_lightning = True
-    for optimizer in agent.optimizers.optimizers:
-        agent.model, optimizer = fabric.setup(agent.model, optimizer)
 
-    agent.backward = fabric.backward
+    if args.lightning:
+        # TODO: Bundle this inside the agent, alongside the rest of the device mapping code. Need to pass the Fabric obj inside somehow...
+        lightning.fabric.utilities.seed.seed_everything(config.get("seed", 123))
 
-    if data_loader._train.exists:
-        data_loader.train_loader = fabric.setup_dataloaders(data_loader.train_loader)
-    if data_loader._valid.exists:
-        data_loader.valid_loader = fabric.setup_dataloaders(data_loader.valid_loader)
-    if data_loader._test.exists:
-        data_loader.test_loader = fabric.setup_dataloaders(data_loader.test_loader)
+        fabric = lightning.fabric.Fabric(
+            accelerator="cpu" if args.cpu else "cuda",
+            devices=torch.cuda.device_count(),
+            strategy="ddp",
+            # precision=("32-true" if args.no_amp else "bf16-mixed"),
+        )
+        fabric.launch()
+
+        if args.train:
+            # for optimizer in agent.optimizers.optimizers:
+            #     agent.model, optimizer = fabric.setup(agent.model, optimizer)
+            agent.model, *agent.optimizers.optimizers = fabric.setup(agent.model, *agent.optimizers.optimizers)
+
+        agent.backward = fabric.backward
+
+        if data_loader._train.exists:
+            data_loader.train_loader = fabric.setup_dataloaders(data_loader.train_loader)
+        if data_loader._valid.exists:
+            data_loader.valid_loader = fabric.setup_dataloaders(data_loader.valid_loader)
+        if data_loader._test.exists:
+            data_loader.test_loader = fabric.setup_dataloaders(data_loader.test_loader)
+        use_lightning = True
+    else:
+        logger.info("Disabling Lightning!")
+        use_lightning = False
 
     if args.load_chkpt is not None:
         logger.info("Loading from checkpoint:")
@@ -160,7 +178,7 @@ def main():
                     agent.run_output_path + "/vqembeds_pre.pt",
                 )
 
-        agent.train(data_loader)
+        agent.train(data_loader, use_lightning=use_lightning)
         logger.info("...training done!")
 
         if args.reload_after_train:
@@ -177,7 +195,14 @@ def main():
         set_status_mckenzie("validating")
 
         logger.info("Starting validation (on training set)...")
-        _ = agent.validate(data_loader, force_save_output=True, use_train=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader,
+            force_save_output=True,
+            use_train=True,
+            save_model=False,
+            slow_metrics=True,
+            use_lightning=use_lightning,
+        )
         logger.info("...validation done!")
 
     if args.validate:
@@ -201,7 +226,9 @@ def main():
         set_status_mckenzie("validating")
 
         logger.info("Starting validation...")
-        _ = agent.validate(data_loader, force_save_output=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader, force_save_output=True, save_model=False, slow_metrics=True, use_lightning=use_lightning
+        )
         logger.info("...validation done!")
 
     if args.test:
@@ -211,8 +238,32 @@ def main():
         set_status_mckenzie("validating")
 
         logger.info("Starting testing...")
-        _ = agent.validate(data_loader, force_save_output=True, use_test=True, save_model=False, slow_metrics=True)
+        _ = agent.validate(
+            data_loader,
+            force_save_output=True,
+            use_test=True,
+            save_model=False,
+            slow_metrics=True,
+            use_lightning=use_lightning,
+        )
         logger.info("...testing done!")
+
+
+# def main():
+#     logging.basicConfig(
+#         level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"
+#     )
+#     logger = logging.getLogger("CLI")
+
+#     args = parse_args()
+#     device = "cpu" if args.cpu else "gpu"
+#     if torch.cuda.device_count() > 1:
+#         logger.warning("Multiple ({:}) GPUs available:  not currently supported!!!".format(torch.cuda.device_count()))
+
+#     # num_devices = torch.cuda.device_count()
+
+#     job = TorchseqJob(accelerator=device, devices=1)  # , strategy="ddp"
+#     job.run(args)
 
 
 if __name__ == "__main__":

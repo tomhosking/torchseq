@@ -139,6 +139,7 @@ class SequenceDecoder(nn.Module):
         self, output_seq: torch.Tensor, memory: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         output_max_len = output_seq.size()[-1]
+        device = output_seq.device
 
         # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(-torch.inf).to(output_seq.device)
         # tgt_mask = torch.triu(tgt_mask, diagonal=1)
@@ -158,9 +159,9 @@ class SequenceDecoder(nn.Module):
 
         if self.pretrained_model_slug is None:
             # Embed the output so far
-            output_embedded = self.embeddings(output_seq.to(self.embeddings.weight.device)).to(
-                output_seq.device
-            ) * math.sqrt(self.config.decoder.embedding_dim)
+            output_embedded = self.embeddings(output_seq.to(self.embeddings.weight.device)).to(device) * math.sqrt(
+                self.config.decoder.embedding_dim
+            )
 
             # if self.config.raw_embedding_dim != self.config.decoder.embedding_dim:
             #     output_embedded = self.embedding_projection(output_embedded)
@@ -182,7 +183,7 @@ class SequenceDecoder(nn.Module):
         else:
             # Build some masks
             tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float("-1e8")).to(output_seq.device)
-            # tgt_mask = torch.FloatTensor(output_max_len, output_max_len).fill_(float('0')).to(self.device)
+
             tgt_mask = torch.triu(tgt_mask, diagonal=1)
 
             # ie how many indices are non-pad

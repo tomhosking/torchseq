@@ -150,6 +150,7 @@ class SequenceEncoder(nn.Module):
         include_position: bool = True,
     ) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         max_input_len = input_seq.shape[1]
+        device = input_seq.device
 
         # Set up some masks
         src_mask = torch.zeros(max_input_len, max_input_len, dtype=torch.bool).to(input_seq.device)
@@ -174,7 +175,7 @@ class SequenceEncoder(nn.Module):
         memory["encoding_mask"] = padding_mask
 
         if self.pretrained_encoder is None:
-            input_toks_embedded = self.embeddings(input_seq).to(input_seq.device)
+            input_toks_embedded = self.embeddings(input_seq.to(self.embeddings.weight.device)).to(device)
 
             if self.encoder_config.embedding_dim != self.global_config.get_first(
                 ["input_raw_embedding_dim", "raw_embedding_dim"]

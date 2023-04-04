@@ -58,8 +58,6 @@ class BaseAgent:
 
             self.logger.info("Model will run on *****CPU*****")
 
-        self.model.device = self.device
-
     def load_checkpoint(self, file_name):
         """
         Latest checkpoint loader

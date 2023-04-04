@@ -6,6 +6,7 @@ from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.hrq_vae import HierarchicalRefinementQuantizer
 from torchseq.models.pythae_vq import PythaeQuantizerWrapper
+from torchseq.models.hyperbolic import HyperbolicBottleneck
 from torchseq.utils.functions import gaussian_kl
 from torchseq.models.vmf import vMF
 from torchseq.utils.functions import reparameterize_gaussian
@@ -198,9 +199,6 @@ class BottleneckPart(nn.Module):
                 kappa=80,
             )
 
-        if config.get("type", None) == "hyperbolic":
-            raise Exception("Hyperbolic bottleneck is not yet implemented for the modular bottleneck!")
-
         # VQ-VAE bottleneck
         if config.get("type", None) == "vqvae":
             # num_quantizer_heads = config.get("quantizer_heads", 1)
@@ -212,6 +210,7 @@ class BottleneckPart(nn.Module):
                 embedding_dim,
                 **quantizer_kwargs,
             )
+
         # HRQ-VAE bottleneck
         if config.get("type", None) == "hrqvae":
             quantizer_kwargs = config.get("quantizer", {})
@@ -221,6 +220,7 @@ class BottleneckPart(nn.Module):
                 embedding_dim,
                 **quantizer_kwargs,
             )
+
         # VQ-VAE bottleneck (pythae implementation)
         if config.get("type", None) == "pythae:vqvae":
             quantizer_kwargs = config.get("quantizer", {})
@@ -230,6 +230,11 @@ class BottleneckPart(nn.Module):
                 embedding_dim,
                 **quantizer_kwargs,
             )
+
+        # Hyperbolic
+        if config.get("type", None) == "hyperbolic":
+            hyperbolic_kwargs = config.get("hyperbolic", {})
+            self.hyperbolic = HyperbolicBottleneck(embedding_dim, **hyperbolic_kwargs)
 
     def forward(self, encoding, memory, global_step, forced_codes=None, head_mask=None, residual_mask=None):
         # if head_mask is not None:
@@ -266,6 +271,13 @@ class BottleneckPart(nn.Module):
                 assert (
                     forced_codes.detach().tolist() == memory["vq_codes"].detach().tolist()
                 ), "Forced codes != vq_codes assigned by quantizer!"
+
+        if self.config.get("type", None) in ["hyperbolic"]:
+            encoding_post, hyper_loss = self.hyperbolic(encoding_post, global_step)
+
+            if "loss" not in memory:
+                memory["loss"] = 0
+            memory["loss"] += hyper_loss
 
         if self.config.get("type", None) == "vmf":
             raise Exception("VMF is not yet implemented for the modular bottleneck!")

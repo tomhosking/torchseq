@@ -52,6 +52,8 @@ def parse_args():
     # Runtime
     parser.add_argument("--cpu", action="store_true", help="Disable CUDA")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
+    parser.add_argument("--lightning", action="store_true", help="Enable Lightning")
+    parser.add_argument("--amp", action="store_true", help="Enable AMP")
 
     args = parser.parse_args()
 

@@ -28,6 +28,7 @@ from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.cache import Cache
 from torchseq.utils.optimizer_group import OptimizerGroup, SchedulerGroup
 from torchseq.utils.wandb import wandb_log
+from torchseq.utils.functions import to_device_unless_marked
 
 from torchseq.models.ranger import Ranger
 from torchseq.utils.loss_dropper import LossDropper
@@ -240,7 +241,6 @@ class ModelAgent(BaseAgent):
         self.logger.info("Loading from checkpoint " + file_name)
         # checkpoint = torch.load(file_name, map_location=(None if torch.cuda.is_available() else "cpu"))
         checkpoint = torch.load(file_name, map_location="cpu")  # load to cpu first - then map to GPU after
-        self.set_device(self.cuda)
 
         missing_keys, unexpected_keys = self.model.load_state_dict(checkpoint["model_state_dict"], strict=False)
         if len(missing_keys) > 0:
@@ -282,6 +282,10 @@ class ModelAgent(BaseAgent):
             if ("reset_metrics" not in self.config.training.data or not self.config.training.reset_metrics)
             else None
         )
+
+        self.model.apply(to_device_unless_marked(self.device))
+
+        self.loss.to(self.device)
 
         if write_pointer and self.run_id is not None:
             pointer_filepath = os.path.join(self.run_output_path, "orig_model.txt")
@@ -346,13 +350,15 @@ class ModelAgent(BaseAgent):
             mask = self.dropper(this_loss)  # The dropper returns a mask of 0s where data should be dropped.
             this_loss *= mask  # Mask out the high losses')
 
+        this_loss = torch.mean(this_loss, dim=0)
+
         return this_loss
 
-    # This is expected to be overwritten by Lightning (if used)
+    # This is expected to be overridden by Lightning (if used)
     def backward(self, loss):
         return loss.backward()
 
-    def train(self, data_loader) -> None:
+    def train(self, data_loader, use_lightning=False) -> None:
         """
         Main training loop
         :return:
@@ -374,7 +380,9 @@ class ModelAgent(BaseAgent):
         # If we're starting above zero, means we've loaded from chkpt -> validate to give a starting point for fine tuning
         if self.global_step > 0:
             self.begin_epoch_hook()
-            test_loss, best_metrics, _, _ = self.validate(data_loader, save_model=True, training_loop=True)
+            test_loss, best_metrics, _, _ = self.validate(
+                data_loader, save_model=True, training_loop=True, use_lightning=use_lightning
+            )
 
             best_loss = test_loss
 
@@ -385,12 +393,14 @@ class ModelAgent(BaseAgent):
         for epoch in range(self.config.training.num_epochs):
             self.begin_epoch_hook()
 
-            self.train_one_epoch(data_loader)
+            self.train_one_epoch(data_loader, use_lightning=use_lightning)
 
             self.current_epoch += 1
 
             if self.current_epoch > self.config.training.warmup_epochs:
-                test_loss, best_metrics, _, _ = self.validate(data_loader, save_model=True, training_loop=True)
+                test_loss, best_metrics, _, _ = self.validate(
+                    data_loader, save_model=True, training_loop=True, use_lightning=use_lightning
+                )
                 self.logger.info("Validation: Average loss: {:.4f}".format(test_loss))
 
                 Logger().log_scalar("dev/loss", test_loss, self.global_step)
@@ -413,7 +423,7 @@ class ModelAgent(BaseAgent):
         self.logger.info("## Training completed {:} epochs".format(self.current_epoch + 1))
         self.logger.info("## Best metrics: {:}".format(self.all_metrics_at_best))
 
-    def train_one_epoch(self, data_loader):
+    def train_one_epoch(self, data_loader, use_lightning=False):
         """
         One epoch of training
         :return:
@@ -432,10 +442,12 @@ class ModelAgent(BaseAgent):
 
         for batch_idx, batch in enumerate(pbar):
             # TRAIN STEP BEGINS
-            if not self.use_lightning:
+            if not use_lightning:
                 batch = {k: (v.to(self.device) if k[-5:] != "_text" else v) for k, v in batch.items()}
 
             curr_batch_size = batch[[k for k in batch.keys() if k[-5:] != "_text"][0]].size()[0]
+
+            # TODO: Check the weighting here - it will be wrong if `bsz % optim_bsz != 0` !!!
 
             loss = (
                 self.step_train(batch, self.tgt_field)
@@ -457,12 +469,14 @@ class ModelAgent(BaseAgent):
 
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
+            # TODO: Should this be moved to just before opt.step()? Otherwise we're clipping partial grads!
             torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.get("clip_gradient", 1e6))
 
             # Gradient accumulation
             for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
-                # Trigger if the threshold is exceeded OR if this is the last (partial) batch
-                if steps >= opt.optim_batch_size or batch_idx == len(pbar) - 1:
+                # TODO: Trigger if the threshold is exceeded OR if this is the last (partial) batch
+                # ^^ This causes a regression problem for Hercules! Leave out for now
+                if steps >= opt.optim_batch_size:  # or batch_idx == len(pbar) - 1
                     opt.step()
                     opt.zero_grad()
                     sched.step()
@@ -572,7 +586,14 @@ class ModelAgent(BaseAgent):
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
     def inference(
-        self, data_loader, memory_keys_to_return=None, metric_hooks=[], use_test=False, training_loop=False, desc=None
+        self,
+        data_loader,
+        memory_keys_to_return=None,
+        metric_hooks=[],
+        use_test=False,
+        training_loop=False,
+        desc=None,
+        use_lightning=False,
     ):
         """
         Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
@@ -597,7 +618,7 @@ class ModelAgent(BaseAgent):
         with torch.inference_mode():
             num_samples = 0
             for batch_idx, batch in enumerate(tqdm(data_loader, desc=desc, disable=self.silent)):
-                if not self.use_lightning:
+                if not use_lightning:
                     batch = {
                         k: (v.to(self.device) if k[-5:] != "_text" and k[0] != "_" else v) for k, v in batch.items()
                     }
@@ -687,6 +708,7 @@ class ModelAgent(BaseAgent):
         memory_keys_to_return=None,
         slow_metrics=False,
         training_loop=False,
+        use_lightning=False,
     ):
         """
         One cycle of model validation. This includes metrics, and is the entry point for eval using the CLI.
@@ -749,6 +771,7 @@ class ModelAgent(BaseAgent):
             use_test,
             training_loop,
             desc="Validating after {:} epochs".format(self.current_epoch),
+            use_lightning=use_lightning,
         )
 
         for h_ix, codes in self.vq_codes.items():
