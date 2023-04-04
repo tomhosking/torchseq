@@ -249,22 +249,5 @@ def main():
         logger.info("...testing done!")
 
 
-# def main():
-#     logging.basicConfig(
-#         level=logging.INFO, format="%(asctime)s\t%(levelname)s\t%(name)s\t%(message)s", datefmt="%H:%M"
-#     )
-#     logger = logging.getLogger("CLI")
-
-#     args = parse_args()
-#     device = "cpu" if args.cpu else "gpu"
-#     if torch.cuda.device_count() > 1:
-#         logger.warning("Multiple ({:}) GPUs available:  not currently supported!!!".format(torch.cuda.device_count()))
-
-#     # num_devices = torch.cuda.device_count()
-
-#     job = TorchseqJob(accelerator=device, devices=1)  # , strategy="ddp"
-#     job.run(args)
-
-
 if __name__ == "__main__":
     main()
