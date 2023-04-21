@@ -14,11 +14,12 @@ class DefaultMetricHook(MetricHook):
         self.scores = {"ppl": []}
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-        self.scores["ppl"].extend(
-            get_perplexity(
-                logits,
-                batch[self.tgt_field],
-                vocab_size=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
-                ignore_index=self.tokenizer.pad_id,
-            ).tolist()
-        )
+        if self.tgt_field is not None:
+            self.scores["ppl"].extend(
+                get_perplexity(
+                    logits,
+                    batch[self.tgt_field],
+                    vocab_size=self.config.prepro.get_first(["output_vocab_size", "vocab_size"]),
+                    ignore_index=self.tokenizer.pad_id,
+                ).tolist()
+            )

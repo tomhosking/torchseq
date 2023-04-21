@@ -7,9 +7,13 @@ import torch.nn.functional as F
 class ContrastiveLoss(nn.Module):
     metric: Literal["euclidean", "cosine"]
     loss_type: Literal["softnn", "basic"]
+    tau: float
 
     def __init__(
-        self, metric: Literal["euclidean", "cosine"] = "euclidean", loss_type: Literal["softnn", "basic"] = "softnn"
+        self,
+        metric: Literal["euclidean", "cosine"] = "euclidean",
+        loss_type: Literal["softnn", "basic"] = "softnn",
+        tau: float = 1.0,
     ):
         super(ContrastiveLoss, self).__init__()
 
@@ -18,6 +22,7 @@ class ContrastiveLoss(nn.Module):
 
         self.metric = metric
         self.loss_type = loss_type
+        self.tau = tau
 
     def forward(self, encodings: torch.Tensor, groups: torch.Tensor) -> torch.Tensor:
         # Get a mask that's true for other members of the same group
@@ -35,11 +40,10 @@ class ContrastiveLoss(nn.Module):
             raise Exception("Unsupported metric in ContrastiveLoss: {:}".format(self.metric))
 
         if self.loss_type == "softnn":
-            tau = 1.0
             # print(distances.shape)
-            pos_loss = torch.logsumexp(-distances * pos_mask / tau, dim=-1, keepdim=True)
-            # neg_loss = torch.logsumexp(-distances * neg_mask / tau, dim=-1, keepdim=True)
-            # denom = torch.logsumexp(-distances * eye_mask / tau, dim=-1, keepdim=True)
+            pos_loss = torch.logsumexp(-distances * pos_mask / self.tau, dim=-1, keepdim=True)
+            # neg_loss = torch.logsumexp(-distances * neg_mask / self.tau, dim=-1, keepdim=True)
+            # denom = torch.logsumexp(-distances * eye_mask / self.tau, dim=-1, keepdim=True)
 
             # print(pos_loss.shape)
             # print(neg_loss.shape)
@@ -47,10 +51,21 @@ class ContrastiveLoss(nn.Module):
             # loss = -(torch.logsumexp(torch.stack([pos_loss, neg_loss], dim=-1),dim=-1) - denom).sum(-1)
             # loss = -(pos_loss - denom).sum(-1)
 
-            logits = -distances / tau - torch.eye(distances.shape[0], device=distances.device) * 1e18
-            log_probs = F.log_softmax(logits, dim=-1) * pos_mask
+            logits = -distances / self.tau
+            # log_probs = F.log_softmax(logits, dim=-1) * pos_mask / pos_mask.sum(dim=-1, keepdim=True)
 
-            loss = (-1.0 * log_probs).sum(dim=-1)
+            numerator = torch.logsumexp(logits - pos_mask.logical_not() * 1e18, dim=-1, keepdim=True)
+            denom = torch.logsumexp(logits - eye_mask.logical_not() * 1e18, dim=-1, keepdim=True)
+
+            # print(logits[::4, ::4])
+            # print(F.softmax(logits - eye_mask.logical_not() * 1e18, dim=-1)[::4, ::4])
+            # print(pos_mask[::4, ::4])
+            # print(eye_mask[::4, ::4])
+            # print(encodings.shape)
+            # print(logits.shape)
+            # raise Exception()
+
+            loss = (-1.0 * (numerator - denom)).triu(diagonal=1).sum(dim=-1)
             # print(logits.shape)
             # print(log_probs.shape)
             # print(loss.shape)

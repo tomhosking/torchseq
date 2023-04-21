@@ -79,12 +79,14 @@ class JsonDataLoader:
                 )
             )
 
+        NUM_WORKERS = 4
+
         if self._train.exists:
             self.train_loader = DataLoader(
                 self._train,
                 batch_size=config.training.batch_size,
                 shuffle=self.config.training.data.get("shuffle_data", True),
-                num_workers=2,
+                num_workers=NUM_WORKERS,
                 collate_fn=JsonDataset.pad_and_order_sequences(
                     self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
                 ),
@@ -96,7 +98,7 @@ class JsonDataLoader:
                 self._valid,
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
-                num_workers=2,
+                num_workers=NUM_WORKERS,
                 collate_fn=JsonDataset.pad_and_order_sequences(
                     self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
                 ),
@@ -107,7 +109,7 @@ class JsonDataLoader:
                 self._test,
                 batch_size=config.eval.eval_batch_size,
                 shuffle=False,
-                num_workers=2,
+                num_workers=NUM_WORKERS,
                 collate_fn=JsonDataset.pad_and_order_sequences(
                     self.config.json_dataset.data["field_map"], pad_ids_by_field, self.input_tokenizer.pad_id
                 ),

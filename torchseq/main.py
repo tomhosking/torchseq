@@ -4,6 +4,7 @@ import json
 import os
 import logging
 from datetime import datetime
+import uuid
 
 import torch
 import torchseq
@@ -89,6 +90,8 @@ def main():
 
     run_id = (
         datetime.now().strftime("%Y%m%d_%H%M%S")
+        + "_"
+        + str(uuid.uuid4())[:4]
         + "_"
         + config.name
         + ("_TEST" if args.test else "")

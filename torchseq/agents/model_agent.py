@@ -41,6 +41,7 @@ from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 from torchseq.metric_hooks.hrq_agg import HRQAggregationMetricHook
 from torchseq.metric_hooks.rouge import RougeMetricHook
 from torchseq.metric_hooks.semparse import SemanticParsingMetricHook
+from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -363,8 +364,8 @@ class ModelAgent(BaseAgent):
         Main training loop
         :return:
         """
-        if self.tgt_field is None:
-            raise Exception("You need to specify the target output field! ie which element of a batch is the output")
+        # if self.tgt_field is None:
+        #     raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
         if data_loader is None:
             raise Exception(
@@ -449,17 +450,17 @@ class ModelAgent(BaseAgent):
 
             # TODO: Check the weighting here - it will be wrong if `bsz % optim_bsz != 0` !!!
 
-            loss = (
-                self.step_train(batch, self.tgt_field)
-                * float(curr_batch_size)
-                / float(self.config.training.optim_batch_size)
+            grad_accum_factor = (
+                float(curr_batch_size) / float(self.config.training.optim_batch_size)
+                if self.config.training.optim_batch_size > self.config.training.batch_size
+                else 1.0
             )
+
+            loss = self.step_train(batch, self.tgt_field) * grad_accum_factor
             if not self.silent:
                 pbar.set_postfix(
                     {
-                        "loss": loss.detach().item()
-                        * float(self.config.training.optim_batch_size)
-                        / float(curr_batch_size),
+                        "loss": loss.detach().item() / grad_accum_factor,
                         "lr": self.optimizers[-1].param_groups[-1]["lr"],
                     }
                 )
@@ -469,18 +470,23 @@ class ModelAgent(BaseAgent):
 
             steps_accum = [steps + curr_batch_size for steps in steps_accum]
 
-            # TODO: Should this be moved to just before opt.step()? Otherwise we're clipping partial grads!
-            torch.nn.utils.clip_grad_norm_(self.model.parameters(), self.config.training.get("clip_gradient", 1e6))
-
             # Gradient accumulation
             for ix, (opt, sched, steps) in enumerate(zip(self.optimizers, self.schedulers, steps_accum)):
                 # TODO: Trigger if the threshold is exceeded OR if this is the last (partial) batch
                 # ^^ This causes a regression problem for Hercules! Leave out for now
-                if steps >= opt.optim_batch_size:  # or batch_idx == len(pbar) - 1
+                if (
+                    steps >= opt.optim_batch_size or opt.optim_batch_size <= self.config.training.batch_size
+                ):  # or batch_idx == len(pbar) - 1
+                    # Norm the total accumulated grad
+                    torch.nn.utils.clip_grad_norm_(
+                        self.model.parameters(), self.config.training.get("clip_gradient", 1e6)
+                    )
+
                     opt.step()
                     opt.zero_grad()
                     sched.step()
                     steps_accum[ix] = 0
+
                     # If this is the default opt, update the global step param
                     if ix == len(self.optimizers) - 1:
                         self.global_step += 1
@@ -564,8 +570,13 @@ class ModelAgent(BaseAgent):
                 beam_output, beam_lens, batch, tgt_field, scores=beam_scores, sort=True, top1=False
             )
 
+        _, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
+
+        if "vq_codes" in memory:
+            for h_ix in range(memory["vq_codes"].shape[1]):
+                self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix].tolist())
+
         if calculate_loss:
-            _, logits, _, memory = self.decode_teacher_force(self.model, batch, tgt_field)
             this_loss = self.loss(logits.permute(0, 2, 1), batch[tgt_field])
 
             normed_loss = torch.sum(this_loss[:, 1:], dim=1) / (batch[tgt_field + "_len"] - 1).to(this_loss)
@@ -575,14 +586,9 @@ class ModelAgent(BaseAgent):
 
             normed_loss = torch.mean(normed_loss, dim=0)
 
-            if "vq_codes" in memory:
-                for h_ix in range(memory["vq_codes"].shape[1]):
-                    self.vq_codes[h_ix].extend(memory["vq_codes"][:, h_ix].tolist())
-
         else:
             logits = None
             normed_loss = None
-            memory = None
         return normed_loss, dev_output, dev_output_lens, dev_scores, logits, memory
 
     def inference(
@@ -594,11 +600,12 @@ class ModelAgent(BaseAgent):
         training_loop=False,
         desc=None,
         use_lightning=False,
+        calculate_loss=True,
     ):
         """
         Inner inference loop - generate outputs, but don't run metrics. This is the recommended method for running inference from a script.
         """
-        test_loss = 0
+        test_loss = 0 if calculate_loss else None
 
         pred_output = []
         gold_output = []
@@ -630,9 +637,11 @@ class ModelAgent(BaseAgent):
                     self.tgt_field,
                     sample_outputs=self.config.eval.data.get("sample_outputs", True) and not training_loop,
                     reduce_outputs=(self.config.eval.data.get("topk", 1) == 1),
+                    calculate_loss=calculate_loss,
                 )
 
-                test_loss += this_loss * curr_batch_size
+                if calculate_loss:
+                    test_loss += this_loss * curr_batch_size
 
                 if memory_keys_to_return is not None:
                     for mem_key in memory_keys_to_return:
@@ -645,6 +654,7 @@ class ModelAgent(BaseAgent):
                     self.config.eval.data.get("sample_outputs", True)
                     and not training_loop
                     and (self.config.eval.data.get("topk", 1) == 1)
+                    and self.tgt_field is not None
                 ):
                     for ix, pred in enumerate(dev_output.data):
                         pred_output.append(self.output_tokenizer.decode(pred[: dev_output_lens[ix]]))
@@ -665,6 +675,7 @@ class ModelAgent(BaseAgent):
                     self.config.eval.data.get("sample_outputs", True)
                     and not training_loop
                     and not (self.config.eval.data.get("topk", 1) == 1)
+                    and self.tgt_field is not None
                 ):
                     topk = self.config.eval.data.get("topk", 1)
                     for ix, pred in enumerate(dev_output.data):
@@ -685,7 +696,8 @@ class ModelAgent(BaseAgent):
                     # This is a horrible way of getting the current batch worth of decoded output - tidy it up at some point!
                     hook.on_batch(batch, logits, pred_output[-curr_batch_size:], memory, use_test)
 
-        test_loss = test_loss / num_samples
+        if calculate_loss:
+            test_loss = test_loss / num_samples
 
         all_metrics = {}
         for hook in metric_hooks:
@@ -715,8 +727,8 @@ class ModelAgent(BaseAgent):
         :return:
         """
 
-        if self.tgt_field is None:
-            raise Exception("You need to specify the target output field! ie which element of a batch is the output")
+        # if self.tgt_field is None:
+        #     raise Exception("You need to specify the target output field! ie which element of a batch is the output")
 
         self.logger.info("## Validating after {:} epochs".format(self.current_epoch))
         self.model.eval()
@@ -726,10 +738,10 @@ class ModelAgent(BaseAgent):
         # Register the metric hooks to be used
         metric_hooks = [DefaultMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
-        if self.config.eval.data.get("sample_outputs", True) and not training_loop:
+        if self.config.eval.data.get("sample_outputs", True) and not training_loop and self.tgt_field is not None:
             metric_hooks += [TextualMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
-        if slow_metrics:
+        if slow_metrics and self.tgt_field is not None:
             metric_hooks += [QGMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if slow_metrics and "sep_ae" in self.config.eval.get("metrics", {}).keys():
@@ -743,6 +755,10 @@ class ModelAgent(BaseAgent):
         if slow_metrics and "hrq_agg" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [
                 HRQAggregationMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
+            ]
+        if slow_metrics and "self_retrieval" in self.config.eval.get("metrics", {}).keys():
+            metric_hooks += [
+                SelfRetrievalMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
             ]
 
         if (

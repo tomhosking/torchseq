@@ -1,4 +1,4 @@
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from torchseq.utils.singleton import Singleton
 
@@ -18,8 +18,8 @@ class Logger(metaclass=Singleton):
         self.silent = silent
         self.interval = interval
 
-        if log_path is not None:
-            self.writer = SummaryWriter(log_path)
+        # if log_path is not None:
+        #     self.writer = SummaryWriter(log_path)
 
     def log_scalar(self, key, value, iteration):
         # if iteration < self.step:

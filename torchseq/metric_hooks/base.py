@@ -36,4 +36,4 @@ class MetricHook:
         raise NotImplementedError("You need to implement on_batch for your MetricHook!")
 
     def on_end_epoch(self, agent: BaseAgent, use_test: bool = False) -> Dict[str, float]:
-        return {k: sum(v) / len(v) for k, v in self.scores.items()}
+        return {k: sum(v) / len(v) for k, v in self.scores.items() if len(v) > 0}

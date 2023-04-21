@@ -202,6 +202,8 @@ class JsonDataset(Dataset):
             keys = list(batch[0].keys() & (field_map_by_tgt_key.keys() | special_keys))
             max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
 
+            # print(batch)
+
             for k in keys:
                 for ix, x in enumerate(batch):
                     pad_id = pad_ids_by_field.get(k, default_pad_id)
@@ -239,6 +241,13 @@ class JsonDataset(Dataset):
                             [y.unsqueeze(0) for x in batch for y in x[k + "_len"]], 0
                         ).squeeze(dim=1)
                         tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
+
+                        # print(tensor_batch[k + "_text"])
+                        # print([x[k + "_text"] for x in batch])
+                        # print(tensor_batch[k + "_group"])
+                        # print(k)
+                        # print(k, len(tensor_batch[k + "_group"]))
+                        # exit()
                     else:
                         tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
                         if k + "_len" in batch[0]:

@@ -39,7 +39,11 @@ class BottleneckAutoencoderModel(nn.Module):
         self.seq_decoder = SequenceDecoder(config, self.output_tokenizer)
 
         if self.config.training.get("contrastive_loss", None) is not None:
-            self.contrastive_loss = ContrastiveLoss(self.config.training.contrastive_loss.get("metric", "euclidean"))
+            self.contrastive_loss = ContrastiveLoss(
+                metric=self.config.training.contrastive_loss.get("metric", "euclidean"),
+                loss_type=self.config.training.contrastive_loss.get("loss_type", "softnn"),
+                tau=self.config.training.contrastive_loss.get("tau", 1.0),
+            )
         else:
             self.contrastive_loss = None
 
@@ -119,7 +123,13 @@ class BottleneckAutoencoderModel(nn.Module):
 
             memory["encoding"] = encoding_pooled
 
+            # TODO: Does this belong in the Agent? (yes)
             if self.contrastive_loss is not None and self.src_field + "_group" in batch:
+                # print(batch['source_text'])
+                # print(len(batch['source_text']))
+                # print(len(batch['source']))
+                # print(len(batch['target_text']))
+                # print(len(batch['target']))
                 cont_loss = self.contrastive_loss(encoding_pooled, batch[self.src_field + "_group"])
 
                 if self.training:

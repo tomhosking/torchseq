@@ -11,6 +11,11 @@ The Google implementation should be identical to Rouge-155 (except tokenization?
 the jackknifing follows the description of the ROUGE paper.
 """
 
+from absl import logging
+
+# Rouge lets us know that it's using the default tokenizer, turn that off:
+logging.set_verbosity(logging.WARNING)
+
 
 def get_pairwise_rouge(pred, ref):
     rouge_types = ["rouge1", "rouge2", "rougeL", "rougeLsum"]

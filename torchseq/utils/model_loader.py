@@ -1,6 +1,7 @@
 import json
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.seq2seq_agent import Seq2SeqAgent
+from torchseq.agents.retrieval_agent import RetrievalAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.utils.config import Config, merge_cfg_dicts
 import torch
@@ -13,6 +14,7 @@ AGENT_TYPES = {
     "seq2seq": Seq2SeqAgent,
     "autoencoder": Seq2SeqAgent,
     "exemplarguided": Seq2SeqAgent,
+    "retrieval": RetrievalAgent,
 }
 
 

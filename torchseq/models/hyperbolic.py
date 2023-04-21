@@ -60,7 +60,8 @@ class HyperbolicBottleneck(nn.Module):
 
         mu = self.latent_manifold.expmap0(mu_preproj)
 
-        scale = log_var.exp() if self.training else torch.zeros_like(log_var)
+        # If we're in eval mode, make this deterministic
+        scale = log_var.exp() if self.training else torch.full_like(log_var, 1e-15)
 
         qz_x = self.posterior(loc=mu, scale=scale, manifold=self.latent_manifold)
         z = qz_x.rsample(torch.Size([]))

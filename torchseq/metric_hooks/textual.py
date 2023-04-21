@@ -23,7 +23,7 @@ class TextualMetricHook(MetricHook):
         self.inputs = []
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-        if len(output) > 0:
+        if len(output) > 0 and self.tgt_field is not None:
             if self.config.eval.data.get("topk", 1) > 1:
                 self.pred_targets.extend([x[0] for x in output])
             else:
