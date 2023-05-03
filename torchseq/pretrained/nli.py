@@ -28,7 +28,7 @@ class PretrainedNliModel:
     ):
         dataset = [{"text": p, "text_pair": h} for p, h in zip(premises, hypotheses)]
 
-        outputs = self.pipe(dataset, batch_size=bsz, top_k=3)
+        outputs = self.pipe(dataset, batch_size=bsz, top_k=None, num_workers=2)
         outputs = [{x["label"]: x["score"] for x in res} for res in outputs]
 
         if return_entailment_prob:

@@ -254,7 +254,7 @@ class BottleneckPart(nn.Module):
         # Quantize
         if self.config.get("type", None) in ["vqvae", "hrqvae", "pythae:vqvae"]:
             if self.config.get("type", None) == "hrqvae":
-                vq_loss, encoding_post, quantizer_indices = self.quantizer(
+                vq_loss, encoding_post, quantizer_indices, subpath_embeddings = self.quantizer(
                     encoding_post, global_step, forced_codes, head_mask, residual_mask
                 )
             else:
@@ -272,14 +272,14 @@ class BottleneckPart(nn.Module):
                     forced_codes.detach().tolist() == memory["vq_codes"].detach().tolist()
                 ), "Forced codes != vq_codes assigned by quantizer!"
 
-        if self.config.get("type", None) in ["hyperbolic"]:
+        elif self.config.get("type", None) in ["hyperbolic"]:
             encoding_post, hyper_loss = self.hyperbolic(encoding_post, global_step)
 
             if "loss" not in memory:
                 memory["loss"] = 0
             memory["loss"] += hyper_loss
 
-        if self.config.get("type", None) == "vmf":
+        elif self.config.get("type", None) == "vmf":
             raise Exception("VMF is not yet implemented for the modular bottleneck!")
 
         var_weight = self.config.get("prior_var_weight", 1.0) * (

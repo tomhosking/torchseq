@@ -497,7 +497,7 @@ class ModelAgent(BaseAgent):
                 # Loss is weighted for grad accumulation - unweight it for reporting
                 Logger().log_scalar(
                     "train/loss",
-                    loss * float(self.config.training.optim_batch_size) / float(curr_batch_size),
+                    loss / grad_accum_factor,
                     self.global_step,
                 )
                 Logger().log_scalar("train/lr", self.optimizers[-1].param_groups[-1]["lr"], self.global_step)

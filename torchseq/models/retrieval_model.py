@@ -21,12 +21,10 @@ class RetrievalModel(nn.Module):
     index_encoder: SequenceEncoder
     bottleneck: Union[ModularBottleneck, PoolingBottleneck]
 
-    def __init__(self, config: Config, input_tokenizer: Tokenizer, src_field: str = "source"):
+    def __init__(self, config: Config, input_tokenizer: Tokenizer):
         super().__init__()
         self.config = config
         self.input_tokenizer = input_tokenizer
-
-        self.src_field = src_field
 
         # For now, we implement a single encoder (for self retrieval)
         self.index_encoder = SequenceEncoder(
@@ -70,7 +68,7 @@ class RetrievalModel(nn.Module):
             reduced = inputs.max(dim=1).values.unsqueeze(1)
         return reduced
 
-    def forward(self, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
+    def forward(self, batch: Dict[str, torch.Tensor], src_field: str) -> Tuple[torch.Tensor, Dict[str, torch.Tensor]]:
         # if memory is None:
         memory: Dict[str, torch.Tensor] = {}
 
@@ -81,8 +79,8 @@ class RetrievalModel(nn.Module):
         # print(batch['forced_encoding'].shape)
 
         encoding, memory = self.index_encoder(
-            batch[self.src_field],
-            batch[self.src_field + "_len"],
+            batch[src_field],
+            batch[src_field + "_len"],
             memory,
             include_position=self.config.encoder.get("position_embeddings", True),
         )

@@ -140,6 +140,15 @@ class SelfRetrievalMetricHook(MetricHook):
             )
             logger.info("...done")
 
+        if self.config.eval.metrics.self_retrieval.get("run_specialisation", False):
+            logger.info("Running specialisation eval")
+            self.scores["self_retrieval_specialisation"] = SelfRetrievalMetricHook.eval_specialisation(
+                self.config,
+                agent,
+                test=use_test,
+            )
+            logger.info("...done")
+
         return self.scores
 
     @abstractmethod
@@ -425,7 +434,7 @@ class SelfRetrievalMetricHook(MetricHook):
         PLOT_LIMIT = 250
 
         sent_codes = [tuple(x) for x in outputs_with_codes["codes"]][:LIMIT]
-        outputs = outputs_with_codes["outputs"][:LIMIT]
+        # outputs = outputs_with_codes["outputs"][:LIMIT]
 
         num_heads = config.bottleneck.modules[0].quantizer.num_heads
         embedding_dim = config.bottleneck.embedding_dim
@@ -493,7 +502,7 @@ class SelfRetrievalMetricHook(MetricHook):
         paths_by_entity = defaultdict(lambda: defaultdict(int))
         paths_by_entity_probs = defaultdict(lambda: defaultdict(float))
 
-        for entity_id, review_id, path, pred_sent in zip(entity_ids, review_ids, sent_codes, outputs):
+        for entity_id, review_id, path in zip(entity_ids, review_ids, sent_codes):
             for h in range(4):
                 paths_by_entity[entity_id][path[: h + 1]] += 1
 
@@ -679,25 +688,6 @@ class SelfRetrievalMetricHook(MetricHook):
             plt.show()
 
         return {"probability_tree": paths_by_entity_probs}
-
-    @abstractmethod
-    def get_feature_entropies(codes, features, num_heads):
-        entropies_by_depth = {}
-        for d in range(num_heads):
-            features_by_code = defaultdict(Counter)
-            for feature, code in zip(features, codes):
-                features_by_code[code[: (d + 1)]][feature] += 1
-
-            entropies = []
-            for code in features_by_code.keys():
-                denom = sum([x for x in features_by_code[code].values()])
-                distribution = [1.0 * x / denom for x in features_by_code[code].values()]
-
-                this_entropy = np.sum(-1.0 * np.log(distribution) * distribution)
-                entropies.append(this_entropy)
-            entropies_by_depth[d] = np.mean(entropies)
-
-        return entropies_by_depth
 
     @abstractmethod
     def select_entity_summary_paths(
@@ -1381,10 +1371,10 @@ class SelfRetrievalMetricHook(MetricHook):
 
             scores["nli"] = {}
 
-        for depth in range(num_heads):
+        for depth in range(min(num_heads, 8)):
             sents_by_cluster = defaultdict(set)
             for codes, sents in sents_by_code.items():
-                sents_by_cluster[eval(codes)[: depth + 1]].update(sents)
+                sents_by_cluster[eval(codes)[: depth + 1]].update([sent.lower() for sent in sents])
 
             inters_bleu = []
             intras_bleu = []
@@ -1395,10 +1385,14 @@ class SelfRetrievalMetricHook(MetricHook):
             INTER_SAMPLES = 100
             INTRA_SAMPLES = 100
 
-            for codes, sents in tqdm(list(sents_by_cluster.items())[:MAX_CLUSTERS], disable=agent.silent):
+            n = 0
+            for codes, sents in tqdm(list(sents_by_cluster.items()), disable=agent.silent):
                 sents = list(sents)
-                if len(sents) == 1:
+                if len(sents) < 5:
                     continue
+                if n > MAX_CLUSTERS:
+                    break
+                n += 1
                 inter_sents = [
                     sent
                     for other_codes, other_sents in sents_by_cluster.items()
@@ -1456,13 +1450,158 @@ class SelfRetrievalMetricHook(MetricHook):
                     np.mean(intras_bleu) - np.mean(inters_bleu),
                 )
             if score_nli:
-                scores["nli"][depth] = (np.mean(intras_nli), np.mean(inters_nli)), np.mean(intras_nli) - np.mean(
-                    inters_nli
+                scores["nli"][depth] = (
+                    np.mean(intras_nli),
+                    np.mean(inters_nli),
+                    np.mean(intras_nli) - np.mean(inters_nli),
                 )
 
         if score_bleu:
             scores["bleu"]["mean"] = np.mean([score[2] for score in scores["bleu"].values()])
         if score_nli:
             scores["nli"]["mean"] = np.mean([score[2] for score in scores["nli"].values()])
+
+        return scores
+
+    @abstractmethod
+    def get_feature_entropies(codes, features, num_heads):
+        entropies_by_depth = {}
+        for d in range(num_heads):
+            features_by_code = defaultdict(Counter)
+            for feature, code in zip(features, codes):
+                features_by_code[code[: (d + 1)]][feature] += 1
+
+            entropies = []
+            for code in features_by_code.keys():
+                denom = sum([x for x in features_by_code[code].values()])
+                distribution = [1.0 * x / denom for x in features_by_code[code].values()]
+
+                this_entropy = np.sum(-1.0 * np.log(distribution) * distribution)
+                entropies.append(this_entropy)
+            entropies_by_depth[d] = np.mean(entropies)
+
+        return entropies_by_depth
+
+    @abstractmethod
+    def eval_specialisation(config, agent, test=False):
+        _, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, test)
+        split = "test" if test else "dev"
+
+        codes = [tuple(x) for x in outputs_with_codes["codes"]]
+
+        num_heads = config.bottleneck.modules[0].quantizer.num_heads
+        codebook_size = config.bottleneck.modules[0].quantizer.codebook_size
+
+        with jsonlines.open(
+            agent.data_path + "/" + config.eval.metrics.self_retrieval.dataset_all + f"/reviews.{split}.jsonl"
+        ) as f:
+            rows = [x for x in f]
+
+        entity_ids = [x["entity_id"] for x in rows]
+        review_ids = [x["review_id"] for x in rows]
+        inputs = [x["sentence"] for x in rows]
+        ratings = [x["rating"] for x in rows]
+
+        # Get (weak) aspect labels
+        space_aspect_list = ["building", "cleanliness", "food", "location", "rooms", "service"]
+        aspect_keywords = defaultdict(list)
+        for aspect in space_aspect_list:
+            with open(agent.data_path + f"/opagg/aspect-seeds/{aspect}.txt") as f:
+                keywords = [line.strip().split()[1] for line in f.readlines()]
+            aspect_keywords[aspect] = keywords
+        keywords_to_aspect = {kw: aspect for aspect, kws in aspect_keywords.items() for kw in kws}
+        aspect_labels = []
+        for sentence in inputs:
+            labels = set()
+            for kw, aspect in keywords_to_aspect.items():
+                if kw in sentence.split():
+                    labels.add(aspect)
+            if len(labels) == 0:
+                labels.add("UNK")
+            aspect_labels.append(labels)
+
+        sentence_positions = [i - review_ids.index(review_id) for i, review_id in enumerate(review_ids)]
+        review_lengths = [review_ids.count(review_id) for i, review_id in enumerate(review_ids)]
+        sentence_pos_relative = [1.0 * pos / length for pos, length in zip(sentence_positions, review_lengths)]
+        sentence_pos_buckets = [0 if pos < 0.25 else (2 if pos >= 0.75 else 1) for pos in sentence_pos_relative]
+
+        # Measures of path concentration
+
+        # entropy (path | entity_id)
+
+        # construct probabilistic paths
+        paths_by_entity = defaultdict(lambda: defaultdict(int))
+        paths_by_review = defaultdict(lambda: defaultdict(int))
+        paths_by_entity_probs = defaultdict(lambda: defaultdict(float))
+        paths_by_review_probs = defaultdict(lambda: defaultdict(float))
+
+        for entity_id, review_id, path in zip(entity_ids, review_ids, codes):
+            for h in range(num_heads):
+                paths_by_entity[entity_id][path[: h + 1]] += 1
+                paths_by_review[review_id][path[: h + 1]] += 1
+
+        # normalise
+        entropies_entity_by_head = {}
+        entropies_review_by_head = {}
+
+        for h in range(num_heads):
+            entropies_entity_by_head[h] = []
+            entropies_review_by_head[h] = []
+
+            for entity_id in paths_by_entity.keys():
+                total = sum([v for k, v in paths_by_entity[entity_id].items() if len(k) == (h + 1)])
+                for k, v in paths_by_entity[entity_id].items():
+                    if len(k) == (h + 1):
+                        paths_by_entity_probs[entity_id][k] = 1.0 * v / total
+                this_probs = [prob for k, prob in paths_by_entity_probs[entity_id].items() if len(k) == (h + 1)]
+                this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
+                entropies_entity_by_head[h].append(this_entropy)
+
+            entropies_entity_by_head[h] = np.mean(entropies_entity_by_head[h])
+
+            for review_id in paths_by_review.keys():
+                total = sum([v for k, v in paths_by_review[review_id].items() if len(k) == (h + 1)])
+                for k, v in paths_by_review[review_id].items():
+                    if len(k) == (h + 1):
+                        paths_by_review_probs[review_id][k] = 1.0 * v / total
+                this_probs = [prob for k, prob in paths_by_review_probs[review_id].items() if len(k) == (h + 1)]
+                this_entropy = np.sum(-1.0 * np.log(this_probs) * this_probs)
+                entropies_review_by_head[h].append(this_entropy)
+
+            entropies_review_by_head[h] = np.mean(entropies_review_by_head[h])
+
+        uniform_by_depth = {}
+        for d in range(num_heads):
+            codebook_size = codebook_size if isinstance(codebook_size, int) else codebook_size[d]
+            uniform_prob = 1.0 / (codebook_size ** (d + 1))
+            uniform_entropy = -1.0 * (codebook_size ** (d + 1)) * (np.log(uniform_prob) * uniform_prob)
+            uniform_by_depth[d] = uniform_entropy
+
+        # Measures of predictability
+
+        # entropy (aspect | cluster)
+        # entropy (rating | cluster)
+        # entropy (sent position in review | cluster)
+
+        scores = {
+            "entropy_uniform_codes": uniform_by_depth,
+            "entropy_codes_from_entities": entropies_entity_by_head,
+            "entropy_codes_from_reviews": entropies_review_by_head,
+            "entropy_aspects_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+                codes,
+                [list(x)[0] for x in aspect_labels],
+                num_heads,
+            ),
+            "entropy_ratings_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+                codes,
+                ratings,
+                num_heads,
+            ),
+            "entropy_positions_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+                codes,
+                sentence_pos_buckets,
+                num_heads,
+            ),
+        }
 
         return scores

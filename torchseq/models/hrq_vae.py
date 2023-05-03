@@ -580,6 +580,9 @@ class HierarchicalRefinementQuantizer(nn.Module):
             norms = torch.linalg.vector_norm(quantized, dim=-1).mean(-1)
             loss += (norms - pairwise_diffs.mean().unsqueeze(0)) * self._diversity_penalty_weight
 
+        # Stash the embeddings of all subpaths for use in training losses
+        subpath_embeddings = torch.cumsum(quantized, dim=1)
+
         if self._output_cumsum:
             quantized = torch.cumsum(quantized, dim=1)
         elif not self._output_seq:
@@ -636,4 +639,4 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 inputs = torch.round(inputs, decimals=self._debug.get("round_digits", None))
             return 0.0, inputs, vq_codes
 
-        return loss, quantized, vq_codes
+        return loss, quantized, vq_codes, subpath_embeddings

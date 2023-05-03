@@ -13,6 +13,8 @@ from torchseq.utils.tokenizer import FAIRSEQ_LANGUAGE_CODES
 
 
 class JsonDataset(Dataset):
+    split: str
+
     def __init__(
         self,
         config,
@@ -34,8 +36,8 @@ class JsonDataset(Dataset):
 
         self.path = path
 
-        split = "dev" if dev else ("test" if test else "train")
-        self.variant = self.config.json_dataset.get("filename", "{split}").format(split=split)
+        self.split = "dev" if dev else ("test" if test else "train")
+        self.variant = self.config.json_dataset.get("filename", "{split}").format(split=self.split)
 
         self.exists = True
 
@@ -83,6 +85,7 @@ class JsonDataset(Dataset):
             include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
             drop_target_lang_codes=self.config.prepro.data.get("drop_target_lang_codes", False),
             mask_prob=self.config.prepro.data.get("token_mask_prob", 0),
+            deterministic=self.split in ["dev", "test"],
         )
 
     @staticmethod
@@ -95,6 +98,7 @@ class JsonDataset(Dataset):
         include_lang_codes=False,
         drop_target_lang_codes=False,
         mask_prob=0.0,
+        deterministic=False,
     ):
         src_lang = obj.get("src_lang", "en_XX")
         tgt_lang = obj.get("tgt_lang", "en_XX")
@@ -112,8 +116,14 @@ class JsonDataset(Dataset):
 
         transformed = {}
 
+        # Use the same randints for sampling so that samples from different fields can still line up
+        # TODO: If we need multiple samplers, just expand this to 2D
+        randints = np.random.shuffle([i for i in range(100)])
+
         for f in fields:
-            transformed[f["to"]] = JsonDataset._transform(obj[f["from"]], f.get("type", "copy"))
+            transformed[f["to"]] = JsonDataset._transform(
+                obj[f["from"]], f, deterministic=deterministic, randints=randints
+            )
 
         batch = {k + "_text": v for k, v in transformed.items()}
         for f in fields:
@@ -168,11 +178,26 @@ class JsonDataset(Dataset):
         return batch
 
     @staticmethod
-    def _transform(value, transform_type="copy"):
+    def _transform(value, field_cfg=None, deterministic=False, randints=None):
+        transform_type = field_cfg.get("type", "copy")
         if transform_type == "sample":
-            return np.random.choice(value)
+            if deterministic:
+                return value[0]
+            elif randints is not None:
+                return value
+            else:
+                return np.random.choice(value)
         elif transform_type in ["copy", "group"]:
-            return value
+            if field_cfg is not None and field_cfg.get("subsample", None) is not None:
+                num_samples = min(field_cfg["subsample"], len(value))
+                if deterministic:
+                    return value[:num_samples]
+                elif randints is not None:
+                    return [value[x] for x in randints[:num_samples]]
+                else:
+                    return np.random.choice(value, num_samples, replace=False)
+            else:
+                return value
         else:
             raise Exception(f"Unrecognised transform type in JsonDataset: {transform_type}")
 
@@ -241,6 +266,7 @@ class JsonDataset(Dataset):
                             [y.unsqueeze(0) for x in batch for y in x[k + "_len"]], 0
                         ).squeeze(dim=1)
                         tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
+                        tensor_batch[k + "_clusters_text"] = [x[k + "_text"] for x in batch]
 
                         # print(tensor_batch[k + "_text"])
                         # print([x[k + "_text"] for x in batch])
