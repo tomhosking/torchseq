@@ -738,7 +738,7 @@ class ModelAgent(BaseAgent):
         # Register the metric hooks to be used
         metric_hooks = [DefaultMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
-        if self.config.eval.data.get("sample_outputs", True) and not training_loop and self.tgt_field is not None:
+        if self.config.eval.get("sample_outputs", True) and not training_loop and self.tgt_field is not None:
             metric_hooks += [TextualMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)]
 
         if slow_metrics and self.tgt_field is not None:

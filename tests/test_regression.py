@@ -98,9 +98,9 @@ def test_paraphrasing_vae():
     loss, metrics, output, memory = agent.validate(data_loader, force_save_output=True, save_model=False)
 
     # Now check the output (for first 100 samples)
-    assert abs(loss.item() - 2.22916) < 1e-3, "Loss is different to expected!"
+    assert abs(loss.item() - 1.9656) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 36.18769) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 35.142) < 1e-2, "BLEU score is different to expected!"
 
     # Try a short training run, to check no exceptions are thrown
     # TODO: check the result of training is roughly OK?

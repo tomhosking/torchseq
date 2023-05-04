@@ -85,7 +85,7 @@ class JsonDataset(Dataset):
             include_lang_codes=self.config.prepro.data.get("include_lang_codes", False),
             drop_target_lang_codes=self.config.prepro.data.get("drop_target_lang_codes", False),
             mask_prob=self.config.prepro.data.get("token_mask_prob", 0),
-            deterministic=self.split in ["dev", "test"],
+            deterministic=self.split in ["dev", "test"] and self.config.json_dataset.get("deterministic_eval", False),
         )
 
     @staticmethod
@@ -117,12 +117,12 @@ class JsonDataset(Dataset):
         transformed = {}
 
         # Use the same randints for sampling so that samples from different fields can still line up
-        # TODO: If we need multiple samplers, just expand this to 2D
-        randints = np.random.shuffle([i for i in range(100)])
+        randints = [np.random.choice([i for i in range(100)], size=100, replace=False) for _ in range(len(fields))]
 
-        for f in fields:
+        for i, f in enumerate(fields):
+            rand_ix = f.get("rand_ix", i)
             transformed[f["to"]] = JsonDataset._transform(
-                obj[f["from"]], f, deterministic=deterministic, randints=randints
+                obj[f["from"]], f, deterministic=deterministic, randints=randints[rand_ix]
             )
 
         batch = {k + "_text": v for k, v in transformed.items()}
@@ -184,7 +184,7 @@ class JsonDataset(Dataset):
             if deterministic:
                 return value[0]
             elif randints is not None:
-                return value
+                return value[randints[0] % len(value)]
             else:
                 return np.random.choice(value)
         elif transform_type in ["copy", "group"]:
