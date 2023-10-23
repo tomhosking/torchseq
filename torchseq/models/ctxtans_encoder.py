@@ -128,7 +128,9 @@ class ContextAnswerEncoder(nn.Module):
             config.encoder.embedding_dim + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim)
         ) * num_encoder_outputs
         memory_dim += self.config.bio_embedding_dim if self.config.encoder_outputs.c_ans_labels else 0
-        self.encoder_projection = nn.utils.parametrizations.weight_norm(nn.Linear(memory_dim, config.encoder.embedding_dim, bias=False))
+        self.encoder_projection = nn.utils.parametrizations.weight_norm(
+            nn.Linear(memory_dim, config.encoder.embedding_dim, bias=False)
+        )
 
         # Pooling layers
         self.ans_pooling = MultiHeadedPooling(
