@@ -4,7 +4,7 @@ import logging
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel, RobertaModel, MBartModel
+from transformers import BartModel, BertModel, RobertaModel, MBartModel, AutoModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
@@ -33,7 +33,7 @@ class ContextAnswerEncoder(nn.Module):
                 self.embeddings.weight.data = self.input_tokenizer.get_embeddings()
             self.embeddings.weight.requires_grad = not freeze_embeddings
 
-        self.embedding_projection = nn.utils.weight_norm(
+        self.embedding_projection = nn.utils.parametrizations.weight_norm(
             nn.Linear(
                 config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
                 config.encoder.embedding_dim,
@@ -41,7 +41,7 @@ class ContextAnswerEncoder(nn.Module):
             )
         )
 
-        self.bert_embedding_projection = nn.utils.weight_norm(
+        self.bert_embedding_projection = nn.utils.parametrizations.weight_norm(
             nn.Linear(
                 config.encoder.embedding_dim * 1 + config.bio_embedding_dim, config.encoder.embedding_dim, bias=False
             )
@@ -69,8 +69,10 @@ class ContextAnswerEncoder(nn.Module):
                 del bart_model.decoder
             elif "roberta-" in self.pretrained_model_slug:
                 self.pretrained_encoder = RobertaModel.from_pretrained(self.pretrained_model_slug)
-            else:
+            elif "bert-" in self.pretrained_model_slug:
                 self.pretrained_encoder = BertModel.from_pretrained(self.pretrained_model_slug)
+            else:
+                self.pretrained_encoder = AutoModel.from_pretrained(self.pretrained_model_slug)
             # self.pretrained_encoder.train()
             # for param in self.pretrained_encoder.parameters():
             #     param.requires_grad = True
@@ -126,7 +128,7 @@ class ContextAnswerEncoder(nn.Module):
             config.encoder.embedding_dim + (0 if self.pretrained_model_slug is not None else config.bio_embedding_dim)
         ) * num_encoder_outputs
         memory_dim += self.config.bio_embedding_dim if self.config.encoder_outputs.c_ans_labels else 0
-        self.encoder_projection = nn.utils.weight_norm(nn.Linear(memory_dim, config.encoder.embedding_dim, bias=False))
+        self.encoder_projection = nn.utils.parametrizations.weight_norm(nn.Linear(memory_dim, config.encoder.embedding_dim, bias=False))
 
         # Pooling layers
         self.ans_pooling = MultiHeadedPooling(
@@ -161,10 +163,10 @@ class ContextAnswerEncoder(nn.Module):
 
     def forward(self, ctxt_seq, ctxt_seq_len, a_pos, memory):
         # Re-normalise the projections...
-        with torch.no_grad():
-            self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
-            self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+        # with torch.no_grad():
+        #     self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
+        #     self.bert_embedding_projection.weight_g.div_(self.bert_embedding_projection.weight_g)
+        #     self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # Get some sizes
         max_ctxt_len = ctxt_seq.shape[1]

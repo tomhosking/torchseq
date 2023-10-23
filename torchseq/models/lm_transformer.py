@@ -20,7 +20,7 @@ class TransformerLanguageModel(nn.Module):
         ).cpu()
         self.embeddings.weight.requires_grad = not config.freeze_embeddings
 
-        self.embedding_projection = nn.utils.weight_norm(
+        self.embedding_projection = nn.utils.parametrizations.weight_norm(
             nn.Linear(config.raw_embedding_dim, config.encoder.embedding_dim, bias=False)
         )
 
@@ -66,10 +66,10 @@ class TransformerLanguageModel(nn.Module):
             memory = dict()
 
         # Re-normalise the projections...
-        with torch.no_grad():
-            self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
-            if self.config.encoder.data.get("residual", False):
-                self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
+        # with torch.no_grad():
+        #     self.embedding_projection.weight_g.div_(self.embedding_projection.weight_g)
+        #     if self.config.encoder.data.get("residual", False):
+        #         self.encoder_projection.weight_g.div_(self.encoder_projection.weight_g)
 
         # Get some sizes
         max_ctxt_len = output.shape[1]

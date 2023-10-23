@@ -4,7 +4,7 @@ import logging
 
 import torch
 import torch.nn as nn
-from transformers import BartModel, BertModel, RobertaModel, MBartModel
+from transformers import BartModel, BertModel, RobertaModel, MBartModel, AutoModel
 
 from torchseq.models.pooling import MultiHeadedPooling
 from torchseq.models.positional_embeddings import PositionalEncoding
@@ -61,7 +61,7 @@ class SequenceEncoder(nn.Module):
         if self.encoder_config.embedding_dim != global_config.get_first(
             ["input_raw_embedding_dim", "raw_embedding_dim"]
         ):
-            self.embedding_projection = nn.utils.weight_norm(
+            self.embedding_projection = nn.utils.parametrizations.weight_norm(
                 nn.Linear(
                     global_config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
                     encoder_config.embedding_dim,
@@ -87,9 +87,12 @@ class SequenceEncoder(nn.Module):
                 del bart_model.decoder
             elif "roberta-" in self.pretrained_model_slug:
                 self.pretrained_encoder = RobertaModel.from_pretrained(self.pretrained_model_slug)
-            else:
-                # TODO: Make this an AutoModel?
+            elif "bert-" in self.pretrained_model_slug:
                 self.pretrained_encoder = BertModel.from_pretrained(self.pretrained_model_slug)
+            else:
+                self.pretrained_encoder = AutoModel.from_pretrained(self.pretrained_model_slug)
+                self.pretrained_encoder.embeddings.cpu()
+                self.pretrained_encoder.embeddings.force_device = True  # type: ignore # dynamic attr
 
             if encoder_config.get("freeze_pretrained", False):
                 self.pretrained_encoder.requires_grad = False
@@ -97,11 +100,11 @@ class SequenceEncoder(nn.Module):
             self.pretrained_encoder = None
 
         if self.encoder_config.get("residual", False):
-            self.encoder_projection = nn.utils.weight_norm(
+            self.encoder_projection = nn.utils.parametrizations.weight_norm(
                 nn.Linear(encoder_config.embedding_dim * 2, encoder_config.embedding_dim, bias=False)
             )
         if self.encoder_config.get("pre_residual", False):
-            self.token_projection = nn.utils.weight_norm(
+            self.token_projection = nn.utils.parametrizations.weight_norm(
                 nn.Linear(
                     global_config.get_first(["input_raw_embedding_dim", "raw_embedding_dim"]),
                     encoder_config.embedding_dim,

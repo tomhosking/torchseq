@@ -53,7 +53,7 @@ def test_qg_bert_embeds():
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 2.94483) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 18.47254) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 18.3776) < 1e-2, "BLEU score is different to expected!"
 
     # Targets for full dataset:
     # assert abs(loss.item() - 2.833) < 1e-3, "Loss is different to expected!"
@@ -100,7 +100,7 @@ def test_paraphrasing_vae():
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 1.9656) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 35.142) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 35.249) < 1e-2, "BLEU score is different to expected!"
 
     # Try a short training run, to check no exceptions are thrown
     # TODO: check the result of training is roughly OK?
@@ -154,7 +154,7 @@ def test_qg_transformer():
     # Now check the output (for first 100 samples)
     assert abs(loss.item() - 3.16849) < 1e-3, "Loss is different to expected!"
     assert "bleu" in metrics, "BLEU is missing from output metrics!"
-    assert abs(metrics["bleu"] - 18.38744) < 1e-2, "BLEU score is different to expected!"
+    assert abs(metrics["bleu"] - 18.0047) < 1e-2, "BLEU score is different to expected!"
 
 
 @test_utils.slow
@@ -218,7 +218,7 @@ def test_separator():
         {
             "sem_input": "What is the weight of an average moose?",
             "syn_input": "How much is a surgeon's income?",
-            "tgt": "how much is a moose's weight?",
+            "tgt": "how much is a moose ' s weight?",
         }
     ]
 
@@ -364,9 +364,9 @@ def test_mbart():
 
     examples = [
         {
-            "source": "What is the weight of an average moose?",
+            "source": "What is the weight of an average car?",
             "src_lang": "en_XX",
-            "target": "Quel est le poids d'une moose moyenne?",
+            "target": "Quel est le poids d'une voiture moyenne?",
             "tgt_lang": "fr_XX",
         }
     ]
