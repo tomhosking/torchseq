@@ -14,7 +14,7 @@ class DefaultMetricHook(MetricHook):
         self.scores = {"ppl": []}
 
     def on_batch(self, batch, logits, output, memory, use_test=False):
-        if self.tgt_field is not None:
+        if self.tgt_field is not None and logits is not None:
             self.scores["ppl"].extend(
                 get_perplexity(
                     logits,

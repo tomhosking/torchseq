@@ -64,10 +64,10 @@ class ExemplarGuidedAutoencoderModel(nn.Module):
             )
             # self.bottleneck_2 = PoolingBottleneck(config)
 
-            # self.split_projection_1 = nn.utils.weight_norm(
+            # self.split_projection_1 = nn.utils.parametrizations.weight_norm(
             #     nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
             # )
-            # self.split_projection_2 = nn.utils.weight_norm(
+            # self.split_projection_2 = nn.utils.parametrizations.weight_norm(
             #     nn.Linear(config.encoder.embedding_dim, config.decoder.embedding_dim // 2, bias=False)
             # )
 

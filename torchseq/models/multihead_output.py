@@ -46,7 +46,7 @@ class MultiHeadOutput(nn.Module):
             self.embeds_to_logits.weight.requires_grad = not freeze_projection
 
         # if normed:
-        #     self.embeds_to_logits = nn.utils.weight_norm(self.embeds_to_logits)
+        #     self.embeds_to_logits = nn.utils.parametrizations.weight_norm(self.embeds_to_logits)
 
     def forward(self, embeds):
         if self.num_heads > 1 or self.num_projections > 1:

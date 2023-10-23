@@ -792,7 +792,7 @@ class ModelAgent(BaseAgent):
 
         for h_ix, codes in self.vq_codes.items():
             if len(codes) > 0:
-                Logger().log_histogram(f"vq_codes/{split_slug}/h{h_ix}", codes, self.global_step)
+                Logger().log_histogram(f"vq_codes/{split_slug}/h{h_ix:02d}", codes, self.global_step)
 
         # if len(self.vq_codes) > 0 and self.run_id is not None:
         #     with open(os.path.join(self.output_path, self.config.tag, self.run_id, "codes.json"), "w") as f:

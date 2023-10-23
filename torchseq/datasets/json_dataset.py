@@ -154,11 +154,25 @@ class JsonDataset(Dataset):
                     else:
                         batch[f["to"]] = torch.LongTensor(field_values.tolist())
                 else:
-                    batch[f["to"]] = torch.LongTensor(field_values)
-                if f.get("type", "copy") == "group":
-                    batch[f["to"] + "_len"] = torch.LongTensor([len(x) for x in batch[f["to"]]])
-                else:
-                    batch[f["to"] + "_len"] = torch.LongTensor([len(batch[f["to"]])])
+                    if not f.get("is_text", True):
+                        # if not hasattr(field_values, "__iter__"):
+                        #     batch[f["to"]] = torch.tensor([field_values])
+                        # else:
+                        batch[f["to"]] = torch.tensor(field_values)
+                        # if f['to'] == 'targets_scores':
+                        #     print(field_values)
+                        #     exit()
+                    else:
+                        # print(field_values)
+                        batch[f["to"]] = torch.LongTensor(
+                            field_values
+                        )  # TODO: check if it's necessary to explicitly create a LongTensor here
+
+                if f.get("is_text", True):
+                    if f.get("type", "copy") == "group":
+                        batch[f["to"] + "_len"] = torch.LongTensor([len(x) for x in batch[f["to"]]])
+                    else:
+                        batch[f["to"] + "_len"] = torch.LongTensor([len(batch[f["to"]])])
             else:
                 batch[f["to"]] = field_values
 
@@ -193,7 +207,7 @@ class JsonDataset(Dataset):
                 if deterministic:
                     return value[:num_samples]
                 elif randints is not None:
-                    return [value[x] for x in randints[:num_samples]]
+                    return [value[x % len(value)] for x in randints[:num_samples]]
                 else:
                     return np.random.choice(value, num_samples, replace=False)
             else:
@@ -203,7 +217,7 @@ class JsonDataset(Dataset):
 
     @staticmethod
     def _tokenize_if_string(value, tokenizer, tok_window, is_list=False):
-        if is_list:
+        if is_list and isinstance(value, list) and all(isinstance(elem, str) for elem in value):
             pad_id = tokenizer.pad_id
             tokenized_list = [JsonDataset._tokenize_if_string(val, tokenizer, tok_window, False) for val in value]
             max_len = max([len(toks) for toks in tokenized_list])
@@ -225,7 +239,7 @@ class JsonDataset(Dataset):
             special_keys = set(["tgt_lang", "src_lang"])
             field_map_by_tgt_key = {f["to"]: f for f in field_map}
             keys = list(batch[0].keys() & (field_map_by_tgt_key.keys() | special_keys))
-            max_lens = {k: max(len(x[k]) for x in batch) for k in keys}
+            max_lens = {k: max(x[k + "_len"] for x in batch) for k in keys if k + "_len" in batch[0]}
 
             # print(batch)
 
@@ -237,11 +251,12 @@ class JsonDataset(Dataset):
                     if k == "a_pos":
                         x[k] = F.pad(x[k], pad=(0, max_lens[k] - len(x[k])), value=0)
                     elif field_map_by_tgt_key.get(k, {}).get("type", "copy") == "group":
-                        max_len = max([len(z) for y in batch for z in y[k]])
+                        if field_map_by_tgt_key.get(k, {}).get("is_text", True):
+                            max_len = max([len(z) for y in batch for z in y[k]])
 
-                        x[k] = F.pad(x[k], pad=(0, max_len - x[k].shape[1]), value=pad_id)
+                            x[k] = F.pad(x[k], pad=(0, max_len - x[k].shape[1]), value=pad_id)
                         x[k + "_group"] = torch.full((x[k].shape[0],), ix)
-                    elif k[-5:] != "_text":
+                    elif k[-5:] != "_text" and k in max_lens:
                         x[k] = F.pad(x[k], pad=(0, max_lens[k] - len(x[k])), value=pad_id)
 
                     # if field_map_by_tgt_key.get(k, {}).get('type', 'copy') == 'group':
@@ -262,11 +277,12 @@ class JsonDataset(Dataset):
                     if field_map_by_tgt_key.get(k, {}).get("type", "copy") == "group":
                         tensor_batch[k] = torch.cat([x[k] for x in batch], 0)
                         tensor_batch[k + "_group"] = torch.cat([x[k + "_group"] for x in batch], 0)
-                        tensor_batch[k + "_len"] = torch.stack(
-                            [y.unsqueeze(0) for x in batch for y in x[k + "_len"]], 0
-                        ).squeeze(dim=1)
-                        tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
-                        tensor_batch[k + "_clusters_text"] = [x[k + "_text"] for x in batch]
+                        if field_map_by_tgt_key.get(k, {}).get("is_text", True):
+                            tensor_batch[k + "_len"] = torch.stack(
+                                [y.unsqueeze(0) for x in batch for y in x[k + "_len"]], 0
+                            ).squeeze(dim=1)
+                            tensor_batch[k + "_text"] = [y for x in batch for y in x[k + "_text"]]
+                            tensor_batch[k + "_clusters_text"] = [x[k + "_text"] for x in batch]
 
                         # print(tensor_batch[k + "_text"])
                         # print([x[k + "_text"] for x in batch])
@@ -276,6 +292,7 @@ class JsonDataset(Dataset):
                         # exit()
                     else:
                         tensor_batch[k] = torch.stack([x[k] for x in batch], 0)
+
                         if k + "_len" in batch[0]:
                             tensor_batch[k + "_len"] = torch.stack([x[k + "_len"] for x in batch], 0).squeeze(dim=1)
                         if k + "_text" in batch[0]:

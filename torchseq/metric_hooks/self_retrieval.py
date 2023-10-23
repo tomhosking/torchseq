@@ -190,6 +190,7 @@ class SelfRetrievalMetricHook(MetricHook):
                 "field_map": [
                     {"type": "copy", "from": "sentence", "to": "target"},
                     {"type": "copy", "from": "sentence", "to": "source"},
+                    {"type": "copy", "from": "sentence", "to": "query"},
                 ],
             }
 
@@ -917,8 +918,9 @@ class SelfRetrievalMetricHook(MetricHook):
         config_codes["json_dataset"] = {
             "path": None,
             "field_map": [
-                {"type": "copy", "from": "sentence", "to": "target"},
+                {"type": "copy", "from": "sentence", "to": "target"},  # src/tgt used for in-batch negative setups
                 {"type": "copy", "from": "sentence", "to": "source"},
+                {"type": "copy", "from": "sentence", "to": "query"},  # query is used for triplet-style setups
             ],
         }
 

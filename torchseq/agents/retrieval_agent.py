@@ -7,6 +7,7 @@ from torchseq.agents.model_agent import ModelAgent
 
 from torchseq.models.retrieval_model import RetrievalModel
 from torchseq.models.contrastive_loss import ContrastiveLoss, NliContrastiveLoss
+from torchseq.models.contrastive_triplet_loss import ContrastiveTripletLoss
 
 
 from torchseq.utils.logging import Logger
@@ -32,6 +33,7 @@ class RetrievalAgent(ModelAgent):
 
         self.tgt_field = "query" if self.config.training.contrastive_loss.get("biencoder", False) else None
         self.src_field = "source"
+        self.triplet_loss = False
 
         # define loss
         if self.config.training.contrastive_loss.get("nli_scores", False):
@@ -42,6 +44,14 @@ class RetrievalAgent(ModelAgent):
                 src_field=self.src_field,
                 bsz=self.config.training.contrastive_loss.get("nli_bsz", 64),
             )
+        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+            self.loss = ContrastiveTripletLoss(
+                metric=self.config.training.contrastive_loss.get("metric", "euclidean"),
+                loss_type=self.config.training.contrastive_loss.get("loss_type", "softnn"),
+                tau=self.config.training.contrastive_loss.get("tau", 1.0),
+            )
+            self.triplet_loss = True
+            self.src_field = "query"
         else:
             self.loss = ContrastiveLoss(
                 metric=self.config.training.contrastive_loss.get("metric", "euclidean"),
@@ -66,8 +76,13 @@ class RetrievalAgent(ModelAgent):
         encodings, memory = self.model(batch, src_field=self.src_field)
 
         encodings2, memory2, groups = None, None, None
+        pos_encodings, pos_memory = None, None
+        neg_encodings, neg_memory = None, None
         if self.config.training.contrastive_loss.get("biencoder", False):
             encodings2, memory2 = self.model(batch, src_field=self.tgt_field)
+        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+            pos_encodings, pos_memory = self.model(batch, src_field="pos_target")
+            neg_encodings, neg_memory = self.model(batch, src_field="neg_target")
         else:
             groups = batch[self.src_field + "_group"]
 
@@ -77,6 +92,14 @@ class RetrievalAgent(ModelAgent):
             if encodings2 is not None:
                 raise Exception("biencoder setup isnt supported for nli_scores yet!")
             cont_loss = self.loss(encodings, batch)
+        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+            cont_loss = self.loss(
+                encodings,
+                pos_encodings=pos_encodings,
+                neg_encodings=neg_encodings,
+                pos_scores=batch.get("pos_score", None),
+                neg_scores=batch.get("neg_score", None),
+            )
         else:
             cont_loss = self.loss(encodings, encodings2, groups=groups)
 
@@ -89,6 +112,10 @@ class RetrievalAgent(ModelAgent):
 
         if memory2 is not None and "loss" in memory2:
             this_loss += memory2["loss"]
+        if pos_memory is not None and "loss" in pos_memory:
+            this_loss += pos_memory["loss"]
+        if neg_memory is not None and "loss" in neg_memory:
+            this_loss += neg_memory["loss"]
 
         if self.config.training.get("loss_dropping", False):
             mask = self.dropper(this_loss)  # The dropper returns a mask of 0s where data should be dropped.
@@ -115,8 +142,14 @@ class RetrievalAgent(ModelAgent):
         encodings, memory = self.model(batch, src_field=self.src_field)
 
         encodings2, memory2, groups = None, None, None
+        pos_encodings, pos_memory = None, None
+        neg_encodings, neg_memory = None, None
         if self.config.training.contrastive_loss.get("biencoder", False):
             encodings2, memory2 = self.model(batch, src_field=self.tgt_field)
+        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+            if calculate_loss:
+                pos_encodings, pos_memory = self.model(batch, src_field="pos_target")
+                neg_encodings, neg_memory = self.model(batch, src_field="neg_target")
         else:
             groups = batch[self.src_field + "_group"]
 
@@ -128,7 +161,17 @@ class RetrievalAgent(ModelAgent):
             this_loss = torch.zeros(encodings.shape[0], dtype=torch.float).to(self.device)
 
             if self.config.training.contrastive_loss.get("nli_scores", False):
+                if encodings2 is not None:
+                    raise Exception("biencoder setup isnt supported for nli_scores yet!")
                 this_loss += self.loss(encodings, batch)
+            elif self.config.training.contrastive_loss.get("triplet_loss", False):
+                this_loss += self.loss(
+                    encodings,
+                    pos_encodings=pos_encodings,
+                    neg_encodings=neg_encodings,
+                    pos_scores=batch.get("pos_scores", None),
+                    neg_scores=batch.get("neg_scores", None),
+                )
             else:
                 this_loss += self.loss(encodings, encodings2, groups=groups)
 

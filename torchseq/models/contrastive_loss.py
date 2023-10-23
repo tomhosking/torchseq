@@ -87,9 +87,17 @@ class ContrastiveLoss(nn.Module):
                 numerator = torch.logsumexp(logits - pos_mask.logical_not() * 1e18, dim=-1, keepdim=True)
             denom = torch.logsumexp(logits - eye_mask.logical_not() * 1e18, dim=-1, keepdim=True)
 
-            loss = (-1.0 * (numerator - denom)).sum(dim=-1)
+            loss = -1.0 * (numerator - denom)
+
+            # loss = loss.sum(dim=-1)
 
             if scores is not None:
+                print(
+                    "The use of scores with (in-batch) ContrastiveLoss is still a WIP! Check results carefully and remove this error once verified"
+                )
+                print(scores)
+                print(loss)
+                exit()
                 loss = torch.where(scores.sum(dim=-1) > 1e-5, loss, torch.zeros_like(loss))
 
         elif self.loss_type == "basic":
