@@ -5,7 +5,7 @@ import logging
 
 from tokenizers import BertWordPieceTokenizer, ByteLevelBPETokenizer
 from tokenizers import Tokenizer as HFTokenizer
-from transformers import BartModel, BertModel, RobertaModel, AutoModel, AutoTokenizer
+from transformers import BartModel, BertModel, RobertaModel, AutoModel, AutoTokenizer, DebertaV2TokenizerFast
 from transformers import MBart50TokenizerFast
 
 from torchseq.utils.singleton import Singleton
@@ -121,11 +121,26 @@ class Tokenizer:
         if "mbart-" in model_slug:
             if model_slug != "facebook/mbart-large-50-many-to-many-mmt":
                 logger.warn(
-                    "Using mBART-50 tokenizer when model_slug was {:}\nCheck that this is still OK!".format(model_slug)
+                    "Using mBART-50 MMT tokenizer when model_slug was {:}\nCheck that this is still OK!".format(
+                        model_slug
+                    )
                 )
 
             self.engine = MBart50TokenizerFast.from_pretrained(
                 "facebook/mbart-large-50-many-to-many-mmt", src_lang="en_XX", tgt_lang="en_XX", add_prefix_space=True
+            )
+
+            self.pad_id = self.engine.pad_token_id
+            self.mask_id = self.engine.mask_token_id
+            self.unk_id = self.engine.unk_token_id
+
+            self.bos_id = self.engine.bos_token_id
+            self.eos_id = self.engine.eos_token_id
+
+        elif "deberta-" in model_slug:
+            self.engine = DebertaV2TokenizerFast(
+                vocab_file=os.path.join(self.data_path, f"pretrained-vocabs/{model_slug}-spm.model"),
+                do_lower_case=False,
             )
 
             self.pad_id = self.engine.pad_token_id
@@ -206,6 +221,8 @@ class Tokenizer:
         # Vocab size from PretrainedFastTokenize is __len__ attr
         if "mbart-" in model_slug:
             self.vocab_size = len(self.engine)
+        elif "deberta-" in model_slug:
+            self.vocab_size = self.engine.vocab_size
         else:
             self.vocab_size = self.engine.get_vocab_size()
 
@@ -260,7 +277,7 @@ class Tokenizer:
             raise Exception("Tried to get_embeddings() for a tokenizer with has_embeddings==False!")
 
     def tokenise(self, text, add_bos_eos=True, src_lang=None, tgt_lang=None):
-        if "mbart-" in self.model_slug:
+        if "mbart-" in self.model_slug or "deberta-" in self.model_slug:
             output = self.engine(text, return_offsets_mapping=True, add_special_tokens=False)
 
             token_ids = output["input_ids"]
