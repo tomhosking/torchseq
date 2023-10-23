@@ -4,7 +4,7 @@ import wandb
 
 
 def wandb_init(config, run_id=None, path=None):
-    if "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ:
+    if "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ and os.environ.get("WANDB_USERNAME", "") != "":
         # W&B hierarchy is: project > group > job_type > name > id
         wandb.init(
             project=config.tag,
@@ -29,7 +29,7 @@ def wandb_init(config, run_id=None, path=None):
 
 
 def wandb_log(data, step=None):
-    if ("WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ) or os.environ.get(
-        "WANDB_MODE", None
-    ) == "disabled":
+    if (
+        "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ and os.environ.get("WANDB_USERNAME", "") != ""
+    ) or os.environ.get("WANDB_MODE", None) == "disabled":
         wandb.log(data, step)

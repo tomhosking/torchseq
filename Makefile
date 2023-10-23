@@ -20,11 +20,11 @@ types:
 
 # Run tests for the library
 test:
-	pytest --cov=./torchseq ./tests
+	WANDB_USERNAME='' pytest --cov=./torchseq ./tests
 
 # Run tests for the library
 testall:
-	RUN_SLOW=1 pytest --cov=./torchseq ./tests
+	WANDB_USERNAME='' RUN_SLOW=1 pytest --cov=./torchseq ./tests
 
 # Send coverage report to codecov
 coverage:
