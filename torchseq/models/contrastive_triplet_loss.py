@@ -1,4 +1,4 @@
-from typing import Literal, Optional, Dict
+from typing import Literal, Optional, Dict, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 class ContrastiveTripletLoss(nn.Module):
     metric: Literal["euclidean", "cosine", "dot"]
-    loss_type: Literal["softnn", "basic"]
+    loss_type: Literal["softnn", "marginmse"]
     tau: float
 
     def __init__(
@@ -27,8 +27,8 @@ class ContrastiveTripletLoss(nn.Module):
     def forward(
         self,
         query_encodings: torch.Tensor,
-        pos_encodings: Optional[torch.Tensor] = None,
-        neg_encodings: Optional[torch.Tensor] = None,
+        pos_encodings: torch.Tensor,
+        neg_encodings: torch.Tensor,
         pos_scores: Optional[torch.Tensor] = None,
         neg_scores: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
@@ -37,14 +37,14 @@ class ContrastiveTripletLoss(nn.Module):
                 query_encodings.shape[0] == pos_scores.shape[0]
             ), "pos_scores should have shape bsz x 1 in ContrastiveTripletLoss! Found {:}".format(pos_scores.shape)
         else:
-            pos_scores = 1
+            pos_scores = torch.tensor(1.0)
 
         if neg_scores is not None:
             assert (
                 query_encodings.shape[0] == neg_scores.shape[0]
             ), "neg_scores should have shape bsz x 1 in ContrastiveTripletLoss! Found {:}".format(neg_scores.shape)
         else:
-            neg_scores = 1e-18
+            neg_scores = torch.tensor(1e-18)
 
         if self.metric == "euclidean":
             pos_distances = (query_encodings - pos_encodings) ** 2
