@@ -462,7 +462,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
         # all_codes_d3 = [(i,j,0) for i in range(12) for j in range(12)] # for k in range(12)
         all_codes_d3 = list(set([x[:4] for x in sent_codes]))
-        logger.info(len(all_codes_d3), " will be plotted")
+        # logger.info(len(all_codes_d3), " will be plotted")
 
         # codes = all_codes_d3
         codes = None
@@ -525,7 +525,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     if h == 0 or k[:-1] in paths_by_entity_probs[entity_id]:
                         paths_by_entity_probs[entity_id][k] = 1.0 * v / total
 
-        tsne = TSNE(n_components=2)
+        tsne = TSNE(n_components=2, negative_gradient_method="bh")
 
         logger.info("Fitting tSNE")
 
@@ -1252,9 +1252,15 @@ class SelfRetrievalMetricHook(MetricHook):
         for row, codes in zip(eval_sentences, all_codes):
             sentences_by_path[row["entity_id"]][tuple(codes)].append(row["sentence"])
 
+        nli_model = None
+        if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
+            from torchseq.pretrained.nli import PretrainedNliModel
+
+            nli_model = PretrainedNliModel()
+
         all_evidence = []
         all_evidence_paths = []
-        for row in tqdm(eval_data, desc="Selecting ROUGE centroids for extractive summary", disable=agent.silent):
+        for row in tqdm(eval_data, desc="Selecting centroids for extractive summary", disable=agent.silent):
             summary_sentences = []
             summary_evidence = []
             summary_evidence_paths = []
@@ -1285,13 +1291,27 @@ class SelfRetrievalMetricHook(MetricHook):
                 path_evidence_paths = path_evidence_paths[:50]
 
                 scores = []
-                for x in path_evidence:
-                    scores.append([])
-                    for y in path_evidence:
-                        rouge = get_pairwise_rouge(x, y)["rouge2"]
-                        scores[-1].append(rouge)
-                    # print(scores)
-                    scores[-1] = np.mean(scores[-1])
+
+                if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
+                    for x in path_evidence:
+                        scores.append([])
+                        for y in path_evidence:
+                            rouge = get_pairwise_rouge(x, y)["rouge2"]
+                            scores[-1].append(rouge)
+                        # print(scores)
+                        scores[-1] = np.mean(scores[-1])
+                elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
+                    hyps_flat = [x for x in path_evidence for y in path_evidence]
+                    prems_flat = [y for x in path_evidence for y in path_evidence]
+                    scores_flat = nli_model.get_scores(premises=prems_flat, hypotheses=hyps_flat, bsz=256)
+                    scores = []
+                    i = 0
+                    for x in path_evidence:
+                        curr_scores = []
+                        for y in path_evidence:
+                            curr_scores.append(scores_flat[i])
+                            i += 1
+                        scores.append(np.mean(curr_scores))
 
                 max_ix = np.argmax(scores)
                 summary_sentences.append(path_evidence[max_ix])
@@ -1373,7 +1393,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
             scores["nli"] = {}
 
-        for depth in range(min(num_heads, 8)):
+        for depth in range(min(num_heads, 4)):
             sents_by_cluster = defaultdict(set)
             for codes, sents in sents_by_code.items():
                 sents_by_cluster[eval(codes)[: depth + 1]].update([sent.lower() for sent in sents])
@@ -1383,9 +1403,11 @@ class SelfRetrievalMetricHook(MetricHook):
             inters_nli = []
             intras_nli = []
 
-            MAX_CLUSTERS = 250
-            INTER_SAMPLES = 100
-            INTRA_SAMPLES = 100
+            MAX_CLUSTERS = 50
+            INTER_SAMPLES = 64
+            INTRA_SAMPLES = 64
+            MAX_NLI_REFS_PER_CLUSTER = 100
+            NLI_BSZ = 256
 
             n = 0
             for codes, sents in tqdm(list(sents_by_cluster.items()), disable=agent.silent):
@@ -1394,13 +1416,18 @@ class SelfRetrievalMetricHook(MetricHook):
                     continue
                 if n > MAX_CLUSTERS:
                     break
-                n += 1
+
                 inter_sents = [
                     sent
                     for other_codes, other_sents in sents_by_cluster.items()
                     if codes != other_codes
                     for sent in other_sents
                 ]
+                if len(inter_sents) < 5:
+                    continue
+
+                n += 1
+
                 np.random.shuffle(inter_sents)
                 inter_sents = inter_sents[:INTER_SAMPLES]
                 inter_refs = [inter_sents] * len(sents[:INTER_SAMPLES])
@@ -1431,13 +1458,21 @@ class SelfRetrievalMetricHook(MetricHook):
                     # )
 
                     # TODO: flatten each cluster into a single batched pass
-                    inter_refs_flat = [ref for refs in inter_refs for ref in refs]
-                    intra_refs_flat = [ref for refs in intra_refs for ref in refs]
-                    inter_hyps_flat = [hyp for hyp, refs in zip(sents[:INTER_SAMPLES], inter_refs) for ref in refs]
-                    intra_hyps_flat = [hyp for hyp, refs in zip(sents[:INTRA_SAMPLES], intra_refs) for ref in refs]
-                    inter_score = np.mean(nli_model.get_scores(inter_refs_flat, inter_hyps_flat)) * 100
+                    inter_refs_flat = [ref for refs in inter_refs for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]]
+                    intra_refs_flat = [ref for refs in intra_refs for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]]
+                    inter_hyps_flat = [
+                        hyp
+                        for hyp, refs in zip(sents[:INTER_SAMPLES], inter_refs)
+                        for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
+                    ]
+                    intra_hyps_flat = [
+                        hyp
+                        for hyp, refs in zip(sents[:INTRA_SAMPLES], intra_refs)
+                        for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
+                    ]
+                    inter_score = np.mean(nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=NLI_BSZ)) * 100
                     # hyps_flat = [hyp for hyps in sents[:INTER_SAMPLES] * len(intra_refs) for hyp in hyps]
-                    intra_score = np.mean(nli_model.get_scores(intra_refs_flat, intra_hyps_flat)) * 100
+                    intra_score = np.mean(nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=NLI_BSZ)) * 100
 
                     inters_nli.append(inter_score)
                     intras_nli.append(intra_score)

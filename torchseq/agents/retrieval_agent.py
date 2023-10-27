@@ -49,6 +49,8 @@ class RetrievalAgent(ModelAgent):
                 metric=self.config.training.contrastive_loss.get("metric", "euclidean"),
                 loss_type=self.config.training.contrastive_loss.get("loss_type", "softnn"),
                 tau=self.config.training.contrastive_loss.get("tau", 1.0),
+                inbatch_negatives=self.config.training.contrastive_loss.get("inbatch_negatives", False),
+                softnn_agg_mean=self.config.training.contrastive_loss.get("softnn_agg_mean", False),
             )
             self.triplet_loss = True
             self.src_field = "query"
@@ -169,8 +171,8 @@ class RetrievalAgent(ModelAgent):
                     encodings,
                     pos_encodings=pos_encodings,
                     neg_encodings=neg_encodings,
-                    pos_scores=batch.get("pos_scores", None),
-                    neg_scores=batch.get("neg_scores", None),
+                    pos_scores=batch.get("pos_score", None),
+                    neg_scores=batch.get("neg_score", None),
                 )
             else:
                 this_loss += self.loss(encodings, encodings2, groups=groups)

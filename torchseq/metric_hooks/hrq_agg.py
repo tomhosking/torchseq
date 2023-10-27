@@ -472,7 +472,7 @@ class HRQAggregationMetricHook(MetricHook):
 
         # all_codes_d3 = [(i,j,0) for i in range(12) for j in range(12)] # for k in range(12)
         all_codes_d3 = list(set([x[:4] for x in sent_codes]))
-        logger.info(len(all_codes_d3), " will be plotted")
+        # logger.info(len(all_codes_d3), " will be plotted")
 
         # codes = all_codes_d3
         codes = None

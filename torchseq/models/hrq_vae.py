@@ -371,8 +371,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
 
             if self.training:
                 # gumbel_sched_weight = 2 - 2 / (1 + exp(-float(global_step) / float(self._temp_schedule_gamma)))
-                gumbel_sched_weight = exp(
-                    -float(global_step)
+                gumbel_sched_weight = torch.exp(
+                    -torch.tensor(float(global_step))
                     / float(self._temp_schedule_gamma * self._temp_schedule_depth_factor**head_ix)
                 )
                 gumbel_temp = (

@@ -51,7 +51,7 @@ class BaseAgent:
             # torch._dynamo.config.verbose = False
             # torch._dynamo.config.log_level = logging.WARN
             # torch._dynamo.reset()
-            # self.model = torch.compile(self.model, dynamic=True)  #, backend="inductor",fullgraph=True, mode='reduce-overhead',
+            # self.model = torch.compile(self.model, dynamic=True, mode='reduce-overhead')  #, backend="inductor",fullgraph=True, mode='reduce-overhead',, dynamic=True
 
         else:
             self.device = torch.device("cpu")
