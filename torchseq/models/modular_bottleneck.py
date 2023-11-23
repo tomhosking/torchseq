@@ -254,7 +254,7 @@ class BottleneckPart(nn.Module):
         # Quantize
         if self.config.get("type", None) in ["vqvae", "hrqvae", "pythae:vqvae"]:
             if self.config.get("type", None) == "hrqvae":
-                vq_loss, encoding_post, quantizer_indices, subpath_embeddings = self.quantizer(
+                vq_loss, encoding_post, quantizer_indices, all_logits, all_onehot, subpath_embeddings = self.quantizer(
                     encoding_post, global_step, forced_codes, head_mask, residual_mask
                 )
             else:
@@ -266,6 +266,9 @@ class BottleneckPart(nn.Module):
                 memory["loss"] = 0
             memory["loss"] += vq_loss
             memory["vq_codes"] = torch.cat([x.unsqueeze(1).detach() for x in quantizer_indices], dim=1)
+            memory["hrq_all_onehot"] = torch.cat(all_onehot, dim=1)
+            memory["hrq_all_logits"] = torch.cat(all_logits, dim=1)
+            memory["hrq_subpath_embeddings"] = subpath_embeddings
 
             if forced_codes is not None:
                 assert (

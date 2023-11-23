@@ -164,6 +164,13 @@ class HRQAggregationMetricHook(MetricHook):
         #     )
         #     logger.info("...done")
 
+        if self.config.eval.metrics.hrq_agg.get("run_purity_nli", False):
+            logger.info("Running cluster purity eval")
+            self.scores["hrq_agg_purity_nli"] = HRQAggregationMetricHook.eval_cluster_purity_nli(
+                self.config, agent, test=use_test
+            )
+            logger.info("...done")
+
         return self.scores
 
     @abstractmethod
@@ -1603,6 +1610,92 @@ class HRQAggregationMetricHook(MetricHook):
                 #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2']
                 intras.append(intra_score)
             scores[num_heads - mask_len] = (np.mean(intras), np.mean(inters))
+
+        return scores
+
+    @abstractmethod
+    def eval_cluster_purity_nli(config, agent, test=False):
+        sents_by_code, _ = HRQAggregationMetricHook.codes_from_cache(config, agent, test, save_to_cache=False)
+
+        bneck_types = [x.type for x in agent.config.bottleneck.modules]
+        if "hrqvae" not in bneck_types:
+            logger.warning("Tried to run oracle masked eval on a model without a quantizer!")
+            return {}
+        quantizer_index = bneck_types.index("hrqvae")
+        num_heads = agent.config.bottleneck.modules[quantizer_index].quantizer.num_heads
+
+        scores = {}
+
+        from torchseq.pretrained.nli import PretrainedNliModel
+
+        nli_model = PretrainedNliModel()
+
+        scores["nli"] = {}
+
+        for depth in range(min(num_heads, 6)):
+            sents_by_cluster = defaultdict(set)
+            for codes, sents in sents_by_code.items():
+                sents_by_cluster[eval(codes)[: depth + 1]].update([sent.lower() for sent in sents])
+
+            inters_nli = []
+            intras_nli = []
+
+            MAX_CLUSTERS = 50
+            INTER_SAMPLES = 64
+            INTRA_SAMPLES = 64
+            MAX_NLI_REFS_PER_CLUSTER = 100
+            NLI_BSZ = 256
+
+            n = 0
+            for codes, sents in tqdm(list(sents_by_cluster.items()), disable=agent.silent):
+                sents = list(sents)
+                if len(sents) < 5:
+                    continue
+                if n > MAX_CLUSTERS:
+                    break
+
+                inter_sents = [
+                    sent
+                    for other_codes, other_sents in sents_by_cluster.items()
+                    if codes != other_codes
+                    for sent in other_sents
+                ]
+                if len(inter_sents) < 5:
+                    continue
+
+                n += 1
+
+                np.random.shuffle(inter_sents)
+                inter_sents = inter_sents[:INTER_SAMPLES]
+                inter_refs = [inter_sents] * len(sents[:INTER_SAMPLES])
+                intra_refs = [[s for s in sents if s != sent][:INTRA_SAMPLES] for sent in sents[:INTRA_SAMPLES]]
+
+                inter_refs_flat = [ref for refs in inter_refs for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]]
+                intra_refs_flat = [ref for refs in intra_refs for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]]
+                inter_hyps_flat = [
+                    hyp
+                    for hyp, refs in zip(sents[:INTER_SAMPLES], inter_refs)
+                    for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
+                ]
+                intra_hyps_flat = [
+                    hyp
+                    for hyp, refs in zip(sents[:INTRA_SAMPLES], intra_refs)
+                    for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
+                ]
+                inter_score = np.mean(nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=NLI_BSZ)) * 100
+                # hyps_flat = [hyp for hyps in sents[:INTER_SAMPLES] * len(intra_refs) for hyp in hyps]
+                intra_score = np.mean(nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=NLI_BSZ)) * 100
+
+                inters_nli.append(inter_score)
+                intras_nli.append(intra_score)
+
+            scores["nli"][depth] = (
+                np.mean(intras_nli),
+                np.mean(inters_nli),
+                np.mean(intras_nli) - np.mean(inters_nli),
+            )
+
+        scores["nli"]["mean"] = np.mean([score[2] for score in scores["nli"].values()])
 
         return scores
 

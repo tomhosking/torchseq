@@ -167,3 +167,9 @@ def init_bert_params(module):
 
 def gaussian_kl(mu, logvar):
     return -0.5 * torch.mean(1 + logvar - mu.pow(2) - logvar.exp(), dim=-1)
+
+
+def get_off_diagonal_elements(M, dim1=-1, dim2=-2):
+    res = M.clone()
+    res.diagonal(dim1=dim1, dim2=dim2).zero_()
+    return res

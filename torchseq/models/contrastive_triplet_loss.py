@@ -2,6 +2,8 @@ from typing import Literal, Optional, Dict, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from math import exp
+from torchseq.utils.functions import get_off_diagonal_elements
 
 
 class ContrastiveTripletLoss(nn.Module):
@@ -9,6 +11,8 @@ class ContrastiveTripletLoss(nn.Module):
     loss_type: Literal["softnn", "marginmse"]
     tau: float
     inbatch_negatives: bool
+    inbatch_weight: Optional[float]
+    inbatch_weight_decaysteps: Optional[int]
 
     def __init__(
         self,
@@ -17,6 +21,10 @@ class ContrastiveTripletLoss(nn.Module):
         tau: float = 1.0,
         inbatch_negatives: bool = False,
         softnn_agg_mean: bool = False,
+        inbatch_weight: Optional[float] = None,
+        inbatch_weight_decaysteps: Optional[int] = None,
+        inbatch_weight_min: Optional[float] = None,
+        tgt_nograd: bool = False,
     ):
         super(ContrastiveTripletLoss, self).__init__()
 
@@ -28,9 +36,14 @@ class ContrastiveTripletLoss(nn.Module):
         self.tau = tau
         self.inbatch_negatives = inbatch_negatives
         self.softnn_agg_mean = softnn_agg_mean
+        self.inbatch_weight = inbatch_weight
+        self.inbatch_weight_decaysteps = inbatch_weight_decaysteps
+        self.inbatch_weight_min = inbatch_weight_min
+        self.tgt_nograd = tgt_nograd
 
     def forward(
         self,
+        global_step: int,
         query_encodings: torch.Tensor,
         pos_encodings: torch.Tensor,
         neg_encodings: torch.Tensor,
@@ -50,6 +63,10 @@ class ContrastiveTripletLoss(nn.Module):
             ), "neg_scores should have shape bsz x 1 in ContrastiveTripletLoss! Found {:}".format(neg_scores.shape)
         else:
             neg_scores = torch.tensor(1e-18)
+
+        if self.tgt_nograd:
+            pos_encodings = pos_encodings.detach()
+            neg_encodings = neg_encodings.detach()
 
         if self.metric == "euclidean":
             pos_distances = (query_encodings - pos_encodings) ** 2
@@ -73,22 +90,32 @@ class ContrastiveTripletLoss(nn.Module):
                 # Assume scores for in-batch negs are 0 - then they only need to be included in the denominator
                 numerator = torch.log(pos_distances.squeeze(1) * pos_scores + neg_distances.diag() * neg_scores)
 
-                denom = torch.log(
-                    pos_distances.squeeze(1) + neg_distances.mean(dim=1)
-                    if self.softnn_agg_mean
-                    else neg_distances.sum(dim=1)
-                )
+                if self.inbatch_weight is not None:
+                    decay_factor = (
+                        exp(-float(global_step) / self.inbatch_weight_decaysteps)
+                        if self.inbatch_weight_decaysteps is not None
+                        else 1.0
+                    )
+
+                    inbatch_weight = max(
+                        self.inbatch_weight * decay_factor,
+                        self.inbatch_weight_min if self.inbatch_weight_min is not None else 0,
+                    )
+
+                    denom = torch.log(
+                        pos_distances.squeeze(1)
+                        + neg_distances.diag()
+                        + get_off_diagonal_elements(neg_distances).mean(dim=1) * inbatch_weight
+                    )
+                else:
+                    denom = torch.log(
+                        pos_distances.squeeze(1) + neg_distances.mean(dim=1)
+                        if self.softnn_agg_mean
+                        else neg_distances.sum(dim=1)
+                    )
             else:
                 numerator = torch.log(pos_distances.squeeze(1) * pos_scores + neg_distances.diag() * neg_scores)
                 denom = torch.log(pos_distances.squeeze(1) + neg_distances.diag())
-
-            # if pos_scores is not None:
-            #     numerator = torch.logsumexp(
-            #         logits + (scores + 1e-18).log() - eye_mask.logical_not() * 1e18, dim=-1, keepdim=True
-            #     )
-            # else:
-            #     numerator = torch.logsumexp(logits - pos_mask.logical_not() * 1e18, dim=-1, keepdim=True)
-            # denom = torch.logsumexp(logits - eye_mask.logical_not() * 1e18, dim=-1, keepdim=True)
 
             loss = -1.0 * (numerator - denom)
 

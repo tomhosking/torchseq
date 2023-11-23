@@ -110,7 +110,6 @@ class ModelAgent(BaseAgent):
         self.best_epoch = None
         self.current_epoch = 0
         self.global_step = 0
-        self.global_step = 0
 
     def create_optimizer(self):
         """
@@ -465,6 +464,30 @@ class ModelAgent(BaseAgent):
                     }
                 )
 
+            if self.global_step % self.config.training.log_interval == 0:
+                # Loss is weighted for grad accumulation - unweight it for reporting
+                Logger().log_scalar(
+                    "train/loss",
+                    loss / grad_accum_factor,
+                    self.global_step,
+                )
+                Logger().log_scalar("train/lr", self.optimizers[-1].param_groups[-1]["lr"], self.global_step)
+
+                # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
+                if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
+                    with torch.inference_mode():
+                        greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
+
+                    self.logger.info(
+                        self.output_tokenizer.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]])
+                    )
+                    self.logger.info(
+                        self.output_tokenizer.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]])
+                    )
+                    self.logger.info(self.output_tokenizer.decode(greedy_output.data[0][: output_lens[0]]))
+
+                # torch.cuda.empty_cache()
+
             # loss.backward()
             self.backward(loss)
 
@@ -492,30 +515,6 @@ class ModelAgent(BaseAgent):
                         self.global_step += 1
 
             # TRAIN STEP ENDS
-
-            if self.global_step % self.config.training.log_interval == 0:
-                # Loss is weighted for grad accumulation - unweight it for reporting
-                Logger().log_scalar(
-                    "train/loss",
-                    loss / grad_accum_factor,
-                    self.global_step,
-                )
-                Logger().log_scalar("train/lr", self.optimizers[-1].param_groups[-1]["lr"], self.global_step)
-
-                # TODO: This is currently paraphrase specific! May work for other models but isn't guaranteed
-                if batch_idx % (self.config.training.log_interval * 20) == 0 and self.verbose:
-                    with torch.inference_mode():
-                        greedy_output, _, output_lens, _ = self.decode_greedy(self.model, batch, self.tgt_field)
-
-                    self.logger.info(
-                        self.output_tokenizer.decode(batch[self.src_field][0][: batch[self.src_field + "_len"][0]])
-                    )
-                    self.logger.info(
-                        self.output_tokenizer.decode(batch[self.tgt_field][0][: batch[self.tgt_field + "_len"][0]])
-                    )
-                    self.logger.info(self.output_tokenizer.decode(greedy_output.data[0][: output_lens[0]]))
-
-                # torch.cuda.empty_cache()
 
             if (
                 self.config.training.get("epoch_steps", 0) > 0

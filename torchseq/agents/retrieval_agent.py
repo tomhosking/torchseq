@@ -4,13 +4,13 @@ import torch.nn.functional as F
 from torch import nn
 
 from torchseq.agents.model_agent import ModelAgent
-
 from torchseq.models.retrieval_model import RetrievalModel
 from torchseq.models.contrastive_loss import ContrastiveLoss, NliContrastiveLoss
 from torchseq.models.contrastive_triplet_loss import ContrastiveTripletLoss
-
-
+from torchseq.models.contrastive_hrq_loss import HierarchicalQuantizationLoss
 from torchseq.utils.logging import Logger
+
+from copy import copy
 
 
 class RetrievalAgent(ModelAgent):
@@ -45,13 +45,15 @@ class RetrievalAgent(ModelAgent):
                 bsz=self.config.training.contrastive_loss.get("nli_bsz", 64),
             )
         elif self.config.training.contrastive_loss.get("triplet_loss", False):
-            self.loss = ContrastiveTripletLoss(
-                metric=self.config.training.contrastive_loss.get("metric", "euclidean"),
-                loss_type=self.config.training.contrastive_loss.get("loss_type", "softnn"),
-                tau=self.config.training.contrastive_loss.get("tau", 1.0),
-                inbatch_negatives=self.config.training.contrastive_loss.get("inbatch_negatives", False),
-                softnn_agg_mean=self.config.training.contrastive_loss.get("softnn_agg_mean", False),
-            )
+            loss_kwargs = copy(self.config.training.contrastive_loss.data)
+            loss_kwargs.pop("triplet_loss")  # this is a temp fix - it will break if the key is missing
+            self.loss = ContrastiveTripletLoss(**loss_kwargs)
+            self.triplet_loss = True
+            self.src_field = "query"
+        elif self.config.training.contrastive_loss.get("hrq_loss", False):
+            loss_kwargs = copy(self.config.training.contrastive_loss.data)
+            loss_kwargs.pop("hrq_loss")  # this is a temp fix - it will break if the key is missing
+            self.loss = HierarchicalQuantizationLoss(**loss_kwargs)
             self.triplet_loss = True
             self.src_field = "query"
         else:
@@ -78,11 +80,13 @@ class RetrievalAgent(ModelAgent):
         encodings, memory = self.model(batch, src_field=self.src_field)
 
         encodings2, memory2, groups = None, None, None
-        pos_encodings, pos_memory = None, None
-        neg_encodings, neg_memory = None, None
+        pos_encodings, pos_memory = None, {}
+        neg_encodings, neg_memory = None, {}
         if self.config.training.contrastive_loss.get("biencoder", False):
             encodings2, memory2 = self.model(batch, src_field=self.tgt_field)
-        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+        elif self.config.training.contrastive_loss.get(
+            "triplet_loss", False
+        ) or self.config.training.contrastive_loss.get("hrq_loss", False):
             pos_encodings, pos_memory = self.model(batch, src_field="pos_target")
             neg_encodings, neg_memory = self.model(batch, src_field="neg_target")
         else:
@@ -96,9 +100,25 @@ class RetrievalAgent(ModelAgent):
             cont_loss = self.loss(encodings, batch)
         elif self.config.training.contrastive_loss.get("triplet_loss", False):
             cont_loss = self.loss(
+                batch["_global_step"],
                 encodings,
                 pos_encodings=pos_encodings,
                 neg_encodings=neg_encodings,
+                pos_scores=batch.get("pos_score", None),
+                neg_scores=batch.get("neg_score", None),
+            )
+        elif self.config.training.contrastive_loss.get("hrq_loss", False):
+            cont_loss = self.loss(
+                batch["_global_step"],
+                query_path_onehot=memory["hrq_all_onehot"],
+                query_path_logits=memory["hrq_all_logits"],
+                query_path_embedded=memory["hrq_subpath_embeddings"],
+                pos_path_onehot=pos_memory["hrq_all_onehot"],
+                pos_path_logits=pos_memory["hrq_all_logits"],
+                pos_path_embedded=pos_memory["hrq_subpath_embeddings"],
+                neg_path_onehot=neg_memory["hrq_all_onehot"],
+                neg_path_logits=neg_memory["hrq_all_logits"],
+                neg_path_embedded=neg_memory["hrq_subpath_embeddings"],
                 pos_scores=batch.get("pos_score", None),
                 neg_scores=batch.get("neg_score", None),
             )
@@ -144,11 +164,13 @@ class RetrievalAgent(ModelAgent):
         encodings, memory = self.model(batch, src_field=self.src_field)
 
         encodings2, memory2, groups = None, None, None
-        pos_encodings, pos_memory = None, None
-        neg_encodings, neg_memory = None, None
+        pos_encodings, pos_memory = None, {}
+        neg_encodings, neg_memory = None, {}
         if self.config.training.contrastive_loss.get("biencoder", False):
             encodings2, memory2 = self.model(batch, src_field=self.tgt_field)
-        elif self.config.training.contrastive_loss.get("triplet_loss", False):
+        elif self.config.training.contrastive_loss.get(
+            "triplet_loss", False
+        ) or self.config.training.contrastive_loss.get("hrq_loss", False):
             if calculate_loss:
                 pos_encodings, pos_memory = self.model(batch, src_field="pos_target")
                 neg_encodings, neg_memory = self.model(batch, src_field="neg_target")
@@ -168,9 +190,25 @@ class RetrievalAgent(ModelAgent):
                 this_loss += self.loss(encodings, batch)
             elif self.config.training.contrastive_loss.get("triplet_loss", False):
                 this_loss += self.loss(
+                    batch["_global_step"],
                     encodings,
                     pos_encodings=pos_encodings,
                     neg_encodings=neg_encodings,
+                    pos_scores=batch.get("pos_score", None),
+                    neg_scores=batch.get("neg_score", None),
+                )
+            elif self.config.training.contrastive_loss.get("hrq_loss", False):
+                this_loss += self.loss(
+                    batch["_global_step"],
+                    query_path_onehot=memory["hrq_all_onehot"],
+                    query_path_logits=memory["hrq_all_logits"],
+                    query_path_embedded=memory["hrq_subpath_embeddings"],
+                    pos_path_onehot=pos_memory["hrq_all_onehot"],
+                    pos_path_logits=pos_memory["hrq_all_logits"],
+                    pos_path_embedded=pos_memory["hrq_subpath_embeddings"],
+                    neg_path_onehot=neg_memory["hrq_all_onehot"],
+                    neg_path_logits=neg_memory["hrq_all_logits"],
+                    neg_path_embedded=neg_memory["hrq_subpath_embeddings"],
                     pos_scores=batch.get("pos_score", None),
                     neg_scores=batch.get("neg_score", None),
                 )

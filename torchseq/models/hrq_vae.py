@@ -246,6 +246,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         quantized_list = []
         vq_codes = []
         all_probs = []
+        all_logits = []
 
         loss = torch.zeros(input_shape[0]).to(inputs.device)
 
@@ -407,19 +408,19 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 min(float(global_step) / float(self._kl_warmup_steps), 1.0) if self._kl_warmup_steps > 0 else 1.0
             )
             kl = self._kl_loss(nn.functional.log_softmax(logits, dim=-1), prior).sum(dim=-1)
-            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/kl", kl.mean(), global_step)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix:02d}/kl", kl.mean(), global_step)
             if self._kl_weight > 0:
                 loss += kl * self._kl_weight * kl_warmup_weight
 
-            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/temp", gumbel_temp, global_step)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix:02d}/temp", gumbel_temp, global_step)
 
             Logger().log_scalar(
-                f"hrq_{dev_str}/{head_ix}/probs_ent",
+                f"hrq_{dev_str}/{head_ix:02d}/probs_ent",
                 -1.0 * torch.sum(posterior * torch.log(posterior + 1e-10), dim=1).mean(),
                 global_step,
             )
             Logger().log_scalar(
-                f"hrq_{dev_str}/{head_ix}/probs_ent_batch",
+                f"hrq_{dev_str}/{head_ix:02d}/probs_ent_batch",
                 -1.0
                 * torch.sum(
                     posterior
@@ -429,24 +430,27 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 ).mean(),
                 global_step,
             )
-            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/probs_min", torch.min(posterior), global_step)
-            Logger().log_scalar(f"hrq_{dev_str}/{head_ix}/probs_max", torch.max(posterior), global_step)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix:02d}/probs_min", torch.min(posterior), global_step)
+            Logger().log_scalar(f"hrq_{dev_str}/{head_ix:02d}/probs_max", torch.max(posterior), global_step)
             # Logger().log_histogram(f"hrq_{dev_str}/probs_hist_" + str(head_ix), probs.cpu().detach().tolist(), global_step)
             Logger().log_scalar(
-                f"hrq_{dev_str}/{head_ix}/norm_input", torch.linalg.vector_norm(resid_error, dim=1).mean(), global_step
+                f"hrq_{dev_str}/{head_ix:02d}/norm_input",
+                torch.linalg.vector_norm(resid_error, dim=1).mean(),
+                global_step,
             )
             Logger().log_scalar(
-                f"hrq_{dev_str}/{head_ix}/norm_meaninput",
+                f"hrq_{dev_str}/{head_ix:02d}/norm_meaninput",
                 torch.linalg.vector_norm(resid_error.mean(dim=0)),
                 global_step,
             )
             Logger().log_scalar(
-                f"hrq_{dev_str}/{head_ix}/norm_embed",
+                f"hrq_{dev_str}/{head_ix:02d}/norm_embed",
                 torch.linalg.vector_norm(embedding, dim=1).mean(),
                 global_step,
             )
 
             all_probs.append(probs.unsqueeze(1))
+            all_logits.append(logits.unsqueeze(1))
 
         if forced_codes is not None:
             assert (
@@ -581,7 +585,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
             loss += (norms - pairwise_diffs.mean().unsqueeze(0)) * self._diversity_penalty_weight
 
         # Stash the embeddings of all subpaths for use in training losses
-        subpath_embeddings = torch.cumsum(quantized, dim=1)
+        subpath_embeddings = quantized
 
         if self._output_cumsum:
             quantized = torch.cumsum(quantized, dim=1)
@@ -639,4 +643,4 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 inputs = torch.round(inputs, decimals=self._debug.get("round_digits", None))
             return 0.0, inputs, vq_codes
 
-        return loss, quantized, vq_codes, subpath_embeddings
+        return loss, quantized, vq_codes, all_logits, all_probs, subpath_embeddings

@@ -1149,16 +1149,6 @@ class SelfRetrievalMetricHook(MetricHook):
                 silent=agent.silent,
                 term_score_weights=term_score_weights,
             )
-            # summary_paths_generic, summary_path_weights_generic = SelfRetrievalMetricHook.select_entity_summary_paths(
-            #     paths_by_review_by_entity,
-            #     ceil(num_heads // 8),
-            #     path_limit=config.eval.metrics.self_retrieval.get("summary_smart_num_generic", 4),
-            #     truncation_length=None,
-            #     prune_min_weight=None,
-            #     prune_max_paths=None,
-            #     use_tfidf=True,
-            #     block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
-            # )
 
             summary_paths, summary_path_weights = {}, {}
             for ent_id in summary_paths_generic.keys():
@@ -1183,19 +1173,6 @@ class SelfRetrievalMetricHook(MetricHook):
             )
 
         # # Identify top clusters per entity
-        # codes_by_entity = defaultdict(Counter)
-
-        # for row, codes in zip(eval_data, all_codes):
-        #     codes_by_entity[row["entity_id"]][tuple(codes.tolist()[:-MASK_LENGTH])] += 1
-
-        # mask = [1] * (num_heads - MASK_LENGTH) + [0] * MASK_LENGTH
-
-        # filtered_examples = []
-        # for entity, counter in codes_by_entity.items():
-        #     for x, count in counter.most_common(5):
-        #         filtered_examples.append(
-        #             {"entity_id": entity, "codes": list(x) + [0] * MASK_LENGTH, "sentence": "", "head_mask": mask}
-        #         )
 
         filtered_examples = []
         # for entity, paths in summary_paths.items():
@@ -1217,35 +1194,6 @@ class SelfRetrievalMetricHook(MetricHook):
                     }
                 )
 
-        # Generate!
-        # agent.config.eval.data["sample_outputs"] = True
-
-        # config_forced = copy.deepcopy(config.data)
-        # config_forced["dataset"] = "json"
-        # config_forced["json_dataset"] = {
-        #     "path": None,
-        #     "field_map": [
-        #         {"type": "copy", "from": "sentence", "to": "target"},
-        #         {"type": "copy", "from": "sentence", "to": "source"},
-        #         {"type": "copy", "from": "codes", "to": "forced_codes"},
-        #         {"type": "copy", "from": "head_mask", "to": "head_mask"},
-        #     ],
-        # }
-
-        # forced_loader = JsonDataLoader(
-        #     config=Config(config_forced), data_path=agent.data_path, dev_samples=filtered_examples
-        # )
-
-        # _, _, (output, _, _), _ = agent.inference(forced_loader.valid_loader, desc="Generating")
-
-        # sentences_by_entity = defaultdict(list)
-        # for input, sentence in zip(filtered_examples, output):
-        #     sentences_by_entity[input["entity_id"]].append(get_true_case(sentence))
-
-        # if config.eval.metrics.self_retrieval.get("summary_dedupe_output", False):
-        #     for ent_id, sents in sentences_by_entity.items():
-        #         sentences_by_entity[ent_id] = list(set(sents))
-
         # Extractive summaries
         sentences_by_path = defaultdict(lambda: defaultdict(list))
         extractive_summs = []
@@ -1260,7 +1208,13 @@ class SelfRetrievalMetricHook(MetricHook):
 
         all_evidence = []
         all_evidence_paths = []
-        for row in tqdm(eval_data, desc="Selecting centroids for extractive summary", disable=agent.silent):
+        for row in tqdm(
+            eval_data,
+            desc="Selecting centroids for extractive summary (using {:})".format(
+                config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge")
+            ),
+            disable=agent.silent,
+        ):
             summary_sentences = []
             summary_evidence = []
             summary_evidence_paths = []
@@ -1358,6 +1312,7 @@ class SelfRetrievalMetricHook(MetricHook):
             "paths_by_review_by_entity": paths_by_review_by_entity,
             "inputs": eval_sentences,
             "all_codes": all_codes,
+            "refs": gold_summs,
         }
 
     @abstractmethod
@@ -1393,7 +1348,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
             scores["nli"] = {}
 
-        for depth in range(min(num_heads, 4)):
+        for depth in range(min(num_heads, 6)):
             sents_by_cluster = defaultdict(set)
             for codes, sents in sents_by_code.items():
                 sents_by_cluster[eval(codes)[: depth + 1]].update([sent.lower() for sent in sents])
