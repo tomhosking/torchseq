@@ -4,6 +4,10 @@ MCKENZIE_HOOK=~/mckenzie/scripts/hook.sh
 
 
 
+jobName="UNK"
+jobTag="custom"
+
+
 POSITIONAL=()
 while [[ $# -gt 0 ]]
 do
@@ -14,6 +18,8 @@ case $key in
     CONFIG="$2"
     POSITIONAL+=("$1") # save it in an array for later
     POSITIONAL+=("$2") # save it in an array for later
+    jobName=$(cat $CONFIG | grep \"name\"\: | sed -E 's/.+\"name\": \"(.*)\"\,/\1/')
+    jobTag=$(cat $CONFIG | grep \"tag\"\: | sed -E 's/.+\"tag\": \"(.*)\"\,/\1/')
     shift # past argument
     shift # past value
     ;;
@@ -24,7 +30,6 @@ case $key in
 esac
 done
 set -- "${POSITIONAL[@]}" # restore positional parameters
-
 
 
 
@@ -40,9 +45,6 @@ then
     
     ${MCKENZIE_HOOK} -a 1 -i $jobId -p $partition > /dev/null
     
-    jobName=$(cat $CONFIG | grep \"name\"\: | sed -E 's/.+\"name\": \"(.*)\"\,/\1/')
-    jobTag=$(cat $CONFIG | grep \"tag\"\: | sed -E 's/.+\"tag\": \"(.*)\"\,/\1/')
-
     echo "Batch job ID $jobId -> $jobTag/$jobName"
     
     ${MCKENZIE_HOOK} -i $jobId -p $partition -n $jobTag/$jobName > /dev/null
