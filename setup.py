@@ -31,7 +31,7 @@ setuptools.setup(
         'scipy>=1.5',
         'nltk>=3.6.7',
         'transformers==4.36.2',
-        'tokenizers==0.14.1',
+        'tokenizers==0.15.0',
         'jsonlines>=2',
         'sacrebleu>=2.0',
         'py-rouge',
