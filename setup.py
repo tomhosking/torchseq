@@ -26,11 +26,11 @@ setuptools.setup(
     },
     install_requires = [
         'tensorboard==2.15.0',
-        'torch==2.1.0',
+        'torch==2.1.2',
         'tqdm>=4.62',
         'scipy>=1.5',
         'nltk>=3.6.7',
-        'transformers==4.34.0',
+        'transformers==4.36.2',
         'tokenizers==0.14.1',
         'jsonlines>=2',
         'sacrebleu>=2.0',
@@ -43,6 +43,7 @@ setuptools.setup(
         'protobuf<4',
         'pydantic==1.9.1',
         'truecase==0.0.14',
-        'lightning==2.1.0'
+        'lightning==2.1.0',
+        'summac'
     ],
 )

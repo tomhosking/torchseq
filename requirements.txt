@@ -1,11 +1,11 @@
 tensorboard==2.15.0
-torch==2.1.0
+torch==2.1.2
 tqdm>=4.62
 scipy>=1.5
 lightning==2.1.0
 
 nltk>=3.6.7
-transformers==4.34.0
+transformers==4.36.2
 tokenizers==0.14.1
 jsonlines>=2
 sacrebleu>=2.0
@@ -15,6 +15,7 @@ opentsne
 sentencepiece==0.1.95
 pydantic==1.9.1
 truecase==0.0.14
+summac
 
 matplotlib
 
