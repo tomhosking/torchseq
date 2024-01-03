@@ -95,7 +95,7 @@ def test_functions():
     x = torch.Tensor([[0.0, 0.0, 0.0, 1.0], [0.13, 0.7, 0.17, 0.0]])
     y = torch.Tensor([[0.0, 0.0, 0.0, 1.0]])
 
-    assert tsfunctions.cos_sim(x, y).equal(torch.tensor([[1.0], [0.0000]]))
+    assert tsfunctions.cos_sim(x, y).equal(torch.tensor([1.0, 0.0000]))
 
     test_data = list(range(6))
 
