@@ -32,4 +32,20 @@ def wandb_log(data, step=None):
     if (
         "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ and os.environ.get("WANDB_USERNAME", "") != ""
     ) or os.environ.get("WANDB_MODE", None) == "disabled":
-        wandb.log(data, step)
+        if step >= wandb.run.step:
+            wandb.log(data, step)
+
+
+def wandb_summary(data):
+    if (
+        "WANDB_API_KEY" in os.environ and "WANDB_USERNAME" in os.environ and os.environ.get("WANDB_USERNAME", "") != ""
+    ) or os.environ.get("WANDB_MODE", None) == "disabled":
+
+        def stringify_keys(data):
+            if isinstance(data, dict):
+                return {str(k): stringify_keys(v) for k, v in data.items()}
+            else:
+                return data
+
+        for k, v in stringify_keys(data).items():
+            wandb.run.summary[k] = v

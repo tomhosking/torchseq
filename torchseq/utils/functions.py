@@ -59,9 +59,10 @@ def top_k_top_p_filtering(logits, top_k=0, top_p=0.0, filter_value=-torch.inf):
 
 # Return the cosine similarity between x, y
 def cos_sim(x, y):
-    # prod = x*y
-    prod = torch.matmul(x, y.T)
-    norm = torch.matmul(x.norm(dim=-1, keepdim=True), y.norm(dim=-1, keepdim=True).T)
+    prod = (x * y).sum(-1, keepdim=False)
+    # prod = torch.matmul(x, y)
+    # norm = torch.matmul(x.norm(dim=-1, keepdim=True), y.norm(dim=-1, keepdim=True).transpose(-1,-2))
+    norm = x.norm(dim=-1, keepdim=False) * y.norm(dim=-1, keepdim=False)
     return prod / norm
 
 
