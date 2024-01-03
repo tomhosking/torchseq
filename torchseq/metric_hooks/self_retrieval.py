@@ -17,7 +17,7 @@ from torchseq.utils.config import Config
 from torchseq.utils.functions import batchify
 from torchseq.utils.ari import get_cluster_ari
 from torchseq.utils.rouge import get_jackknife_rouge, get_pairwise_rouge
-from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
+
 
 import sacrebleu
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
@@ -1518,6 +1518,9 @@ class SelfRetrievalMetricHook(MetricHook):
 
     @abstractmethod
     def eval_cluster_prevalence(config, agent, evidence, test=False):
+        # Import here because SummaC isn't installed by default..!
+        from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
+
         metric = PrevalenceMetric()
 
         # Optionally, cap the total number of samples (for speed)
