@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, Any
 
 from torchseq.utils.functions import initialize_truncated_normal_
 
@@ -56,7 +56,7 @@ class MultiHeadedPooling(nn.Module):
         value: torch.Tensor,
         query: Optional[torch.Tensor] = None,
         mask=None,
-    ) -> torch.Tensor:
+    ) -> Any:
         batch_size = key.size(0)
 
         def shape(x: torch.Tensor, dim=self.dim_per_head) -> torch.Tensor:
