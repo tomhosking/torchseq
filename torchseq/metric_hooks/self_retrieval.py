@@ -1489,9 +1489,6 @@ class SelfRetrievalMetricHook(MetricHook):
                 curr_clusters.append([x[0] for x in topk if x[1] > 15])
             oracle_clusters.append(curr_clusters)
 
-        def C2(x):
-            return binom(x, 2)
-
         oracle_mean_sizes = []
         pred_mean_sizes = []
 
