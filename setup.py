@@ -44,6 +44,6 @@ setuptools.setup(
         'pydantic==1.9.1',
         'truecase==0.0.14',
         'lightning==2.1.0',
-        'summac'
+        # 'summac'
     ],
 )
