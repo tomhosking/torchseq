@@ -1,9 +1,13 @@
-from typing import Literal, Optional, Dict, Union
+from typing import Literal, Optional, Dict, Union, List
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torchseq.utils.functions import get_off_diagonal_elements, cos_sim
+
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_distances
+
 from math import exp
-from torchseq.utils.functions import get_off_diagonal_elements
 
 
 class HierarchicalQuantizationLoss(nn.Module):
@@ -11,7 +15,7 @@ class HierarchicalQuantizationLoss(nn.Module):
 
     def __init__(
         self,
-        similarity_fn: Literal["crossent", "kl", "euclidean"] = "crossent",
+        similarity_fn: Literal["crossent", "kl", "euclidean", "dot", "cosine"] = "crossent",
         tau: float = 1.0,
         gamma: Optional[float] = 2.0,
         lamda: float = 2.0,
@@ -30,6 +34,11 @@ class HierarchicalQuantizationLoss(nn.Module):
         detach_prev_levels: bool = False,
         query_leaves_only: bool = False,
         tgt_leaves_only: bool = False,
+        mean_weighting: bool = False,
+        hard_neg_weight: float = 1,
+        neg_topic_threshold: Optional[float] = None,
+        neg_topic_use_scores: bool = False,
+        topic_dataset_sents: Optional[List[str]] = None,
     ):
         super(HierarchicalQuantizationLoss, self).__init__()
 
@@ -53,6 +62,21 @@ class HierarchicalQuantizationLoss(nn.Module):
         self.detach_prev_levels = detach_prev_levels
         self.query_leaves_only = query_leaves_only
         self.tgt_leaves_only = tgt_leaves_only
+        self.mean_weighting = mean_weighting
+        self.hard_neg_weight = hard_neg_weight
+        self.neg_topic_threshold = neg_topic_threshold
+        self.neg_topic_use_scores = neg_topic_use_scores
+
+        if neg_topic_threshold is not None or neg_topic_use_scores:
+            if topic_dataset_sents is None:
+                raise Exception("If neg_topic_threshold is not null, then topic_dataset_sents needs to be set!")
+
+            self.tfidf_vectorizer = TfidfVectorizer(
+                stop_words=("english"),
+                min_df=5,
+                max_df=0.5,
+            )
+            self.tfidf_vectorizer.fit(topic_dataset_sents)
 
     def forward(
         self,
@@ -60,12 +84,15 @@ class HierarchicalQuantizationLoss(nn.Module):
         query_path_onehot: torch.Tensor,
         query_path_logits: torch.Tensor,
         query_path_embedded: torch.Tensor,
+        query_text: List[str],
         pos_path_onehot: torch.Tensor,
         pos_path_logits: torch.Tensor,
         pos_path_embedded: torch.Tensor,
+        pos_text: List[str],
         neg_path_onehot: torch.Tensor,
         neg_path_logits: torch.Tensor,
         neg_path_embedded: torch.Tensor,
+        neg_text: List[str],
         pos_scores: Optional[torch.Tensor] = None,
         neg_scores: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
@@ -75,6 +102,25 @@ class HierarchicalQuantizationLoss(nn.Module):
             pos_scores = torch.ones_like(query_path_onehot[:, 0, 0])
         if neg_scores is None:
             neg_scores = torch.zeros_like(query_path_onehot[:, 0, 0])
+
+        if self.neg_topic_threshold is not None or self.neg_topic_use_scores:
+            query_tfidf = self.tfidf_vectorizer.transform(query_text)
+            neg_tfidf = self.tfidf_vectorizer.transform(neg_text)
+            query_neg_tfidf_distances = torch.tensor(cosine_distances(query_tfidf, neg_tfidf)).to(
+                query_path_embedded.device
+            )
+
+            if self.neg_topic_use_scores:
+                query_neg_tfidf_mask = query_neg_tfidf_distances
+            else:
+                query_neg_tfidf_mask = torch.where(
+                    query_neg_tfidf_distances < self.neg_topic_threshold,
+                    torch.zeros_like(query_neg_tfidf_distances),
+                    torch.ones_like(query_neg_tfidf_distances),
+                )
+
+        else:
+            query_neg_tfidf_mask = torch.tensor(1.0)
 
         if self.detach_prev_levels:
             query_path_embedded_prev = torch.cumsum(query_path_embedded, dim=1).detach()
@@ -182,24 +228,28 @@ class HierarchicalQuantizationLoss(nn.Module):
                 # Take distances between each tgt level AND query level
                 pos_distances = ((pos_path_embedded - query_path_embedded) ** 2).sum(-1)
                 neg_distances = ((neg_path_embedded.unsqueeze(0) - query_path_embedded.unsqueeze(1)) ** 2).sum(-1)
-
+        elif self.similarity_fn == "dot":
+            pos_distances = -nn.functional.relu((pos_path_embedded * query_path_embedded).sum(-1))
+            neg_distances = -nn.functional.relu(
+                (neg_path_embedded.unsqueeze(0) * query_path_embedded.unsqueeze(1)).sum(-1)
+            )
+        elif self.similarity_fn == "cosine":
+            # print(pos_path_embedded.shape, query_path_embedded.shape)
+            pos_distances = -nn.functional.relu(cos_sim(pos_path_embedded, query_path_embedded))
+            neg_distances = -nn.functional.relu(
+                cos_sim(neg_path_embedded.unsqueeze(0), query_path_embedded.unsqueeze(1))
+            )
+            # print(pos_distances.shape, neg_distances.shape)
+            # print(pos_path_embedded.norm(dim=-1).min(), query_path_embedded.norm(dim=-1).min(), neg_path_embedded.norm(dim=-1).min())
+            # print(pos_distances.isnan().any(), neg_distances.isnan().any())
+            # exit()
         else:
             raise Exception("Unrecognised similarity_fn: {:}".format(self.similarity_fn))
 
-        # print(pos_distances.shape, neg_distances.shape)
-
-        # print((-pos_distances * hierarchy_weight * mask / self.tau).shape)
-        # print(
-        #     (
-        #         -neg_distances
-        #         * hierarchy_weight.unsqueeze(self.hierarchy_weight_dim)
-        #         * mask.unsqueeze(self.hierarchy_weight_dim)
-        #         / self.tau
-        #     ).shape
-        # )
-
         pos_distances = torch.exp(
-            (-pos_distances * hierarchy_weight * mask / self.tau).sum(-1)  # TODO: This may be better as mean()
+            (-pos_distances * hierarchy_weight * mask / self.tau).mean(-1)
+            if self.mean_weighting
+            else (-pos_distances * hierarchy_weight * mask / self.tau).sum(-1)
         )  # bsz
         neg_distances = torch.exp(
             (
@@ -207,14 +257,15 @@ class HierarchicalQuantizationLoss(nn.Module):
                 * hierarchy_weight.unsqueeze(self.hierarchy_weight_dim)
                 * mask.unsqueeze(self.hierarchy_weight_dim)
                 / self.tau
-            ).sum(
-                -1
-            )  # TODO: This may be better as mean()
+            ).mean(-1)
+            if self.mean_weighting
+            else (
+                -neg_distances
+                * hierarchy_weight.unsqueeze(self.hierarchy_weight_dim)
+                * mask.unsqueeze(self.hierarchy_weight_dim)
+                / self.tau
+            ).sum(-1)
         )  # bsz x bsz
-
-        # print(pos_distances.shape, neg_distances.shape)
-        # print(pos_scores.shape, neg_scores.shape)
-        # print(neg_distances.diagonal(dim1=0, dim2=1).shape)
 
         if self.inbatch_negatives:
             # Assume scores for in-batch negs are 0 - then they only need to be included in the denominator
@@ -236,8 +287,9 @@ class HierarchicalQuantizationLoss(nn.Module):
 
                 denom = (
                     pos_distances
-                    + neg_distances.diagonal(dim1=0, dim2=1)
-                    + get_off_diagonal_elements(neg_distances, 0, 1).mean(dim=1) * inbatch_weight
+                    + neg_distances.diagonal(dim1=0, dim2=1) * self.hard_neg_weight
+                    + get_off_diagonal_elements(neg_distances * query_neg_tfidf_mask, 0, 1).mean(dim=1)
+                    * inbatch_weight
                 )
 
             else:

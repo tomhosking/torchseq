@@ -27,7 +27,7 @@ from torchseq.utils.mckenzie import update_mckenzie
 from torchseq.utils.tokenizer import Tokenizer
 from torchseq.utils.cache import Cache
 from torchseq.utils.optimizer_group import OptimizerGroup, SchedulerGroup
-from torchseq.utils.wandb import wandb_log
+from torchseq.utils.wandb import wandb_log, wandb_summary
 from torchseq.utils.functions import to_device_unless_marked
 
 from torchseq.models.ranger import Ranger
@@ -811,6 +811,8 @@ class ModelAgent(BaseAgent):
             self.all_metrics_at_best = {"nll": test_loss.item(), "epoch": self.current_epoch, **all_metrics}
 
             wandb_log({split_slug + "/" + k: v for k, v in self.all_metrics_at_best.items()}, step=self.global_step)
+
+            wandb_summary(self.all_metrics_at_best)
 
             if self.run_id is not None:
                 with open(os.path.join(self.run_output_path, f"output.{split_slug}.txt"), "w") as f:

@@ -11,6 +11,8 @@ from torchseq.models.contrastive_hrq_loss import HierarchicalQuantizationLoss
 from torchseq.utils.logging import Logger
 
 from copy import copy
+import jsonlines
+import os
 
 
 class RetrievalAgent(ModelAgent):
@@ -53,6 +55,21 @@ class RetrievalAgent(ModelAgent):
         elif self.config.training.contrastive_loss.get("hrq_loss", False):
             loss_kwargs = copy(self.config.training.contrastive_loss.data)
             loss_kwargs.pop("hrq_loss")  # this is a temp fix - it will break if the key is missing
+
+            if loss_kwargs.get("neg_topic_threshold", None) is not None or loss_kwargs.get(
+                "neg_topic_use_scores", False
+            ):
+                # Load training sentences to construct tfidf dict
+                # dataset_path = config.json_dataset.path
+                # TODO: This cross-reference to a metric config is a Bad Idea - find it a proper home
+                dataset_path = config.eval.metrics.self_retrieval.dataset_all
+                with jsonlines.open(os.path.join(self.data_path, dataset_path, "reviews.train.jsonl")) as reader:
+                    train_data = list(reader)
+                all_sents = [row["sentence"] for row in train_data]
+                all_sents = list(set(all_sents))
+
+                loss_kwargs["topic_dataset_sents"] = all_sents
+
             self.loss = HierarchicalQuantizationLoss(**loss_kwargs)
             self.triplet_loss = True
             self.src_field = "query"
@@ -113,12 +130,15 @@ class RetrievalAgent(ModelAgent):
                 query_path_onehot=memory["hrq_all_onehot"],
                 query_path_logits=memory["hrq_all_logits"],
                 query_path_embedded=memory["hrq_subpath_embeddings"],
+                query_text=batch["query_text"],
                 pos_path_onehot=pos_memory["hrq_all_onehot"],
                 pos_path_logits=pos_memory["hrq_all_logits"],
                 pos_path_embedded=pos_memory["hrq_subpath_embeddings"],
+                pos_text=batch["pos_target_text"],
                 neg_path_onehot=neg_memory["hrq_all_onehot"],
                 neg_path_logits=neg_memory["hrq_all_logits"],
                 neg_path_embedded=neg_memory["hrq_subpath_embeddings"],
+                neg_text=batch["neg_target_text"],
                 pos_scores=batch.get("pos_score", None),
                 neg_scores=batch.get("neg_score", None),
             )
@@ -203,12 +223,15 @@ class RetrievalAgent(ModelAgent):
                     query_path_onehot=memory["hrq_all_onehot"],
                     query_path_logits=memory["hrq_all_logits"],
                     query_path_embedded=memory["hrq_subpath_embeddings"],
+                    query_text=batch["query_text"],
                     pos_path_onehot=pos_memory["hrq_all_onehot"],
                     pos_path_logits=pos_memory["hrq_all_logits"],
                     pos_path_embedded=pos_memory["hrq_subpath_embeddings"],
+                    pos_text=batch["pos_target_text"],
                     neg_path_onehot=neg_memory["hrq_all_onehot"],
                     neg_path_logits=neg_memory["hrq_all_logits"],
                     neg_path_embedded=neg_memory["hrq_subpath_embeddings"],
+                    neg_text=batch["neg_target_text"],
                     pos_scores=batch.get("pos_score", None),
                     neg_scores=batch.get("neg_score", None),
                 )

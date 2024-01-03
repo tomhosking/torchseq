@@ -9,9 +9,7 @@ from torchseq.models.modular_bottleneck import ModularBottleneck
 from torchseq.models.contrastive_loss import ContrastiveLoss
 from torchseq.utils.logging import Logger
 
-# from torchseq.utils.functions import cos_sim, onehot
-# from torchseq.models.lr_schedule import get_hyperbolic_schedule, get_tanh_schedule
-# from torchseq.models.vq_code_predictor import VQCodePredictor
+
 from torchseq.models.pooling import MultiHeadedPooling
 
 

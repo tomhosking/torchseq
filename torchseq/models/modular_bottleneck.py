@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from transformers import BartModel, BertModel
 
-from torchseq.models.pooling import MultiHeadedPooling
+from torchseq.models.pooling import MultiHeadedPooling, MultiHeadPoolingFast
 from torchseq.models.vq_vae import VectorQuantizerMultiHead
 from torchseq.models.hrq_vae import HierarchicalRefinementQuantizer
 from torchseq.models.pythae_vq import PythaeQuantizerWrapper
@@ -165,13 +165,22 @@ class BottleneckPart(nn.Module):
         # print('building part, dim=',embedding_dim)
 
         if config.get("pooling", False):
-            self.pooling = MultiHeadedPooling(
-                num_heads,
-                self.embedding_dim,
-                dropout=global_config.dropout,
-                use_final_linear=False,
-                use_layer_norm=self.config.get("layer_norm", False),
-            )
+            if config.get("fast_pooling", False):
+                self.pooling = MultiHeadPoolingFast(
+                    self.embedding_dim,
+                    num_heads,
+                    dropout_p=global_config.dropout,
+                    query_token_ix=self.config.get("query_token_ix", None),
+                )
+            else:
+                self.pooling = MultiHeadedPooling(
+                    num_heads,
+                    self.embedding_dim,
+                    dropout=global_config.dropout,
+                    use_final_linear=False,
+                    use_layer_norm=self.config.get("layer_norm", False),
+                    query_token_ix=self.config.get("query_token_ix", None),
+                )
             # print('built pooling, dim=', self.embedding_dim)
 
         if config.get("freeze_pooling", False):
@@ -185,6 +194,7 @@ class BottleneckPart(nn.Module):
                 self.embedding_dim,
                 dropout=global_config.dropout,
                 use_final_linear=False,
+                query_token_ix=self.config.get("query_token_ix", None),
             )
             if not config.get("pooling", False):
                 self.mu_proj = nn.Linear(self.embedding_dim, self.embedding_dim, bias=False)
@@ -242,11 +252,15 @@ class BottleneckPart(nn.Module):
 
         # print('BN part, input=', encoding.shape)
 
-        encoding_pooled = (
-            self.pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)
-            if self.config.get("pooling", True)
-            else encoding
-        )
+        if self.config.get("pooling", True):
+            if self.config.get("fast_pooling", False):
+                encoding_pooled = self.pooling(sequence=encoding, key_padding_mask=memory["encoding_mask"]).unsqueeze(
+                    1
+                )
+            else:
+                encoding_pooled = self.pooling(key=encoding, value=encoding, mask=memory["encoding_mask"]).unsqueeze(1)
+        else:
+            encoding_pooled = encoding
 
         # Stash this for later
         encoding_post = encoding_pooled

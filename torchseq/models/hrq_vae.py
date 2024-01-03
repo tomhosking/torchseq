@@ -32,6 +32,7 @@ class HierarchicalRefinementQuantizer(nn.Module):
         init_embeds_truncnorm=False,
         init_embeds_uniform=False,
         init_embeds_polar=False,
+        init_embeds_orthog=False,
         init_delay_steps=None,
         init_dynamic_var=False,
         init_scale=1.0,
@@ -98,6 +99,10 @@ class HierarchicalRefinementQuantizer(nn.Module):
         self._warmup_steps = warmup_steps
 
         self._cos_sim = use_cosine_similarities
+        if use_cosine_similarities:
+            raise Exception(
+                "cos_sim has changed since this VQ code was written! Check that it behaves as expected then remove this error"
+            )
 
         self._norm_loss_weight = norm_loss_weight
         self._norm_loss_scale = norm_loss_scale
@@ -172,6 +177,8 @@ class HierarchicalRefinementQuantizer(nn.Module):
                 initialize_polar_normal_(
                     embedding.weight.data[init_ix:, :], scale=init_scale * init_decay_weight**hix
                 )  # / sqrt(self._embedding_dim)
+            elif init_embeds_orthog:
+                nn.init.orthogonal_(embedding.weight.data[init_ix:, :])
             else:
                 embedding.weight.data[init_ix:, :].normal_(std=init_scale * init_decay_weight**hix)
 

@@ -306,6 +306,9 @@ class ExemplarGuidedAutoencoderModel(nn.Module):
 
                     # TODO: there must be a cleaner way of flipping the tensor ranges here...
                     if self.config.bottleneck.get("cos_separation_loss", True):
+                        raise Exception(
+                            "cos_sim has changed since this VQ code was written! Check that it behaves as expected then remove this error"
+                        )
                         diff1 = cos_sim(
                             encoding_pooled[:, :, self.sep_splice_ix :],
                             template_encoding_pooled[:, :, self.sep_splice_ix :],

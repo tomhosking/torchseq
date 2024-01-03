@@ -112,6 +112,10 @@ class VectorQuantizerMultiHead(nn.Module):
         self._kl_weight = kl_weight
 
         self._cos_sim = use_cosine_similarities
+        if use_cosine_similarities:
+            raise Exception(
+                "cos_sim has changed since this VQ code was written! Check that it behaves as expected then remove this error"
+            )
 
         self._additive = additive
         self._only_final = only_final

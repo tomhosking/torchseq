@@ -11,9 +11,6 @@ from torchseq.utils.logging import Logger
 from torchseq.utils.config import Config
 from torchseq.utils.tokenizer import Tokenizer
 
-# from torchseq.utils.functions import cos_sim, onehot
-# from torchseq.models.lr_schedule import get_hyperbolic_schedule, get_tanh_schedule
-# from torchseq.models.vq_code_predictor import VQCodePredictor
 from torchseq.models.pooling import MultiHeadedPooling
 
 

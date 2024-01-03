@@ -1,4 +1,3 @@
-from torchseq.utils.functions import cos_sim, onehot
 import torch
 import torch.nn as nn
 

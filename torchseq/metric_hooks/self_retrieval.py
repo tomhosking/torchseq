@@ -14,14 +14,20 @@ from collections import defaultdict, Counter
 from torchseq.metric_hooks.base import MetricHook
 from torchseq.datasets.json_loader import JsonDataLoader
 from torchseq.utils.config import Config
-from torchseq.utils.functions import batchify, cos_sim
+from torchseq.utils.functions import batchify
+from torchseq.utils.ari import get_cluster_ari
 from torchseq.utils.rouge import get_jackknife_rouge, get_pairwise_rouge
+from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
 import sacrebleu
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from nltk import sent_tokenize, word_tokenize
 
 from openTSNE import TSNE
+
+# from scipy.special import binom
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 import matplotlib.pyplot as plt
 
@@ -127,6 +133,27 @@ class SelfRetrievalMetricHook(MetricHook):
                 json.dump(generated_summaries, f)
             logger.info("...done")
 
+            if self.config.eval.metrics.self_retrieval.get("run_selection_oracle_comparison", False):
+                self.scores[
+                    "self_retrieval_selection_vs_oracle"
+                ] = SelfRetrievalMetricHook.eval_compare_selected_clusters_to_oracle(
+                    self.config,
+                    agent,
+                    generated_summaries["paths"],
+                    {
+                        sent: code
+                        for sent, code in zip(generated_summaries["inputs"], generated_summaries["all_codes"])
+                    },
+                    test=use_test,
+                )
+            if self.config.eval.metrics.self_retrieval.get("run_selection_prevalence", False):
+                self.scores["self_retrieval_selection_prevalence"] = SelfRetrievalMetricHook.eval_cluster_prevalence(
+                    self.config,
+                    agent,
+                    generated_summaries["evidence"],
+                    test=use_test,
+                )
+
         if self.config.eval.metrics.self_retrieval.get(
             "run_purity_bleu", False
         ) or self.config.eval.metrics.self_retrieval.get("run_purity_nli", False):
@@ -137,6 +164,7 @@ class SelfRetrievalMetricHook(MetricHook):
                 test=use_test,
                 score_bleu=self.config.eval.metrics.self_retrieval.get("run_purity_bleu", False),
                 score_nli=self.config.eval.metrics.self_retrieval.get("run_purity_nli", False),
+                score_tfidf=self.config.eval.metrics.self_retrieval.get("run_purity_tfidf", True),
             )
             logger.info("...done")
 
@@ -694,6 +722,7 @@ class SelfRetrievalMetricHook(MetricHook):
     def select_entity_summary_paths(
         all_review_paths,
         max_path_depth,
+        min_path_depth=1,
         path_limit=5,
         truncation_length=None,
         prune_min_weight=None,
@@ -704,6 +733,8 @@ class SelfRetrievalMetricHook(MetricHook):
         term_score_weights=None,
         allow_wildcards=False,
         silent=True,
+        idf_smoothing_alpha=0,
+        idf_log=True,
     ):
         summary_paths = {}
         summary_path_weights = {}
@@ -729,11 +760,12 @@ class SelfRetrievalMetricHook(MetricHook):
             terms_by_doc = defaultdict(Counter)
             # all_terms = set()
             idf = {}
+            # idc = {}
 
             for entity_id, reviews in all_review_paths.items():
                 all_paths = [tuple(path) for paths in reviews.values() for path in paths]
                 for path in all_paths:
-                    for max_len in range(1, min(max_path_depth + 1, len(path) + 1)):
+                    for max_len in range(min_path_depth, min(max_path_depth + 1, len(path) + 1)):
                         term = path[:max_len]
                         terms_by_doc[entity_id][term] += 1
                         if allow_wildcards:
@@ -751,9 +783,25 @@ class SelfRetrievalMetricHook(MetricHook):
             all_terms = set([term for terms in terms_by_doc.values() for term in terms.keys()])
 
             for term in all_terms:
-                idf[term] = np.log(
-                    len(all_review_paths) / sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
-                )
+                if idf_log:
+                    idf[term] = (
+                        np.log(
+                            len(terms_by_doc)
+                            / (
+                                idf_smoothing_alpha
+                                + sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
+                            )
+                        )
+                        + idf_smoothing_alpha
+                    )
+                else:
+                    idf[term] = (
+                        idf_smoothing_alpha + sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
+                    ) / (len(terms_by_doc) + idf_smoothing_alpha)
+
+                # idc[term] = np.log(
+                #         sum()/( sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms]))
+                #     )
 
             for entity_id, reviews in tqdm(all_review_paths.items(), desc="Calculating term scores", disable=silent):
                 path_weights = {}
@@ -767,26 +815,58 @@ class SelfRetrievalMetricHook(MetricHook):
                                 tf *= term_score_weights[term[:path_len]]
                                 break
 
-                    if tfidf_weighting_scheme == 1:
+                    match = re.match(
+                        r"tf(\^([0-9\.\-]+))?\*idf\^([0-9\.\-]+)\*len\^([0-9\.\-]+)$", tfidf_weighting_scheme
+                    )
+                    if match:
+                        tf_exp, idf_exp, len_exp = match.group(2), match.group(3), match.group(4)
+                        path_weights[term] = (
+                            (tf ** float(tf_exp or 1)) * (idf[term] ** float(idf_exp)) * (len(term) ** float(len_exp))
+                        )
+                    elif tfidf_weighting_scheme == 1 or tfidf_weighting_scheme == "tf*sqrt(idf)/len":
                         path_weights[term] = tf * np.sqrt(idf[term]) / len(term)
                     elif tfidf_weighting_scheme == 2:
                         path_weights[term] = tf * np.sqrt(idf[term] / len(term))
-                    elif tfidf_weighting_scheme == 3:
+                    elif tfidf_weighting_scheme == 3 or tfidf_weighting_scheme == "tf*idf/len":
                         path_weights[term] = tf * (idf[term]) / len(term)
-                    elif tfidf_weighting_scheme == 4:
+                    elif tfidf_weighting_scheme == 3 or tfidf_weighting_scheme == "tf*idf/len^1.5":
+                        path_weights[term] = tf * (idf[term]) / (len(term) ** 1.5)
+                    elif tfidf_weighting_scheme == 3 or tfidf_weighting_scheme == "tf*idf/len^2":
+                        path_weights[term] = tf * (idf[term]) / (len(term) ** 2)
+                    elif tfidf_weighting_scheme == 4 or tfidf_weighting_scheme == "tf*len":
                         path_weights[term] = tf * len(term)
+                    elif tfidf_weighting_scheme == "tf*len^2":
+                        path_weights[term] = tf * (len(term) ** 2)
+                    elif tfidf_weighting_scheme == "tf*len^1.5":
+                        path_weights[term] = tf * (len(term) ** 1.5)
                     elif tfidf_weighting_scheme == 5:
                         path_weights[term] = tf * np.sqrt(len(term))
-                    elif tfidf_weighting_scheme == 6:
+                    elif tfidf_weighting_scheme == 6 or tfidf_weighting_scheme == "tf":
                         path_weights[term] = tf
-                    elif tfidf_weighting_scheme == 7:
-                        path_weights[term] = tf * (idf[term]) / np.sqrt(len(term))
-                    elif tfidf_weighting_scheme == 8:
-                        path_weights[term] = tf * (idf[term])
-                    elif tfidf_weighting_scheme == 9:
+                    elif tfidf_weighting_scheme == "log(tf)":
+                        path_weights[term] = np.log(1 + tf)
+                    elif tfidf_weighting_scheme == "log(tf)*len":
+                        path_weights[term] = np.log(1 + tf) * len(term)
+                    elif tfidf_weighting_scheme == 7 or tfidf_weighting_scheme == "tf*idf/sqrt(len)":
+                        path_weights[term] = tf * idf[term] / np.sqrt(len(term))
+                    elif tfidf_weighting_scheme == 8 or tfidf_weighting_scheme == "tf*idf":
+                        path_weights[term] = tf * idf[term]
+                    elif tfidf_weighting_scheme == 9 or tfidf_weighting_scheme == "tf*sqrt(idf)":
                         path_weights[term] = tf * np.sqrt(idf[term])
                     elif tfidf_weighting_scheme == 10:
                         path_weights[term] = np.sqrt(tf) * idf[term]
+                    elif tfidf_weighting_scheme == "tf*log(idf)":
+                        path_weights[term] = tf * np.log(idf[term] + 1e-10)
+                    elif tfidf_weighting_scheme == "tf*exp(-idf)":
+                        path_weights[term] = tf * np.exp(-idf[term])
+                    elif tfidf_weighting_scheme == "tf*exp(-idf)/len":
+                        path_weights[term] = tf * np.exp(-idf[term]) / len(term)
+                    elif tfidf_weighting_scheme == "tf*exp(-idf)*len":
+                        path_weights[term] = tf * np.exp(-idf[term]) * len(term)
+                    elif tfidf_weighting_scheme == "tf*2^len":
+                        path_weights[term] = tf * 2 ** len(term)
+                    else:
+                        raise Exception("Unrecognised weighting scheme! {:}".format(tfidf_weighting_scheme))
                     # path_weights[term] = tf * 3**(len(term)-1)
 
                 summary_paths[entity_id], summary_path_weights[entity_id] = [], []
@@ -794,6 +874,8 @@ class SelfRetrievalMetricHook(MetricHook):
                     if len(summary_paths[entity_id]) >= path_limit:
                         break
                     if (
+                        False
+                        or
                         # len(
                         #     [
                         #         1
@@ -1115,7 +1197,7 @@ class SelfRetrievalMetricHook(MetricHook):
             ) = SelfRetrievalMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 3),
-                8,
+                max_path_depth=config.eval.metrics.self_retrieval.get("summary_smart_maxdepth", 8),
                 path_limit=config.eval.metrics.self_retrieval.get("summary_smart_num_specific", 4),
                 truncation_length=None,
                 prune_min_weight=None,
@@ -1132,10 +1214,10 @@ class SelfRetrievalMetricHook(MetricHook):
             summary_paths_generic, summary_path_weights_generic = SelfRetrievalMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 2),
-                8,
+                max_path_depth=config.eval.metrics.self_retrieval.get("summary_smart_maxdepth", 8),
                 path_limit=config.eval.metrics.self_retrieval.get("summary_smart_num_generic", 4),
                 truncation_length=None,
-                prune_min_weight=0.01,
+                prune_min_weight=config.eval.metrics.self_retrieval.get("summary_smart_generic_min_weight", 0.01),
                 prune_max_paths=None,
                 use_tfidf=True
                 if config.eval.metrics.self_retrieval.get("summary_smart_generic_weight_scheme", None) is not None
@@ -1161,7 +1243,8 @@ class SelfRetrievalMetricHook(MetricHook):
             summary_paths, summary_path_weights = SelfRetrievalMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 4),
-                8,
+                max_path_depth=config.eval.metrics.self_retrieval.get("summary_maxdepth", 8),
+                min_path_depth=config.eval.metrics.self_retrieval.get("summary_mindepth", 1),
                 path_limit=config.eval.metrics.self_retrieval.get("summary_path_limit", 6),
                 truncation_length=config.eval.metrics.self_retrieval.get("summary_truncation_length", None),
                 prune_min_weight=config.eval.metrics.self_retrieval.get("summary_prune_min_weight", 0.01),
@@ -1170,9 +1253,9 @@ class SelfRetrievalMetricHook(MetricHook):
                 tfidf_weighting_scheme=config.eval.metrics.self_retrieval.get("summary_tfidf_weight_scheme", 5),
                 silent=agent.silent,
                 term_score_weights=term_score_weights,
+                idf_smoothing_alpha=config.eval.metrics.self_retrieval.get("summary_idf_smoothing_alpha", 0),
+                idf_log=config.eval.metrics.self_retrieval.get("summary_idf_log", True),
             )
-
-        # # Identify top clusters per entity
 
         filtered_examples = []
         # for entity, paths in summary_paths.items():
@@ -1205,6 +1288,19 @@ class SelfRetrievalMetricHook(MetricHook):
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
+        elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
+            dataset_path = config.eval.metrics.self_retrieval.dataset_all
+            with jsonlines.open(os.path.join(agent.data_path, dataset_path, "reviews.train.jsonl")) as reader:
+                train_data = list(reader)
+            all_sents = [row["sentence"] for row in train_data]
+            all_sents = list(set(all_sents))
+
+            tfidf_vectorizer = TfidfVectorizer(
+                stop_words=("english"),
+                min_df=5,
+                max_df=0.5,
+            )
+            tfidf_vectorizer.fit(all_sents)
 
         all_evidence = []
         all_evidence_paths = []
@@ -1266,6 +1362,11 @@ class SelfRetrievalMetricHook(MetricHook):
                             curr_scores.append(scores_flat[i])
                             i += 1
                         scores.append(np.mean(curr_scores))
+                elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
+                    similarities = cosine_similarity(
+                        tfidf_vectorizer.transform(path_evidence), tfidf_vectorizer.transform(path_evidence)
+                    )
+                    scores = similarities.mean(axis=-1)
 
                 max_ix = np.argmax(scores)
                 summary_sentences.append(path_evidence[max_ix])
@@ -1299,6 +1400,45 @@ class SelfRetrievalMetricHook(MetricHook):
 
         extractive_scores = {k: v for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
 
+        if config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False):
+            from summac.model_summac import SummaCConv
+
+            model_conv = SummaCConv(
+                models=["vitc"],
+                bins="percentile",
+                granularity="sentence",
+                nli_labels="e",
+                device="cuda",
+                start_file="default",
+                agg="mean",
+            )
+            # docs = [
+            #     " ".join([sents for review in row["reviews"] for sents in review["sentences"]]) for row in eval_data
+            # ]
+            docs = [
+                " ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data
+            ]
+
+            res = model_conv.score(docs, extractive_summs)
+            extractive_scores["sc_ins"] = np.mean(res["scores"]) * 100
+
+        if config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False):
+            from summac.model_summac import SummaCConv
+
+            model_conv = SummaCConv(
+                models=["vitc"],
+                bins="percentile",
+                granularity="sentence",
+                nli_labels="e",
+                device="cuda",
+                start_file="default",
+                agg="mean",
+            )
+            docs = [" ".join(summs) for summs in gold_summs]
+
+            res = model_conv.score(docs, extractive_summs)
+            extractive_scores["sc_refs"] = np.mean(res["scores"]) * 100
+
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
         return {"extractive": extractive_scores}, {
@@ -1316,7 +1456,101 @@ class SelfRetrievalMetricHook(MetricHook):
         }
 
     @abstractmethod
-    def eval_cluster_purity(config, agent, test=False, score_bleu=True, score_nli=False):
+    def eval_compare_selected_clusters_to_oracle(config, agent, evidence, sents_to_code=None, test=False):
+        split = "test" if test else "dev"
+        dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+        with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+            eval_data = [x for x in reader]
+
+        oracle_centroids = []
+        oracle_clusters = []
+
+        # First, identify which sentences are the centroids (and clusters)
+        for row in eval_data:
+            curr_oracle_centroids = []
+            for tgt_sent in sent_tokenize(row["summaries"][0]):
+                scores = {}
+                for review in row["reviews"]:
+                    for sent in review["sentences"]:
+                        score = get_pairwise_rouge(sent, tgt_sent)["rouge2"]
+                        scores[sent] = score
+                topk = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                curr_oracle_centroids.append(topk[0][0])
+            oracle_centroids.append(curr_oracle_centroids)
+
+            curr_clusters = []
+            for tgt_sent in sent_tokenize(row["summaries"][0]):
+                scores = {}
+                for review in row["reviews"]:
+                    for sent in review["sentences"]:
+                        score = get_pairwise_rouge(sent, tgt_sent)["rouge2"]
+                        scores[sent] = score
+                topk = sorted(scores.items(), key=lambda x: x[1], reverse=True)
+                curr_clusters.append([x[0] for x in topk if x[1] > 15])
+            oracle_clusters.append(curr_clusters)
+
+        def C2(x):
+            return binom(x, 2)
+
+        oracle_mean_sizes = []
+        pred_mean_sizes = []
+
+        # Calculate the ARI between predicted and oracle clusters
+        ari_score = get_cluster_ari(oracle_clusters, evidence)
+
+        for curr_oracle_clusters, curr_evidence in zip(oracle_clusters, evidence):
+            oracle_mean_sizes.append(np.mean([len(cluster) for cluster in curr_oracle_clusters]))
+            pred_mean_sizes.append(np.mean([len(cluster) for cluster in curr_evidence]))
+
+        # Compare predicted and oracle paths
+        # oracle_paths = []
+        # predicted_paths = []
+        # for curr_oracle_clusters, curr_evidence in zip(oracle_clusters, evidence):
+        #     oracle_paths.append([[sents_to_code[sent] for sent in cluster] for cluster in curr_oracle_clusters])
+        #     predicted_paths.append([[sents_to_code[sent] for sent in cluster] for cluster in curr_evidence])
+
+        return {
+            "ari": ari_score,
+            "oracle_mean_size": np.mean(oracle_mean_sizes),
+            "pred_mean_size": np.mean(pred_mean_sizes),
+            "oracle_clusters": oracle_clusters,
+            "oracle_centroids": oracle_centroids,
+            # 'oracle_paths': oracle_paths,
+            # 'predicted_paths': predicted_paths
+        }
+
+    @abstractmethod
+    def eval_cluster_prevalence(config, agent, evidence, test=False):
+        metric = PrevalenceMetric()
+
+        # Optionally, cap the total number of samples (for speed)
+        MAX_REVIEWS = 50
+        MAX_SENTS_PER_CLUSTER = 10
+
+        split = "test" if test else "dev"
+        dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+        with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+            eval_data = [x for x in reader]
+
+        reviews = [[" ".join(rev["sentences"]) for rev in row["reviews"][:MAX_REVIEWS]] for row in eval_data]
+        evidence_flat = [
+            [sent for cluster in clusters for sent in cluster[:MAX_SENTS_PER_CLUSTER]] for clusters in evidence
+        ]
+
+        scores = metric.get_prevalence(
+            reviews,
+            evidence_flat,
+            summaries_are_sentences=True,
+            product_names=None,
+            pbar=False,
+            batch_size=32,
+            ignore_redundancy=True,
+        )
+
+        return {"prevalence": np.mean(scores[0]), "trivial": np.mean(scores[2])}
+
+    @abstractmethod
+    def eval_cluster_purity(config, agent, test=False, score_bleu=True, score_nli=False, score_tfidf=True):
         sents_by_code, _ = SelfRetrievalMetricHook.codes_from_cache(config, agent, test, save_to_cache=False)
 
         bneck_types = [x.type for x in agent.config.bottleneck.modules]
@@ -1347,6 +1581,23 @@ class SelfRetrievalMetricHook(MetricHook):
             nli_model = PretrainedNliModel()
 
             scores["nli"] = {}
+        if score_tfidf:
+            scores["tfidf"] = {}
+
+            # Build tfidf mapper
+            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"dev.jsonl")) as reader:
+                eval_data = [x for x in reader]
+            vectorizer = TfidfVectorizer(
+                stop_words=("english"),
+                min_df=5,
+                # max_df=0.8 if args.ignore_stopwords else 1.0,
+                max_df=0.5,
+            )
+
+            all_sents = [sent for ent in eval_data for review in ent["reviews"] for sent in review["sentences"]]
+
+            vectorizer.fit(all_sents)
 
         for depth in range(min(num_heads, 6)):
             sents_by_cluster = defaultdict(set)
@@ -1355,8 +1606,14 @@ class SelfRetrievalMetricHook(MetricHook):
 
             inters_bleu = []
             intras_bleu = []
+
             inters_nli = []
             intras_nli = []
+            inters_max_nli = []
+
+            inters_tfidf = []
+            inters_max_tfidf = []
+            intras_tfidf = []
 
             MAX_CLUSTERS = 50
             INTER_SAMPLES = 64
@@ -1425,16 +1682,32 @@ class SelfRetrievalMetricHook(MetricHook):
                         for hyp, refs in zip(sents[:INTRA_SAMPLES], intra_refs)
                         for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
                     ]
-                    inter_score = np.mean(nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=NLI_BSZ)) * 100
+                    inter_scores = nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=NLI_BSZ)
                     # hyps_flat = [hyp for hyps in sents[:INTER_SAMPLES] * len(intra_refs) for hyp in hyps]
-                    intra_score = np.mean(nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=NLI_BSZ)) * 100
+                    intra_scores = nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=NLI_BSZ)
 
-                    inters_nli.append(inter_score)
-                    intras_nli.append(intra_score)
+                    inters_nli.append(np.mean(inter_scores) * 100)
+                    intras_nli.append(np.mean(intra_scores) * 100)
+                    inters_max_nli.append(np.max(inter_scores) * 100)
 
                 #     inter_rouge = get_jackknife_rouge(sents[:1000], inter_refs)['rouge2']
                 #     inter_rouges.append(inter_rouge)
                 #     intra_rouge = get_jackknife_rouge(sents[:1000], refs)['rouge2']
+
+                if score_tfidf:
+                    sents_embedded = vectorizer.transform(sents)
+                    inters_embedded = vectorizer.transform(inter_sents)
+                    intras_embedded = [vectorizer.transform(intras) for intras in intra_refs]
+
+                    inter_scores = cosine_similarity(sents_embedded, inters_embedded)
+                    intra_scores = [
+                        cosine_similarity(sent, intras) for sent, intras in zip(sents_embedded, intras_embedded)
+                    ]
+
+                    inters_tfidf.append(np.mean(inter_scores) * 100)
+                    intras_tfidf.append(np.mean(intra_scores) * 100)
+                    inters_max_tfidf.append(np.max(inter_scores) * 100)
+
             if score_bleu:
                 scores["bleu"][depth] = (
                     np.mean(intras_bleu),
@@ -1446,6 +1719,15 @@ class SelfRetrievalMetricHook(MetricHook):
                     np.mean(intras_nli),
                     np.mean(inters_nli),
                     np.mean(intras_nli) - np.mean(inters_nli),
+                    np.mean(inters_max_nli),
+                )
+
+            if score_tfidf:
+                scores["tfidf"][depth] = (
+                    np.mean(intras_tfidf),
+                    np.mean(inters_tfidf),
+                    np.mean(intras_tfidf) - np.mean(inters_tfidf),
+                    np.mean(inters_max_tfidf),
                 )
 
         if score_bleu:
