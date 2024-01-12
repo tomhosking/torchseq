@@ -9,7 +9,9 @@ from torchseq.eval.recipes import EvalRecipe
 from torchseq.utils.rouge import get_jackknife_rouge
 
 
-class OpAggTwoStagePostEvalRecipe(EvalRecipe):
+class Recipe(EvalRecipe):
+    name: str = "opagg.twostage_post"
+
     def run(self, predicted_summaries: Optional[list[str]] = None) -> dict[str, Any]:
         result = {}
 
@@ -94,15 +96,5 @@ class OpAggTwoStagePostEvalRecipe(EvalRecipe):
             trivial_template=trivial_template,
         )
         result["prevalence"] = (np.mean(prevs), np.mean(reds), np.mean(trivs))
-
-        prevs, reds, trivs = prevmet.get_prevalence(
-            [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
-            predicted_summaries,
-            pbar=False,
-            product_names=[product_names[row["entity_id"]] for row in eval_data],
-            trivial_template=trivial_template,
-            flip_hyp_prem=True,
-        )
-        result["prevalence_flip"] = (np.mean(prevs), np.mean(reds), np.mean(trivs))
 
         return result

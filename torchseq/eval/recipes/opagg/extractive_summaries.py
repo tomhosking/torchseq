@@ -4,7 +4,9 @@ from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
 from torchseq.utils.timer import Timer
 
 
-class OpAggTwoStagePostEvalRecipe(EvalRecipe):
+class Recipe(EvalRecipe):
+    name: str = "opagg.extractive_summaries"
+
     def run(self):
         result = {}
 

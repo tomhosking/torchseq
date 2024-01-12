@@ -22,7 +22,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     entry_points = {
-        'console_scripts': ['torchseq=torchseq.main:main', 'torchseq-eval=torchseq.eval.runner:main'],
+        'console_scripts': ['torchseq=torchseq.main:main', 'torchseq-eval=torchseq.eval.cli:main'],
     },
     install_requires = [
         'tensorboard==2.15.0',

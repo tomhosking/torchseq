@@ -12,7 +12,9 @@ In no more than 15 words, write a single short sentence using very simple langua
 """
 
 
-class OpAggTwoStagePostEvalRecipe(EvalRecipe):
+class Recipe(EvalRecipe):
+    name: str = "opagg.twostage_pre"
+
     def run(self):
         result = {}
 

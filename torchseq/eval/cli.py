@@ -8,10 +8,6 @@ import torchseq
 from torchseq.eval.args import parse_eval_args
 import torchseq.eval.recipes as recipes
 
-# from torchseq.utils.wandb import wandb_init, wandb_log
-# from torchseq.utils.model_loader import model_from_path
-# from torchseq.utils.config import merge_cfg_dicts, Config
-
 
 def main():
     logging.basicConfig(
@@ -47,9 +43,10 @@ def main():
 
     # Run the recipe
 
-    recipe = importlib.import_module("torchseq.eval.recipes." + args.recipe, None)
-    if recipe is not None:
-        result = recipe.run_recipe(args.load, args.data_path, args.test, args.cpu)
+    recipe_module = importlib.import_module("torchseq.eval.recipes." + args.recipe, None)
+    if recipe_module is not None:
+        recipe: recipes.EvalRecipe = recipe_module.Recipe(args.load, args.data_path, args.test, args.cpu, logger)
+        result = recipe.run()
     else:
         logger.error("No recipe called {:} found!".format(args.recipe))
 
