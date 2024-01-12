@@ -31,3 +31,31 @@ mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50', src_lang='en_XX'
 mod = MBartTokenizer.from_pretrained('facebook/mbart-large-50-many-to-many-mmt', src_lang='en_XX', tgt_lang='en_XX')
 mod = MBartModel.from_pretrained('facebook/mbart-large-50-many-to-many-mmt')
 
+
+from summac.model_summac import SummaCConv
+
+model_conv = SummaCConv(
+    models=["vitc"],
+    bins="percentile",
+    granularity="sentence",
+    nli_labels="e",
+    device="cpu",
+    start_file="default",
+    agg="mean",
+)
+
+for imager in model_conv.imagers:
+    imager.load_nli()
+
+model_conv = SummaCConv(
+    models=["mnli"],
+    bins="percentile",
+    granularity="sentence",
+    nli_labels="e",
+    device="cpu",
+    start_file="default",
+    agg="mean",
+)
+
+for imager in model_conv.imagers:
+    imager.load_nli()

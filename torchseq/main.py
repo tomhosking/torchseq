@@ -8,7 +8,7 @@ import uuid
 
 import torch
 import torchseq
-from torchseq.utils.wandb import wandb_log
+
 
 from torchseq.agents.aq_agent import AQAgent
 from torchseq.agents.seq2seq_agent import Seq2SeqAgent
@@ -17,7 +17,7 @@ from torchseq.args import parse_args
 from torchseq.utils.config import Config, merge_cfg_dicts
 from torchseq.utils.config_migration import check_config
 from torchseq.utils.mckenzie import set_status_mckenzie
-from torchseq.utils.wandb import wandb_init
+from torchseq.utils.wandb import wandb_init, wandb_log
 from torchseq.utils.model_loader import AGENT_TYPES
 
 from torchseq.datasets.builder import dataloader_from_config

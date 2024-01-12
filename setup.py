@@ -5,7 +5,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="torchseq",
-    version="3.0.0",
+    version="3.1.0dev",
     author="Tom Hosking",
     author_email="code@tomho.sk",
     description="A Seq2Seq framework for PyTorch",
@@ -22,7 +22,7 @@ setuptools.setup(
     ],
     python_requires='>=3.6',
     entry_points = {
-        'console_scripts': ['torchseq=torchseq.main:main'],
+        'console_scripts': ['torchseq=torchseq.main:main', 'torchseq-eval=torchseq.eval.runner:main'],
     },
     install_requires = [
         'tensorboard==2.15.0',

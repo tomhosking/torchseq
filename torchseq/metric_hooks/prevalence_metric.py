@@ -6,23 +6,23 @@ import nltk.tokenize
 from summac.model_summac import SummaCZS
 from tqdm import tqdm
 import numpy as np
-from typing import List, Union, Optional
+from typing import List, Union, Optional, Literal, Sequence
 
 
 class PrevalenceMetric:
     threshold: float = 0.04
     model: SummaCZS
 
-    def __init__(self):
-        # Default is mnli - change to vitc
+    def __init__(self, model_name: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "mnli"):
+        # Default model was originally mnli - changed to vitc
         self.model = SummaCZS(
-            granularity="document", model_name="vitc", bins="percentile", use_con=False, device="cuda"
+            granularity="document", model_name=model_name, bins="percentile", use_con=False, device="cuda"
         )
 
     def get_prevalence(
         self,
         reviews: List[List[str]],
-        generated_summaries: List[Union[str, List[str]]],
+        generated_summaries: Sequence[Union[str, List[str]]],
         product_names: Optional[List[str]] = None,
         pbar: bool = False,
         ignore_redundancy: bool = False,

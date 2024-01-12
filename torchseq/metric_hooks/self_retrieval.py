@@ -129,7 +129,8 @@ class SelfRetrievalMetricHook(MetricHook):
                 test=use_test,
             )
             split = "test" if use_test else "dev"
-            with open(agent.run_output_path + f"/summaries_{split}.json", "w") as f:
+            os.makedirs(os.path.join(agent.run_output_path, "eval"), exist_ok=True)
+            with open(agent.run_output_path + f"/eval/summaries_{split}.json", "w") as f:
                 json.dump(generated_summaries, f)
             logger.info("...done")
 
@@ -138,7 +139,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     "self_retrieval_selection_vs_oracle"
                 ] = SelfRetrievalMetricHook.eval_compare_selected_clusters_to_oracle(
                     self.config,
-                    agent,
+                    agent.data_path,
                     generated_summaries["paths"],
                     {
                         sent: code
@@ -149,7 +150,7 @@ class SelfRetrievalMetricHook(MetricHook):
             if self.config.eval.metrics.self_retrieval.get("run_selection_prevalence", False):
                 self.scores["self_retrieval_selection_prevalence"] = SelfRetrievalMetricHook.eval_cluster_prevalence(
                     self.config,
-                    agent,
+                    agent.data_path,
                     generated_summaries["evidence"],
                     test=use_test,
                 )
@@ -185,15 +186,15 @@ class SelfRetrievalMetricHook(MetricHook):
         agent,
         test=False,
         train=False,
-        eval=False,
+        use_eval=False,
         force_rebuild=False,
         sample_outputs=False,
         save_to_cache=True,
     ):
-        if eval:
-            raise Exception("codes_from_cache not yet implemented for eval datasets!")
+        # if use_eval:
+        #     raise Exception("codes_from_cache not yet implemented for eval datasets!")
         split = "test" if test else ("train" if train else "dev")
-        cache_key = split + ("_eval" if eval else "")
+        cache_key = split + ("_eval" if use_eval else "")
         if (
             not force_rebuild
             and agent.run_output_path is not None
@@ -208,44 +209,69 @@ class SelfRetrievalMetricHook(MetricHook):
 
             dataset = (
                 config.eval.metrics.self_retrieval.dataset_eval
-                if eval
+                if use_eval
                 else config.eval.metrics.self_retrieval.dataset_all
             )
 
-            cfg_dict["json_dataset"] = {
-                "path": dataset,
-                "filename": "{split}" if eval else "reviews.{split}",
-                "field_map": [
-                    {"type": "copy", "from": "sentence", "to": "target"},
-                    {"type": "copy", "from": "sentence", "to": "source"},
-                    {"type": "copy", "from": "sentence", "to": "query"},
-                ],
-            }
+            if use_eval:
+                with jsonlines.open(os.path.join(agent.data_path, dataset, split + ".jsonl")) as reader:
+                    eval_data = list(reader)
 
-            # cfg_dict["eval"]["metrics"]["self_retrieval"] = {
-            #     "dataset_clusters": "opagg/space-filtered-25toks-clusters",
-            #     "dataset_all": "opagg/space-filtered-25toks-all",
-            #     "run_extract_summaries": False,
-            #     "run_retrieval": False,
-            #     "run_masked_generation": True,
-            # }
+                all_sents = [
+                    {"sentence": sent} for ent in eval_data for rev in ent["reviews"] for sent in rev["sentences"]
+                ]
 
-            cfg_dict["training"]["batch_size"] = cfg_dict["eval"]["eval_batch_size"]
-            cfg_dict["training"]["shuffle_data"] = False
-            # cfg_dict['eval']['truncate_dataset'] = 10000
+                cfg_dict["json_dataset"] = {
+                    "path": dataset,
+                    "filename": "{split}" if use_eval else "reviews.{split}",
+                    "field_map": [
+                        {"type": "copy", "from": "sentence", "to": "target"},
+                        {"type": "copy", "from": "sentence", "to": "source"},
+                        {"type": "copy", "from": "sentence", "to": "query"},
+                    ],
+                }
 
-            config_forced = Config(cfg_dict)
+                cfg_dict["training"]["batch_size"] = cfg_dict["eval"]["eval_batch_size"]
+                cfg_dict["training"]["shuffle_data"] = False
+                # cfg_dict['eval']['truncate_dataset'] = 10000
 
-            # checkpoint_path = path_to_model + "/model/checkpoint.pt"
-            # instance = Seq2SeqAgent(config=config, run_id=None, output_path=None, data_path='../../data/', silent=False, verbose=False, training_mode=False)
-            # instance.load_checkpoint(checkpoint_path)
-            # instance.model.eval()
+                config_forced = Config(cfg_dict)
 
-            data_loader = JsonDataLoader(config_forced, data_path=agent.data_path)
+                data_loader = JsonDataLoader(config_forced, dev_samples=all_sents, data_path=agent.data_path)
+                loader = data_loader.valid_loader
 
-            loader = (
-                data_loader.test_loader if test else (data_loader.train_loader if train else data_loader.valid_loader)
-            )
+                inputs = [x["sentence"] for x in all_sents]
+
+            else:
+                cfg_dict["json_dataset"] = {
+                    "path": dataset,
+                    "filename": "{split}" if use_eval else "reviews.{split}",
+                    "field_map": [
+                        {"type": "copy", "from": "sentence", "to": "target"},
+                        {"type": "copy", "from": "sentence", "to": "source"},
+                        {"type": "copy", "from": "sentence", "to": "query"},
+                    ],
+                }
+
+                cfg_dict["training"]["batch_size"] = cfg_dict["eval"]["eval_batch_size"]
+                cfg_dict["training"]["shuffle_data"] = False
+                # cfg_dict['eval']['truncate_dataset'] = 10000
+
+                config_forced = Config(cfg_dict)
+
+                data_loader = JsonDataLoader(config_forced, data_path=agent.data_path)
+                if use_eval:
+                    print(cfg_dict["json_dataset"])
+                    print(data_loader)
+
+                loader = (
+                    data_loader.test_loader
+                    if test
+                    else (data_loader.train_loader if train else data_loader.valid_loader)
+                )
+
+                with jsonlines.open(agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl") as f:
+                    inputs = [x["sentence"] for x in f]
 
             sample_outputs_prev_state = agent.config.eval.get("sample_outputs", True)
             agent.config.eval.data["sample_outputs"] = sample_outputs
@@ -256,8 +282,6 @@ class SelfRetrievalMetricHook(MetricHook):
 
             agent.config.eval.data["sample_outputs"] = sample_outputs_prev_state
 
-            with jsonlines.open(agent.data_path + "/" + dataset + f"/reviews.{split}.jsonl") as f:
-                inputs = [x["sentence"] for x in f]
             # with jsonlines.open(agent.data_path + "/opagg/space-filtered-all/reviews.dev.jsonl") as f:
             #     scores = [x["rating"] for x in f]
 
@@ -735,6 +759,8 @@ class SelfRetrievalMetricHook(MetricHook):
         silent=True,
         idf_smoothing_alpha=0,
         idf_log=True,
+        block_used_paths=True,
+        block_used_paths_d2=True,
     ):
         summary_paths = {}
         summary_path_weights = {}
@@ -760,7 +786,7 @@ class SelfRetrievalMetricHook(MetricHook):
             terms_by_doc = defaultdict(Counter)
             # all_terms = set()
             idf = {}
-            # idc = {}
+            ibf = {}
 
             for entity_id, reviews in all_review_paths.items():
                 all_paths = [tuple(path) for paths in reviews.values() for path in paths]
@@ -788,20 +814,44 @@ class SelfRetrievalMetricHook(MetricHook):
                         np.log(
                             len(terms_by_doc)
                             / (
-                                idf_smoothing_alpha
-                                + sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
+                                1e-10
+                                + idf_smoothing_alpha
+                                + sum(
+                                    [
+                                        1
+                                        for doc_terms in terms_by_doc.values()
+                                        if (term in doc_terms and doc_terms[term] > 0)
+                                    ]
+                                )
+                            )
+                        )
+                        + idf_smoothing_alpha
+                    )
+                    # IBF = inverse baseline frequency = 1/mean(term frequency)
+                    ibf[term] = (
+                        np.log(
+                            len(terms_by_doc)
+                            / (
+                                sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms])
+                                + 1e-10
+                                + idf_smoothing_alpha
                             )
                         )
                         + idf_smoothing_alpha
                     )
                 else:
                     idf[term] = (
-                        idf_smoothing_alpha + sum([1 for doc_terms in terms_by_doc.values() if term in doc_terms])
+                        idf_smoothing_alpha
+                        + sum(
+                            [1 for doc_terms in terms_by_doc.values() if (term in doc_terms and doc_terms[term] > 0)]
+                        )
                     ) / (len(terms_by_doc) + idf_smoothing_alpha)
 
-                # idc[term] = np.log(
-                #         sum()/( sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms]))
-                #     )
+                    # IBF = inverse baseline frequency = 1/mean(term frequency)
+                    ibf[term] = len(terms_by_doc) / (
+                        sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms])
+                        + idf_smoothing_alpha
+                    )
 
             for entity_id, reviews in tqdm(all_review_paths.items(), desc="Calculating term scores", disable=silent):
                 path_weights = {}
@@ -816,12 +866,22 @@ class SelfRetrievalMetricHook(MetricHook):
                                 break
 
                     match = re.match(
-                        r"tf(\^([0-9\.\-]+))?\*idf\^([0-9\.\-]+)\*len\^([0-9\.\-]+)$", tfidf_weighting_scheme
+                        r"tf(\^([0-9\.\-]+))?\*idf\^([0-9\.\-]+)\*len\^([0-9\.\-]+)$", str(tfidf_weighting_scheme)
+                    )
+                    match_ibf = re.match(
+                        r"tf(\^([0-9\.\-]+))?\*ibf\^([0-9\.\-]+)\*len\^([0-9\.\-]+)$", str(tfidf_weighting_scheme)
                     )
                     if match:
                         tf_exp, idf_exp, len_exp = match.group(2), match.group(3), match.group(4)
+                        # print('IDF weight: {:}'.format((tf_exp, idf_exp, len_exp)))
                         path_weights[term] = (
                             (tf ** float(tf_exp or 1)) * (idf[term] ** float(idf_exp)) * (len(term) ** float(len_exp))
+                        )
+                    elif match_ibf:
+                        tf_exp, ibf_exp, len_exp = match_ibf.group(2), match_ibf.group(3), match_ibf.group(4)
+                        # print('IBF weight: {:}'.format((tf_exp, ibf_exp, len_exp)))
+                        path_weights[term] = (
+                            (tf ** float(tf_exp or 1)) * (ibf[term] ** float(ibf_exp)) * (len(term) ** float(len_exp))
                         )
                     elif tfidf_weighting_scheme == 1 or tfidf_weighting_scheme == "tf*sqrt(idf)/len":
                         path_weights[term] = tf * np.sqrt(idf[term]) / len(term)
@@ -874,7 +934,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     if len(summary_paths[entity_id]) >= path_limit:
                         break
                     if (
-                        False
+                        not block_used_paths
                         or
                         # len(
                         #     [
@@ -896,7 +956,8 @@ class SelfRetrievalMetricHook(MetricHook):
                                     selected_path[: min(len(selected_path), len(path))],
                                 )
                                 or (
-                                    len(path) > 1
+                                    block_used_paths_d2
+                                    and len(path) > 1
                                     and len(selected_path) > 1
                                     # and path[: min(len(selected_path), len(path)) - 1]
                                     # == selected_path[: min(len(selected_path), len(path)) - 1]
@@ -1180,7 +1241,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
         all_codes = memory["vq_codes"].tolist()
 
-        # _, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, eval=True)
+        # _, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, use_eval=True)
         # all_codes = outputs_with_codes['codes']
 
         # Organise paths by entity/review, then get summary paths
@@ -1255,6 +1316,9 @@ class SelfRetrievalMetricHook(MetricHook):
                 term_score_weights=term_score_weights,
                 idf_smoothing_alpha=config.eval.metrics.self_retrieval.get("summary_idf_smoothing_alpha", 0),
                 idf_log=config.eval.metrics.self_retrieval.get("summary_idf_log", True),
+                block_used_paths=config.eval.metrics.self_retrieval.get("summary_block_used_paths", True),
+                block_used_paths_d2=config.eval.metrics.self_retrieval.get("summary_block_used_paths_d2", True),
+                allow_wildcards=config.eval.metrics.self_retrieval.get("summary_allow_wildcards", False),
             )
 
         filtered_examples = []
@@ -1386,6 +1450,9 @@ class SelfRetrievalMetricHook(MetricHook):
             all_evidence.append(summary_evidence)
             all_evidence_paths.append(summary_evidence_paths)
 
+        # Clean up
+        del nli_model
+
         gold_summs = [ent["summaries"] for ent in eval_data]
         # pred_summs = [
         #     " ".join(
@@ -1400,7 +1467,11 @@ class SelfRetrievalMetricHook(MetricHook):
 
         extractive_scores = {k: v for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
 
-        if config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False):
+        if (
+            config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False)
+            or config.eval.metrics.self_retrieval.get("calc_summac_cluster", False)
+            or config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False)
+        ):
             from summac.model_summac import SummaCConv
 
             model_conv = SummaCConv(
@@ -1412,9 +1483,10 @@ class SelfRetrievalMetricHook(MetricHook):
                 start_file="default",
                 agg="mean",
             )
-            # docs = [
-            #     " ".join([sents for review in row["reviews"] for sents in review["sentences"]]) for row in eval_data
-            # ]
+
+        if config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False):
+            print("Evaling SC_ins")
+
             docs = [
                 " ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data
             ]
@@ -1422,22 +1494,46 @@ class SelfRetrievalMetricHook(MetricHook):
             res = model_conv.score(docs, extractive_summs)
             extractive_scores["sc_ins"] = np.mean(res["scores"]) * 100
 
-        if config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False):
-            from summac.model_summac import SummaCConv
+        if config.eval.metrics.self_retrieval.get("calc_summac_clusters", False):
+            print("Evaling SC_clusters")
 
-            model_conv = SummaCConv(
-                models=["vitc"],
-                bins="percentile",
-                granularity="sentence",
-                nli_labels="e",
-                device="cuda",
-                start_file="default",
-                agg="mean",
-            )
+            clusters_flattened = [" ".join([" ".join(cluster) for cluster in clusters]) for clusters in all_evidence]
+
+            res = model_conv.score(docs, clusters_flattened)
+            extractive_scores["sc_clusters"] = np.mean(res["scores"]) * 100
+
+        if config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False):
+            print("Evaling SC_refs")
+
             docs = [" ".join(summs) for summs in gold_summs]
 
             res = model_conv.score(docs, extractive_summs)
             extractive_scores["sc_refs"] = np.mean(res["scores"]) * 100
+
+        if config.eval.metrics.self_retrieval.get("calc_extractive_prevalence", True):
+            from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
+
+            prevmet = PrevalenceMetric()
+            prevs, reds, trivs = prevmet.get_prevalence(
+                [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
+                extractive_summs,
+                pbar=False,
+                # product_names=[product_names[row["entity_id"]] for row in eval_data],
+                # trivial_template=trivial_template,
+            )
+            extractive_scores["prevalence_summaries"] = (
+                np.mean(prevs) * 100,
+                np.mean(reds) * 100,
+                np.mean(trivs) * 100,
+            )
+
+        # Clean up
+        if (
+            config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False)
+            or config.eval.metrics.self_retrieval.get("calc_summac_cluster", False)
+            or config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False)
+        ):
+            del model_conv
 
         agent.config.eval.data["sample_outputs"] = sample_outputs
 
@@ -1456,10 +1552,10 @@ class SelfRetrievalMetricHook(MetricHook):
         }
 
     @abstractmethod
-    def eval_compare_selected_clusters_to_oracle(config, agent, evidence, sents_to_code=None, test=False):
+    def eval_compare_selected_clusters_to_oracle(config, data_path, evidence, sents_to_code=None, test=False):
         split = "test" if test else "dev"
         dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
-        with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+        with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
             eval_data = [x for x in reader]
 
         oracle_centroids = []
@@ -1517,7 +1613,7 @@ class SelfRetrievalMetricHook(MetricHook):
         }
 
     @abstractmethod
-    def eval_cluster_prevalence(config, agent, evidence, test=False):
+    def eval_cluster_prevalence(config, data_path, evidence, test=False):
         # Import here because SummaC isn't installed by default..!
         from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
@@ -1529,7 +1625,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
         split = "test" if test else "dev"
         dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
-        with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
+        with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
             eval_data = [x for x in reader]
 
         reviews = [[" ".join(rev["sentences"]) for rev in row["reviews"][:MAX_REVIEWS]] for row in eval_data]
@@ -1547,11 +1643,19 @@ class SelfRetrievalMetricHook(MetricHook):
             ignore_redundancy=True,
         )
 
-        return {"prevalence": np.mean(scores[0]), "trivial": np.mean(scores[2])}
+        return {
+            "prevalence": np.mean(scores[0]) * 100,
+            "redundant": np.mean(scores[1]) * 100,
+            "trivial": np.mean(scores[2]) * 100,
+        }
 
     @abstractmethod
-    def eval_cluster_purity(config, agent, test=False, score_bleu=True, score_nli=False, score_tfidf=True):
-        sents_by_code, _ = SelfRetrievalMetricHook.codes_from_cache(config, agent, test, save_to_cache=False)
+    def eval_cluster_purity(
+        config, agent, test=False, use_eval=False, score_bleu=True, score_nli=False, score_tfidf=True, nli_bsz=256
+    ):
+        sents_by_code, _ = SelfRetrievalMetricHook.codes_from_cache(
+            config, agent, test=test, use_eval=use_eval, save_to_cache=False
+        )
 
         bneck_types = [x.type for x in agent.config.bottleneck.modules]
         if "hrqvae" not in bneck_types:
@@ -1564,18 +1668,6 @@ class SelfRetrievalMetricHook(MetricHook):
         if score_bleu:
             scores["bleu"] = {}
         if score_nli:
-            # from summac.model_summac import SummaCConv
-
-            # model_conv = SummaCConv(
-            #     models=["vitc"],
-            #     bins="percentile",
-            #     granularity="sentence",
-            #     nli_labels="e",
-            #     device="cuda",
-            #     start_file="default",
-            #     agg="mean",
-            # )
-
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
@@ -1619,7 +1711,6 @@ class SelfRetrievalMetricHook(MetricHook):
             INTER_SAMPLES = 64
             INTRA_SAMPLES = 64
             MAX_NLI_REFS_PER_CLUSTER = 100
-            NLI_BSZ = 256
 
             n = 0
             for codes, sents in tqdm(list(sents_by_cluster.items()), disable=agent.silent):
@@ -1682,9 +1773,9 @@ class SelfRetrievalMetricHook(MetricHook):
                         for hyp, refs in zip(sents[:INTRA_SAMPLES], intra_refs)
                         for ref in refs[:MAX_NLI_REFS_PER_CLUSTER]
                     ]
-                    inter_scores = nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=NLI_BSZ)
+                    inter_scores = nli_model.get_scores(inter_refs_flat, inter_hyps_flat, bsz=nli_bsz)
                     # hyps_flat = [hyp for hyps in sents[:INTER_SAMPLES] * len(intra_refs) for hyp in hyps]
-                    intra_scores = nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=NLI_BSZ)
+                    intra_scores = nli_model.get_scores(intra_refs_flat, intra_hyps_flat, bsz=nli_bsz)
 
                     inters_nli.append(np.mean(inter_scores) * 100)
                     intras_nli.append(np.mean(intra_scores) * 100)
@@ -1733,6 +1824,7 @@ class SelfRetrievalMetricHook(MetricHook):
         if score_bleu:
             scores["bleu"]["mean"] = np.mean([score[2] for score in scores["bleu"].values()])
         if score_nli:
+            del nli_model
             scores["nli"]["mean"] = np.mean([score[2] for score in scores["nli"].values()])
 
         return scores
