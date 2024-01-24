@@ -2,6 +2,7 @@
 # Original is a CLI, this provides a more generic OO wrapper
 # See https://arxiv.org/abs/2307.14305
 
+import os
 import nltk.tokenize
 from summac.model_summac import SummaCZS
 from tqdm import tqdm
@@ -12,12 +13,27 @@ from typing import List, Union, Optional, Literal, Sequence
 class PrevalenceMetric:
     threshold: float = 0.04
     model: SummaCZS
+    use_cache: bool
 
-    def __init__(self, model_name: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "mnli"):
+    def __init__(
+        self,
+        model_name: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "mnli",
+        threshold: float = 0.04,
+        use_cache: bool = True,
+    ):
         # Default model was originally mnli - changed to vitc
         self.model = SummaCZS(
             granularity="document", model_name=model_name, bins="percentile", use_con=False, device="cuda"
         )
+        self.threshold = threshold
+
+        self.use_cache = use_cache
+
+        if self.use_cache:
+            self.model.imager.cache_folder = os.path.expanduser("~/.summac_cache/")
+            os.makedirs(self.model.imager.cache_folder, exist_ok=True)
+            cache_file = self.model.imager.get_cache_file()
+            self.model.imager.load_cache()
 
     def get_prevalence(
         self,
@@ -31,8 +47,6 @@ class PrevalenceMetric:
         trivial_default: str = "a hotel",
         batch_size: int = 32,
     ):
-        threshold = 0.04
-
         if product_names is None:
             product_names = [trivial_default] * len(reviews)
 
@@ -76,12 +90,12 @@ class PrevalenceMetric:
 
             # Calculate which summary sentences were trivial
             trivial_scores = all_scores[:trivial_offset]
-            trivial_mask = np.array(trivial_scores) > threshold
+            trivial_mask = np.array(trivial_scores) > self.threshold
 
             # Calculate which sentences are redundant (wrt previous sentences)
             if not ignore_redundancy:
                 redundant_scores = all_scores[trivial_offset:redundant_offset]
-                redundant_mask_flat = np.array(redundant_scores) > threshold
+                redundant_mask_flat = np.array(redundant_scores) > self.threshold
                 redundant_mask_list = []
                 k = 0
                 for i, sent in enumerate(sents):
@@ -98,7 +112,7 @@ class PrevalenceMetric:
 
             # Calculate which sentences are supported by reviews
             implied_scores = all_scores[redundant_offset:]
-            implied_mask_flat = np.array(implied_scores) > threshold
+            implied_mask_flat = np.array(implied_scores) > self.threshold
             implied_counts = implied_mask_flat.reshape(len(curr_reviews), len(sents)).mean(axis=0)
 
             implied_counts = implied_counts * (
@@ -106,8 +120,19 @@ class PrevalenceMetric:
             )  # Ignore if trivial or redundant
 
             # Aggregate
-            prevalences.append(np.mean(implied_counts))
-            redundancies.append(np.mean(redundant_mask))
-            trivials.append(np.mean(trivial_mask))
+            prevalences.append(implied_counts)
+            redundancies.append(redundant_mask)
+            trivials.append(trivial_mask)
 
-        return prevalences, redundancies, trivials
+        if self.use_cache:
+            self.model.imager.save_cache()
+
+        return (
+            [np.mean(prevs) for prevs in prevalences],
+            [np.mean(reds) for reds in redundancies],
+            [np.mean(trivs) for trivs in trivials],
+        ), (
+            prevalences,
+            redundancies,
+            trivials,
+        )

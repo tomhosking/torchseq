@@ -87,14 +87,14 @@ class Recipe(EvalRecipe):
         print("Evaling prevalence")
         from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
-        prevmet = PrevalenceMetric()
-        prevs, reds, trivs = prevmet.get_prevalence(
+        prevmet = PrevalenceMetric(model_name="vitc")
+        (prevs, reds, trivs), _ = prevmet.get_prevalence(
             [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
             predicted_summaries,
             pbar=False,
             product_names=[product_names[row["entity_id"]] for row in eval_data],
             trivial_template=trivial_template,
         )
-        result["prevalence"] = (np.mean(prevs), np.mean(reds), np.mean(trivs))
+        result["prevalence"] = (np.mean(prevs) * 100, np.mean(reds) * 100, np.mean(trivs) * 100)
 
         return result

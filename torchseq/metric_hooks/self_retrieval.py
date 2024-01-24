@@ -9,6 +9,9 @@ from abc import abstractmethod
 from tqdm import tqdm
 from math import ceil
 
+from multiprocessing import Pool
+from multiprocessing.pool import ThreadPool
+
 
 from collections import defaultdict, Counter
 from torchseq.metric_hooks.base import MetricHook
@@ -47,6 +50,12 @@ def paths_are_equal(p1, p2):
         if x1 != x2 and x1 != "_" and x2 != "_":
             return False
     return True
+
+
+def pairwise_r2(pair):
+    if pair[0] == pair[1]:
+        return 0
+    return get_pairwise_rouge(*pair)["rouge2"]
 
 
 class AggregationTree:
@@ -141,14 +150,17 @@ class SelfRetrievalMetricHook(MetricHook):
                     self.config,
                     agent.data_path,
                     generated_summaries["paths"],
-                    {
-                        sent: code
-                        for sent, code in zip(generated_summaries["inputs"], generated_summaries["all_codes"])
-                    },
+                    # {
+                    #     sent: code
+                    #     for sent, code in zip(generated_summaries["inputs"], generated_summaries["all_codes"])
+                    # },
                     test=use_test,
                 )
             if self.config.eval.metrics.self_retrieval.get("run_selection_prevalence", False):
-                self.scores["self_retrieval_selection_prevalence"] = SelfRetrievalMetricHook.eval_cluster_prevalence(
+                (
+                    self.scores["self_retrieval_selection_prevalence"],
+                    _,
+                ) = SelfRetrievalMetricHook.eval_cluster_prevalence(
                     self.config,
                     agent.data_path,
                     generated_summaries["evidence"],
@@ -759,6 +771,9 @@ class SelfRetrievalMetricHook(MetricHook):
         silent=True,
         idf_smoothing_alpha=0,
         idf_log=True,
+        ibf_normalise=False,
+        use_review_tf=False,
+        use_review_ibf=False,
         block_used_paths=True,
         block_used_paths_d2=True,
     ):
@@ -783,43 +798,48 @@ class SelfRetrievalMetricHook(MetricHook):
             all_review_paths = all_review_paths_filtered
 
         if use_tfidf:
-            terms_by_doc = defaultdict(Counter)
+            terms_by_entity = defaultdict(Counter)
+            terms_by_ent_by_review = defaultdict(lambda: defaultdict(Counter))
             # all_terms = set()
             idf = {}
             ibf = {}
+            ibf_by_review = {}
 
             for entity_id, reviews in all_review_paths.items():
-                all_paths = [tuple(path) for paths in reviews.values() for path in paths]
-                for path in all_paths:
-                    for max_len in range(min_path_depth, min(max_path_depth + 1, len(path) + 1)):
-                        term = path[:max_len]
-                        terms_by_doc[entity_id][term] += 1
-                        if allow_wildcards:
-                            for wild_ix in range(max_len - 1):  # don't add wildcards to the end
-                                wildcard_term = term[:wild_ix] + tuple(["_"]) + term[(wild_ix + 1) :]
-                                terms_by_doc[entity_id][wildcard_term] += 1
+                # all_paths = [tuple(path) for paths in reviews.values() for path in paths]
+                for rev_id, rev_paths in reviews.items():
+                    for path in rev_paths:
+                        path = tuple(path)
+                        for max_len in range(min_path_depth, min(max_path_depth + 1, len(path) + 1)):
+                            term = path[:max_len]
+                            terms_by_entity[entity_id][term] += 1
+                            terms_by_ent_by_review[entity_id][rev_id][term] += 1
+                            if allow_wildcards:
+                                for wild_ix in range(max_len - 1):  # don't add wildcards to the end
+                                    wildcard_term = term[:wild_ix] + tuple(["_"]) + term[(wild_ix + 1) :]
+                                    terms_by_entity[entity_id][wildcard_term] += 1
 
                 # Starting with the most specific terms, check whether their ancestors have no other descendants (ie, prefer the more specific term)
-                for term, count in sorted(terms_by_doc[entity_id].items(), key=lambda x: len(x[0]), reverse=True):
+                for term, count in sorted(terms_by_entity[entity_id].items(), key=lambda x: len(x[0]), reverse=True):
                     for max_len in range(1, len(term)):
-                        if terms_by_doc[entity_id][term[:-max_len]] == count:
+                        if terms_by_entity[entity_id][term[:-max_len]] == count:
                             # Zero out the generic term in favour of the specific one (since it )
-                            terms_by_doc[entity_id][term[:-max_len]] = 0
+                            terms_by_entity[entity_id][term[:-max_len]] = 0
 
-            all_terms = set([term for terms in terms_by_doc.values() for term in terms.keys()])
+            all_terms = set([term for terms in terms_by_entity.values() for term in terms.keys()])
 
             for term in all_terms:
                 if idf_log:
                     idf[term] = (
                         np.log(
-                            len(terms_by_doc)
+                            len(terms_by_entity)
                             / (
                                 1e-10
                                 + idf_smoothing_alpha
                                 + sum(
                                     [
                                         1
-                                        for doc_terms in terms_by_doc.values()
+                                        for doc_terms in terms_by_entity.values()
                                         if (term in doc_terms and doc_terms[term] > 0)
                                     ]
                                 )
@@ -830,9 +850,9 @@ class SelfRetrievalMetricHook(MetricHook):
                     # IBF = inverse baseline frequency = 1/mean(term frequency)
                     ibf[term] = (
                         np.log(
-                            len(terms_by_doc)
+                            len(terms_by_entity)
                             / (
-                                sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms])
+                                sum([doc_terms[term] for doc_terms in terms_by_entity.values() if term in doc_terms])
                                 + 1e-10
                                 + idf_smoothing_alpha
                             )
@@ -843,20 +863,66 @@ class SelfRetrievalMetricHook(MetricHook):
                     idf[term] = (
                         idf_smoothing_alpha
                         + sum(
-                            [1 for doc_terms in terms_by_doc.values() if (term in doc_terms and doc_terms[term] > 0)]
+                            [
+                                1
+                                for doc_terms in terms_by_entity.values()
+                                if (term in doc_terms and doc_terms[term] > 0)
+                            ]
                         )
-                    ) / (len(terms_by_doc) + idf_smoothing_alpha)
+                    ) / (len(terms_by_entity) + idf_smoothing_alpha)
 
-                    # IBF = inverse baseline frequency = 1/mean(term frequency)
-                    ibf[term] = len(terms_by_doc) / (
-                        sum([doc_terms[term] for doc_terms in terms_by_doc.values() if term in doc_terms])
-                        + idf_smoothing_alpha
+                    if ibf_normalise:
+                        # IBF = inverse baseline frequency = 1/mean(term frequency)
+                        ibf[term] = len(terms_by_entity) / (
+                            sum(
+                                [
+                                    doc_terms[term] / sum(doc_terms.values())
+                                    for doc_terms in terms_by_entity.values()
+                                    if term in doc_terms
+                                ]
+                            )
+                            + idf_smoothing_alpha
+                        )
+                    else:
+                        # IBF = inverse baseline frequency = 1/mean(term frequency)
+                        ibf[term] = len(terms_by_entity) / (
+                            sum([doc_terms[term] for doc_terms in terms_by_entity.values() if term in doc_terms])
+                            + idf_smoothing_alpha
+                        )
+
+                    # Calculate the mean frequency per review of each path
+                    ibf_by_review[term] = len(terms_by_entity) / (
+                        sum(
+                            [
+                                (
+                                    sum(
+                                        [
+                                            1
+                                            for rev_paths in terms_by_review.values()
+                                            if term in rev_paths and rev_paths[term] > 0
+                                        ]
+                                    )
+                                    + idf_smoothing_alpha
+                                )
+                                / (len(terms_by_review) + idf_smoothing_alpha)
+                                for terms_by_review in terms_by_ent_by_review.values()
+                            ]
+                        )
                     )
 
             for entity_id, reviews in tqdm(all_review_paths.items(), desc="Calculating term scores", disable=silent):
                 path_weights = {}
-                for term in terms_by_doc[entity_id].keys():
-                    tf = terms_by_doc[entity_id][term] / sum(terms_by_doc[entity_id].values())
+                for term in terms_by_entity[entity_id].keys():
+                    if use_review_tf:
+                        # Work out how many of the current reviews this term appears in
+                        tf = sum(
+                            [1 for rev_paths in terms_by_ent_by_review[entity_id].values() if rev_paths[term] > 0]
+                        ) / len(reviews)
+                    else:
+                        tf = terms_by_entity[entity_id][term] / sum(terms_by_entity[entity_id].values())
+
+                    if use_review_ibf:
+                        ibf = ibf_by_review
 
                     if term_score_weights is not None:
                         # Multiply by the term weights, with backoff
@@ -925,6 +991,8 @@ class SelfRetrievalMetricHook(MetricHook):
                         path_weights[term] = tf * np.exp(-idf[term]) * len(term)
                     elif tfidf_weighting_scheme == "tf*2^len":
                         path_weights[term] = tf * 2 ** len(term)
+                    elif tfidf_weighting_scheme == "mintf":
+                        path_weights[term] = 0 if tf < 0.25 else len(term) + tf
                     else:
                         raise Exception("Unrecognised weighting scheme! {:}".format(tfidf_weighting_scheme))
                     # path_weights[term] = tf * 3**(len(term)-1)
@@ -1316,6 +1384,9 @@ class SelfRetrievalMetricHook(MetricHook):
                 term_score_weights=term_score_weights,
                 idf_smoothing_alpha=config.eval.metrics.self_retrieval.get("summary_idf_smoothing_alpha", 0),
                 idf_log=config.eval.metrics.self_retrieval.get("summary_idf_log", True),
+                ibf_normalise=config.eval.metrics.self_retrieval.get("summary_ibf_normalise", False),
+                use_review_tf=config.eval.metrics.self_retrieval.get("summary_use_review_tf", False),
+                use_review_ibf=config.eval.metrics.self_retrieval.get("summary_use_review_ibf", False),
                 block_used_paths=config.eval.metrics.self_retrieval.get("summary_block_used_paths", True),
                 block_used_paths_d2=config.eval.metrics.self_retrieval.get("summary_block_used_paths_d2", True),
                 allow_wildcards=config.eval.metrics.self_retrieval.get("summary_allow_wildcards", False),
@@ -1352,103 +1423,224 @@ class SelfRetrievalMetricHook(MetricHook):
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
-        elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
-            dataset_path = config.eval.metrics.self_retrieval.dataset_all
-            with jsonlines.open(os.path.join(agent.data_path, dataset_path, "reviews.train.jsonl")) as reader:
-                train_data = list(reader)
-            all_sents = [row["sentence"] for row in train_data]
-            all_sents = list(set(all_sents))
+        # elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
 
-            tfidf_vectorizer = TfidfVectorizer(
-                stop_words=("english"),
-                min_df=5,
-                max_df=0.5,
-            )
-            tfidf_vectorizer.fit(all_sents)
+        # We may need the tfidf encoding for merging - so build it anyway
+        dataset_path = config.eval.metrics.self_retrieval.dataset_all
+        with jsonlines.open(os.path.join(agent.data_path, dataset_path, "reviews.train.jsonl")) as reader:
+            train_data = list(reader)
+        all_sents = [row["sentence"] for row in train_data]
+        all_sents = list(set(all_sents))
+
+        tfidf_vectorizer = TfidfVectorizer(
+            stop_words=("english"),
+            min_df=5,
+            max_df=0.5,
+        )
+        tfidf_vectorizer.fit(all_sents)
 
         all_evidence = []
         all_evidence_paths = []
-        for row in tqdm(
-            eval_data,
-            desc="Selecting centroids for extractive summary (using {:})".format(
-                config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge")
-            ),
-            disable=agent.silent,
-        ):
-            summary_sentences = []
-            summary_evidence = []
-            summary_evidence_paths = []
-            entity = row["entity_id"]
-            paths = summary_paths[entity]
-            for i, path in enumerate(paths):
-                path_evidence = []
-                path_evidence_paths = []
-                for codes, sents in sentences_by_path[entity].items():
-                    # if path == codes[: len(path)]:
-                    if paths_are_equal(path, codes[: len(path)]):
-                        path_evidence.extend(sents)
-                        path_evidence_paths.extend([codes for _ in sents])
 
-                    # Select rouge centroid as top extractive pick
+        with Pool(4) as pool:
+            for row in tqdm(
+                eval_data,
+                desc="Selecting centroids (using {:})".format(
+                    config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge")
+                ),
+                disable=agent.silent,
+            ):
+                summary_sentences = []
+                summary_evidence = []
+                summary_evidence_paths = []
+                entity = row["entity_id"]
+                paths = summary_paths[entity]
+                for i, path in enumerate(paths):
+                    path_evidence = []
+                    path_evidence_paths = []
+                    for codes, sents in sentences_by_path[entity].items():
+                        # if path == codes[: len(path)]:
+                        if paths_are_equal(path, codes[: len(path)]):
+                            path_evidence.extend(sents)
+                            path_evidence_paths.extend([codes for _ in sents])
 
-                if len(path_evidence) == 0:
-                    print("Found entity with no evidence!")
-                    print(entity)
-                    print(path_evidence)
-                    print(path)
-                    print(paths)
-                    print(summary_path_weights[entity])
-                    print(sentences_by_path[entity].keys())
-                    print(paths_by_review_by_entity[entity])
+                        # Select rouge centroid as top extractive pick
 
-                path_evidence = path_evidence[:50]
-                path_evidence_paths = path_evidence_paths[:50]
+                    if len(path_evidence) == 0:
+                        print("Found entity with no evidence!")
+                        print(entity)
+                        print(path_evidence)
+                        print(path)
+                        print(paths)
+                        print(summary_path_weights[entity])
+                        print(sentences_by_path[entity].keys())
+                        print(paths_by_review_by_entity[entity])
 
-                scores = []
+                    path_evidence = path_evidence[:50]
+                    path_evidence_paths = path_evidence_paths[:50]
 
-                if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
-                    for x in path_evidence:
-                        scores.append([])
-                        for y in path_evidence:
-                            rouge = get_pairwise_rouge(x, y)["rouge2"]
-                            scores[-1].append(rouge)
-                        # print(scores)
-                        scores[-1] = np.mean(scores[-1])
-                elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
-                    hyps_flat = [x for x in path_evidence for y in path_evidence]
-                    prems_flat = [y for x in path_evidence for y in path_evidence]
-                    scores_flat = nli_model.get_scores(premises=prems_flat, hypotheses=hyps_flat, bsz=256)
                     scores = []
-                    i = 0
-                    for x in path_evidence:
-                        curr_scores = []
-                        for y in path_evidence:
-                            curr_scores.append(scores_flat[i])
-                            i += 1
-                        scores.append(np.mean(curr_scores))
-                elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
-                    similarities = cosine_similarity(
-                        tfidf_vectorizer.transform(path_evidence), tfidf_vectorizer.transform(path_evidence)
-                    )
-                    scores = similarities.mean(axis=-1)
 
-                max_ix = np.argmax(scores)
-                summary_sentences.append(path_evidence[max_ix])
-                summary_evidence.append(path_evidence)
-                summary_evidence_paths.append(path_evidence_paths)
+                    min_r2_overlap = config.eval.metrics.self_retrieval.get("cluster_min_r2_overlap", None)
 
-            # post process the extractive summaries
-            summary_sentences = [
-                get_true_case(sent) + ("." if sent[-1] not in ["!", "?", ".", ","] else "")
-                for sent in summary_sentences
-            ]
+                    r2_scores = []
+                    if (
+                        min_r2_overlap is not None
+                        or config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge"
+                    ):
+                        pairs = [(x, y) for x in path_evidence for y in path_evidence]
+                        r2_scores_flat = pool.map(pairwise_r2, pairs)
+                        # r2_scores_flat = [pairwise_r2(pair) for pair in pairs]
+                        r2_scores = np.array(r2_scores_flat).reshape(len(path_evidence), len(path_evidence))
+                        # scores.append([get_pairwise_rouge(x, y)["rouge2"] for y in path_evidence])
+                        # scores[-1] = np.mean(scores[-1])
 
-            if config.eval.metrics.self_retrieval.get("summary_dedupe_output", False):
-                summary_sentences = list(set(summary_sentences))
+                    if min_r2_overlap is not None:
+                        filtered = []
+                        filtered_paths = []
+                        filtered_scores = []
+                        for x, scores, p in zip(path_evidence, r2_scores, path_evidence_paths):
+                            if np.max(scores) > min_r2_overlap:
+                                filtered.append(x)
+                                filtered_paths.append(p)
+                                filtered_scores.append(scores)
 
-            extractive_summs.append(" ".join(summary_sentences))
-            all_evidence.append(summary_evidence)
-            all_evidence_paths.append(summary_evidence_paths)
+                        if len(filtered) == 0:
+                            # logger.warn(
+                            #     "Ended up with a 0-length evidence set after filtering!\nSet was:\n{:}\nScores:\n{:}\nPath: {:}".format(
+                            #         path_evidence, r2_scores, path
+                            #     )
+                            # )
+                            if config.eval.metrics.self_retrieval.get("cluster_min_r2_overlap_exclude", False):
+                                path_evidence = [""]
+                                path_evidence_paths = [(None,)]
+                                r2_scores = [[0]]
+                                logger.warn("Ended up with a 0-length evidence set after filtering! Discarding")
+                            else:
+                                logger.warn(
+                                    "Ended up with a 0-length evidence set after filtering! Using full set instead"
+                                )
+
+                        else:
+                            path_evidence = filtered
+                            path_evidence_paths = filtered_paths
+                            r2_scores = filtered_scores
+
+                    if config.eval.metrics.self_retrieval.get("clusters_sort", False):
+                        indices = np.argsort(np.mean(r2_scores, axis=1))[::-1]
+                        path_evidence = [path_evidence[ix] for ix in indices]
+                        path_evidence_paths = [path_evidence_paths[ix] for ix in indices]
+                        r2_scores = [r2_scores[ix] for ix in indices]
+
+                    if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
+                        scores = np.mean(r2_scores, axis=1)
+                    elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
+                        hyps_flat = [x for x in path_evidence for y in path_evidence]
+                        prems_flat = [y for x in path_evidence for y in path_evidence]
+                        scores_flat = nli_model.get_scores(premises=prems_flat, hypotheses=hyps_flat, bsz=64)
+                        scores = []
+                        i = 0
+                        for x in path_evidence:
+                            curr_scores = []
+                            for y in path_evidence:
+                                curr_scores.append(scores_flat[i])
+                                i += 1
+                            scores.append(np.mean(curr_scores))
+                    elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
+                        similarities = cosine_similarity(
+                            tfidf_vectorizer.transform(path_evidence), tfidf_vectorizer.transform(path_evidence)
+                        )
+                        scores = similarities.mean(axis=-1)
+
+                    max_ix = np.argmax(scores)
+                    summary_sentences.append(path_evidence[max_ix])
+                    summary_evidence.append(path_evidence)
+                    summary_evidence_paths.append(path_evidence_paths)
+
+                # Combine related clusters
+                if config.eval.metrics.self_retrieval.get("summary_combine_clusters_threshold", None) is not None:
+                    # r2_scores_flat = [pairwise_r2((x,y)) for x in summary_sentences for y in summary_sentences]
+                    pairs = [(x, y) for x in summary_sentences for y in summary_sentences]
+                    r2_scores_flat = pool.map(pairwise_r2, pairs)
+                    r2_scores = np.array(r2_scores_flat).reshape(len(summary_sentences), len(summary_sentences))
+
+                    # Use tfidf similarity between all cluster members to work out overlap
+                    # cluster_embedded = tfidf_vectorizer.transform(path_evidence)
+
+                    ixs_to_merge = defaultdict(list)
+                    for srcix, scores in enumerate(r2_scores):
+                        for tgtix in range(srcix, len(scores)):
+                            if scores[tgtix] > config.eval.metrics.self_retrieval.get(
+                                "summary_combine_clusters_threshold", None
+                            ):
+                                ixs_to_merge[srcix].append(tgtix)
+
+                    # print(ixs_to_merge)
+
+                    summary_sentences_merged = []
+                    summary_evidence_merged = []
+                    summary_evidence_paths_merged = []
+
+                    # Perform the merges
+                    for ix in range(len(summary_sentences)):
+                        if ix in [tgt for tgts in ixs_to_merge.values() for tgt in tgts]:
+                            continue
+
+                        summary_sentences_merged.append(summary_sentences[ix])
+                        summary_evidence_merged.append(summary_evidence[ix])
+                        summary_evidence_paths_merged.append(summary_evidence_paths[ix])
+
+                        if ix in ixs_to_merge:
+                            for tgtix in ixs_to_merge[ix]:
+                                # summary_sentences_merged.append(summary_sentences[tgtix])
+                                summary_evidence_merged[-1].extend(summary_evidence[tgtix])
+                                summary_evidence_paths_merged[-1].extend(summary_evidence_paths[tgtix])
+
+                    summary_sentences = summary_sentences_merged
+                    summary_evidence = summary_evidence_merged
+                    summary_evidence_paths = summary_evidence_paths_merged
+
+                    # Re-sort
+                    if config.eval.metrics.self_retrieval.get("clusters_sort", False):
+                        summary_sentences_merged = []
+                        summary_evidence_merged = []
+                        summary_evidence_paths_merged = []
+
+                        for sent, path_evidence, path_evidence_paths in zip(
+                            summary_sentences, summary_evidence, summary_evidence_paths
+                        ):
+                            pairs = [(x, y) for x in path_evidence for y in path_evidence]
+                            r2_scores_flat = pool.map(pairwise_r2, pairs)
+                            # r2_scores_flat = [pairwise_r2(pair) for pair in pairs]
+                            r2_scores = np.array(r2_scores_flat).reshape(len(path_evidence), len(path_evidence))
+
+                            # Also re-select the extractive centroid
+                            if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
+                                max_ix = np.argmax(r2_scores.mean(-1))
+                                summary_sentences_merged.append(path_evidence[max_ix])
+                            else:
+                                summary_sentences_merged.append(sent)
+
+                            indices = np.argsort(np.mean(r2_scores, axis=1))[::-1]
+                            summary_evidence_merged.append([path_evidence[ix] for ix in indices])
+                            summary_evidence_paths_merged.append([path_evidence_paths[ix] for ix in indices])
+
+                        summary_sentences = summary_sentences_merged
+                        summary_evidence = summary_evidence_merged
+                        summary_evidence_paths = summary_evidence_paths_merged
+
+                # post process the extractive summaries
+                summary_sentences = [
+                    get_true_case(sent) + ("." if len(sent) > 0 and sent[-1] not in ["!", "?", ".", ","] else "")
+                    for sent in summary_sentences
+                ]
+
+                if config.eval.metrics.self_retrieval.get("summary_dedupe_output", False):
+                    summary_sentences = list(set(summary_sentences))
+
+                extractive_summs.append(" ".join(summary_sentences))
+                all_evidence.append(summary_evidence)
+                all_evidence_paths.append(summary_evidence_paths)
 
         # Clean up
         del nli_model
@@ -1472,6 +1664,8 @@ class SelfRetrievalMetricHook(MetricHook):
             or config.eval.metrics.self_retrieval.get("calc_summac_cluster", False)
             or config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False)
         ):
+            if not agent.silent:
+                logger.info("Loading SummaC")
             from summac.model_summac import SummaCConv
 
             model_conv = SummaCConv(
@@ -1485,8 +1679,8 @@ class SelfRetrievalMetricHook(MetricHook):
             )
 
         if config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False):
-            print("Evaling SC_ins")
-
+            if not agent.silent:
+                logger.info("Calcing SC_ins")
             docs = [
                 " ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data
             ]
@@ -1495,31 +1689,42 @@ class SelfRetrievalMetricHook(MetricHook):
             extractive_scores["sc_ins"] = np.mean(res["scores"]) * 100
 
         if config.eval.metrics.self_retrieval.get("calc_summac_clusters", False):
-            print("Evaling SC_clusters")
-
+            if not agent.silent:
+                logger.info("Calcing SC_clusters")
+            docs = [
+                " ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data
+            ]
             clusters_flattened = [" ".join([" ".join(cluster) for cluster in clusters]) for clusters in all_evidence]
 
             res = model_conv.score(docs, clusters_flattened)
             extractive_scores["sc_clusters"] = np.mean(res["scores"]) * 100
 
         if config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False):
-            print("Evaling SC_refs")
-
+            if not agent.silent:
+                logger.info("Calcing SC_refs")
             docs = [" ".join(summs) for summs in gold_summs]
 
             res = model_conv.score(docs, extractive_summs)
             extractive_scores["sc_refs"] = np.mean(res["scores"]) * 100
 
         if config.eval.metrics.self_retrieval.get("calc_extractive_prevalence", True):
+            if not agent.silent:
+                logger.info("Calcing Prevalence")
+
             from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
-            prevmet = PrevalenceMetric()
-            prevs, reds, trivs = prevmet.get_prevalence(
+            if "amasum" in dataset_eval:
+                trivial_template = "I bought a {:}."
+            else:
+                trivial_template = "I stayed at {:}."
+
+            prevmet = PrevalenceMetric(model_name="vitc")
+            (prevs, reds, trivs), _ = prevmet.get_prevalence(
                 [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
                 extractive_summs,
                 pbar=False,
-                # product_names=[product_names[row["entity_id"]] for row in eval_data],
-                # trivial_template=trivial_template,
+                product_names=[row["entity_name"] for row in eval_data],
+                trivial_template=trivial_template,
             )
             extractive_scores["prevalence_summaries"] = (
                 np.mean(prevs) * 100,
@@ -1552,14 +1757,15 @@ class SelfRetrievalMetricHook(MetricHook):
         }
 
     @abstractmethod
-    def eval_compare_selected_clusters_to_oracle(config, data_path, evidence, sents_to_code=None, test=False):
-        split = "test" if test else "dev"
-        dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
-        with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
-            eval_data = [x for x in reader]
+    def eval_compare_selected_clusters_to_oracle(config, data_path, evidence, eval_data=None, test=False):
+        if eval_data is None:
+            split = "test" if test else "dev"
+            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
+                eval_data = [x for x in reader]
 
-        oracle_centroids = []
-        oracle_clusters = []
+            oracle_centroids = []
+            oracle_clusters = []
 
         # First, identify which sentences are the centroids (and clusters)
         for row in eval_data:
@@ -1613,31 +1819,41 @@ class SelfRetrievalMetricHook(MetricHook):
         }
 
     @abstractmethod
-    def eval_cluster_prevalence(config, data_path, evidence, test=False):
+    def eval_cluster_prevalence(
+        config,
+        data_path,
+        evidence,
+        eval_data=None,
+        test=False,
+        max_reviews=50,
+        max_sents=10,
+        trivial_template="I stayed at {:}.",
+    ):
         # Import here because SummaC isn't installed by default..!
         from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
-        metric = PrevalenceMetric()
+        metric = PrevalenceMetric(model_name="vitc")
 
-        # Optionally, cap the total number of samples (for speed)
-        MAX_REVIEWS = 50
-        MAX_SENTS_PER_CLUSTER = 10
+        if eval_data is None:
+            split = "test" if test else "dev"
+            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
+                eval_data = [x for x in reader]
 
-        split = "test" if test else "dev"
-        dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
-        with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
-            eval_data = [x for x in reader]
+            if "amasum" in dataset_eval:
+                trivial_template = "I bought a {:}."
+            else:
+                trivial_template = "I stayed at {:}."
 
-        reviews = [[" ".join(rev["sentences"]) for rev in row["reviews"][:MAX_REVIEWS]] for row in eval_data]
-        evidence_flat = [
-            [sent for cluster in clusters for sent in cluster[:MAX_SENTS_PER_CLUSTER]] for clusters in evidence
-        ]
+        reviews = [[" ".join(rev["sentences"]) for rev in row["reviews"][:max_reviews]] for row in eval_data]
+        evidence_flat = [[sent for cluster in clusters for sent in cluster[:max_sents]] for clusters in evidence]
 
-        scores = metric.get_prevalence(
+        scores, raw = metric.get_prevalence(
             reviews,
             evidence_flat,
             summaries_are_sentences=True,
-            product_names=None,
+            product_names=[row["entity_name"] for row in eval_data],
+            trivial_template=trivial_template,
             pbar=False,
             batch_size=32,
             ignore_redundancy=True,
@@ -1647,7 +1863,7 @@ class SelfRetrievalMetricHook(MetricHook):
             "prevalence": np.mean(scores[0]) * 100,
             "redundant": np.mean(scores[1]) * 100,
             "trivial": np.mean(scores[2]) * 100,
-        }
+        }, raw
 
     @abstractmethod
     def eval_cluster_purity(
