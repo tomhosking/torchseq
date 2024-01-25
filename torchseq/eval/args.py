@@ -8,7 +8,7 @@ def parse_eval_args(arg_str=None):
 
     parser.add_argument("-V", "--version", action="store_true", help="Display version")
 
-    parser.add_argument("--load", type=str, metavar="MODEL", help="Path to model folder", required=True)
+    parser.add_argument("--model", type=str, metavar="MODEL", help="Path to model folder", required=True)
 
     parser.add_argument("--recipe", type=str, metavar="RECIPE", help="Name of recipe to run", required=True)
 

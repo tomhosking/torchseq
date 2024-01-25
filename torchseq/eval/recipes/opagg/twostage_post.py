@@ -15,6 +15,10 @@ class Recipe(EvalRecipe):
     def run(self, predicted_summaries: Optional[list[str]] = None) -> dict[str, Any]:
         result = {}
 
+        variant = "piecewise"
+
+        print("Variant: ", variant)
+
         if predicted_summaries is None:
             # Load the input clusters
             with open(os.path.join(self.model_path, "eval", f"summaries_{self.split_str}.json")) as f:
@@ -22,20 +26,23 @@ class Recipe(EvalRecipe):
 
             # Load the LLM outputs
             with jsonlines.open(
-                os.path.join(self.model_path, "eval", f"llm_outputs_{self.split_str}.jsonl")
+                os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}.jsonl")
             ) as reader:
                 llm_outputs = list(reader)
 
             # Clean and combine into summaries
             # TODO: label each output with its origin so that we don't have to do this
-            i = 0
-            predicted_summaries = []
-            for clusters in extractive_summaries["evidence"]:
-                curr_summ = []
-                for cluster in clusters:
-                    curr_summ.append(llm_outputs[i]["response"].strip())
-                    i += 1
-                predicted_summaries.append(" ".join(curr_summ))
+            if variant == "piecewise":
+                i = 0
+                predicted_summaries = []
+                for clusters in extractive_summaries["evidence"]:
+                    curr_summ = []
+                    for cluster in clusters:
+                        curr_summ.append(llm_outputs[i]["response"].strip())
+                        i += 1
+                    predicted_summaries.append(" ".join(curr_summ))
+            else:
+                predicted_summaries = [resp["response"] for resp in llm_outputs]
         else:
             # Allow this recipe to be used for external systems (ie baselines)
             print("Using external summaries passed to eval recipe")
@@ -46,13 +53,8 @@ class Recipe(EvalRecipe):
             eval_data = [x for x in reader]
 
         if "space" in dataset_eval:
-            with open("/mnt/ext/phd/data/space/space_summ.json") as f:
-                space = json.load(f)
-            product_names = {row["entity_id"]: row["entity_name"] for row in space}
             trivial_template = "I stayed at {:}."
         else:
-            # TODO: can we get the product names for amasum?
-            product_names = defaultdict(lambda: "this product")
             trivial_template = "I bought {:}."
 
         # Score the summaries
@@ -92,7 +94,7 @@ class Recipe(EvalRecipe):
             [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
             predicted_summaries,
             pbar=False,
-            product_names=[product_names[row["entity_id"]] for row in eval_data],
+            product_names=[row["entity_name"] for row in eval_data],
             trivial_template=trivial_template,
         )
         result["prevalence"] = (np.mean(prevs) * 100, np.mean(reds) * 100, np.mean(trivs) * 100)

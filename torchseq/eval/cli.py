@@ -29,14 +29,14 @@ def main():
 
     cfg_patch = {}
 
-    config_path = os.path.join(args.load, "config.json")
+    config_path = os.path.join(args.model, "config.json")
 
     if not os.path.exists(config_path):
-        raise Exception("No config file found in path {:}".format(args.load))
+        raise Exception("No config file found in path {:}".format(args.model))
 
     # First load the model
-    # instance = model_from_path(args.load, config_patch=cfg_patch, use_cuda=(not args.cpu))
-    # logger.info("Loaded model from {:}".format(args.load))
+    # instance = model_from_path(args.model, config_patch=cfg_patch, use_cuda=(not args.cpu))
+    # logger.info("Loaded model from {:}".format(args.model))
 
     # Then load the data
     # ???
@@ -45,7 +45,7 @@ def main():
 
     recipe_module = importlib.import_module("torchseq.eval.recipes." + args.recipe, None)
     if recipe_module is not None:
-        recipe: recipes.EvalRecipe = recipe_module.Recipe(args.load, args.data_path, args.test, args.cpu, logger)
+        recipe: recipes.EvalRecipe = recipe_module.Recipe(args.model, args.data_path, args.test, args.cpu, logger)
         result = recipe.run()
     else:
         logger.error("No recipe called {:} found!".format(args.recipe))

@@ -4,11 +4,18 @@ from torchseq.eval.recipes import EvalRecipe
 from torchseq.utils.model_loader import model_from_path
 from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
 
-PROMPT_TEMPLATE = """Here is a list of sentences taken from hotel reviews:
+PROMPT_TEMPLATE_PIECEWISE = """Here is a list of sentences taken from reviews of a single hotel:
 
 {:}
 
 In no more than 15 words, write a single short sentence using very simple language that includes the main point:
+"""
+
+PROMPT_TEMPLATE_ONESHOT = """Here is a list of sentences taken from reviews of a single hotel:
+
+{:}
+
+In no more than 70 words, write a brief summary using very simple language that includes the main points:
 """
 
 
@@ -32,19 +39,36 @@ class Recipe(EvalRecipe):
 
         # Take the selected clusters and construct the prompts to hand off to an external LLM
         clusters_per_entity = summaries["evidence"]
+        entity_ids = summaries["entity_ids"]
 
-        # TODO: preprocess clusters here? remove dupes, combine similar etc
-
-        # TODO: include metadata
-        prompts_flat = [
-            {"prompt": PROMPT_TEMPLATE.format("\n".join(cluster))}
-            for clusters in clusters_per_entity
+        prompts_flat_piecewise = [
+            {"entity_id": ent_id, "prompt": PROMPT_TEMPLATE_PIECEWISE.format("\n".join(cluster))}
+            for clusters, ent_id in zip(clusters_per_entity, entity_ids)
             for cluster in clusters
         ]
 
-        result["prompts"] = prompts_flat
+        result["prompts_piecewise"] = prompts_flat_piecewise
 
-        with jsonlines.open(os.path.join(self.model_path, "eval", f"llm_inputs_{self.split_str}.jsonl")) as writer:
-            writer.write_all(prompts_flat)
+        with jsonlines.open(
+            os.path.join(self.model_path, "eval", f"llm_inputs_piecewise_{self.split_str}.jsonl"), "w"
+        ) as writer:
+            writer.write_all(prompts_flat_piecewise)
+
+        prompts_flat_oneshot = [
+            {
+                "entity_id": ent_id,
+                "prompt": PROMPT_TEMPLATE_ONESHOT.format(
+                    "\n".join([sent for cluster in clusters for sent in cluster])
+                ),
+            }
+            for clusters, ent_id in zip(clusters_per_entity, entity_ids)
+        ]
+
+        result["prompts_oneshot"] = prompts_flat_oneshot
+
+        with jsonlines.open(
+            os.path.join(self.model_path, "eval", f"llm_inputs_oneshot_{self.split_str}.jsonl"), "w"
+        ) as writer:
+            writer.write_all(prompts_flat_oneshot)
 
         return result
