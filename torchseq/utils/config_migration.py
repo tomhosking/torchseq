@@ -49,7 +49,16 @@ def migrate_23_to_24_encdec(cfg_dict, check_only=False):
     return False if check_only else cfg_dict
 
 
-all_migrations = [migrate_optimizers_23, migrate_23_to_24_encdec]
+def migrate_selfret_to_osca(cfg_dict, check_only=False):
+    if "self_retrieval" in cfg_dict["eval"]["metrics"]:
+        if check_only:
+            return True
+        cfg_dict["eval"]["metrics"]["opsumm_cluster_aug"] = cfg_dict["eval"]["metrics"]["self_retrieval"]
+        cfg_dict["eval"]["metrics"].pop("self_retrieval")
+    return False if check_only else cfg_dict
+
+
+all_migrations = [migrate_optimizers_23, migrate_23_to_24_encdec, migrate_selfret_to_osca]
 
 
 def check_config(config):

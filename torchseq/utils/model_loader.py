@@ -4,7 +4,9 @@ from torchseq.agents.seq2seq_agent import Seq2SeqAgent
 from torchseq.agents.retrieval_agent import RetrievalAgent
 from torchseq.agents.lm_agent import LangModelAgent
 from torchseq.utils.config import Config, merge_cfg_dicts
+from torchseq.utils.config_migration import check_config
 import torch
+import logging
 
 
 AGENT_TYPES = {
@@ -16,6 +18,8 @@ AGENT_TYPES = {
     "exemplarguided": Seq2SeqAgent,
     "retrieval": RetrievalAgent,
 }
+
+logger = logging.getLogger("Loader")
 
 
 def config_from_path(path_to_model, config_patch=None):
@@ -42,6 +46,9 @@ def model_from_path(
     torch.cuda.empty_cache()
 
     config = config_from_path(path_to_model, config_patch)
+
+    if check_config(config.data):
+        logger.warning("Config is outdated! Run the migration script to update it")
 
     # run_id = path_to_model.split("/")[-1] if run_id is False else run_id
 
