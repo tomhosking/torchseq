@@ -41,7 +41,7 @@ from torchseq.metric_hooks.sep_ae import SepAEMetricHook
 from torchseq.metric_hooks.hrq_agg import HRQAggregationMetricHook
 from torchseq.metric_hooks.rouge import RougeMetricHook
 from torchseq.metric_hooks.semparse import SemanticParsingMetricHook
-from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
+from torchseq.metric_hooks.opsumm_cluster_aug import OpSummClusterAugMetricHook
 
 
 # Variable length sequences = worse performance if we try to optimise
@@ -755,9 +755,9 @@ class ModelAgent(BaseAgent):
             metric_hooks += [
                 HRQAggregationMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
             ]
-        if slow_metrics and "self_retrieval" in self.config.eval.get("metrics", {}).keys():
+        if slow_metrics and "opsumm_cluster_aug" in self.config.eval.get("metrics", {}).keys():
             metric_hooks += [
-                SelfRetrievalMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
+                OpSummClusterAugMetricHook(self.config, self.output_tokenizer, self.src_field, self.tgt_field)
             ]
 
         if (

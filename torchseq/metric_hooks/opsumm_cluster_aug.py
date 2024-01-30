@@ -90,7 +90,7 @@ class AggregationTree:
         return self.nodes.values()
 
 
-class SelfRetrievalMetricHook(MetricHook):
+class OpSummClusterAugMetricHook(MetricHook):
     type = "slow"  # should be either 'live' or 'slow' - live metrics are calculated every epoch, slow metrics only for evaluation
 
     # def __init__(self, config, src_field=None, tgt_field=None):
@@ -105,34 +105,34 @@ class SelfRetrievalMetricHook(MetricHook):
     def on_end_epoch(self, agent, use_test=False):
         # Populate caches
         logger.info("Populating SelfRet caches - this may take a while!")
-        _, _ = SelfRetrievalMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
-        # _, _ = SelfRetrievalMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
+        _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
+        # _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
         logger.info("...done")
 
-        if self.config.eval.metrics.self_retrieval.get("run_nli", False):
+        if self.config.eval.metrics.opsumm_cluster_aug.get("run_nli", False):
             logger.info("Running NLI eval")
-            self.scores["self_retrieval_nli"], _, _ = SelfRetrievalMetricHook.eval_nli(
+            self.scores["osca_nli"], _, _ = OpSummClusterAugMetricHook.eval_nli(
                 self.config,
                 agent,
                 test=use_test,
             )
             logger.info("...done")
 
-        if self.config.eval.metrics.self_retrieval.get("run_tsne", False):
+        if self.config.eval.metrics.opsumm_cluster_aug.get("run_tsne", False):
             logger.info("Running tsne eval")
-            _ = SelfRetrievalMetricHook.eval_tsne(
+            _ = OpSummClusterAugMetricHook.eval_tsne(
                 self.config,
                 agent,
                 test=use_test,
             )
             logger.info("...done")
 
-        if self.config.eval.metrics.self_retrieval.get("run_extract_summaries", False):
+        if self.config.eval.metrics.opsumm_cluster_aug.get("run_extract_summaries", False):
             logger.info("Running generation using HRQ paths")
             (
-                self.scores["self_retrieval_generation"],
+                self.scores["osca_generation"],
                 generated_summaries,
-            ) = SelfRetrievalMetricHook.eval_extract_summaries_and_score(
+            ) = OpSummClusterAugMetricHook.eval_extract_summaries_and_score(
                 self.config,
                 agent,
                 test=use_test,
@@ -143,10 +143,10 @@ class SelfRetrievalMetricHook(MetricHook):
                 json.dump(generated_summaries, f)
             logger.info("...done")
 
-            if self.config.eval.metrics.self_retrieval.get("run_selection_oracle_comparison", False):
+            if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_oracle_comparison", False):
                 self.scores[
-                    "self_retrieval_selection_vs_oracle"
-                ] = SelfRetrievalMetricHook.eval_compare_selected_clusters_to_oracle(
+                    "osca_selection_vs_oracle"
+                ] = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
                     self.config,
                     agent.data_path,
                     generated_summaries["paths"],
@@ -156,34 +156,34 @@ class SelfRetrievalMetricHook(MetricHook):
                     # },
                     test=use_test,
                 )
-            if self.config.eval.metrics.self_retrieval.get("run_selection_prevalence", False):
+            if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_prevalence", False):
                 (
-                    self.scores["self_retrieval_selection_prevalence"],
+                    self.scores["osca_selection_prevalence"],
                     _,
-                ) = SelfRetrievalMetricHook.eval_cluster_prevalence(
+                ) = OpSummClusterAugMetricHook.eval_cluster_prevalence(
                     self.config,
                     agent.data_path,
                     generated_summaries["evidence"],
                     test=use_test,
                 )
 
-        if self.config.eval.metrics.self_retrieval.get(
+        if self.config.eval.metrics.opsumm_cluster_aug.get(
             "run_purity_bleu", False
-        ) or self.config.eval.metrics.self_retrieval.get("run_purity_nli", False):
+        ) or self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_nli", False):
             logger.info("Running cluster purity eval")
-            self.scores["self_retrieval_purity"] = SelfRetrievalMetricHook.eval_cluster_purity(
+            self.scores["osca_purity"] = OpSummClusterAugMetricHook.eval_cluster_purity(
                 self.config,
                 agent,
                 test=use_test,
-                score_bleu=self.config.eval.metrics.self_retrieval.get("run_purity_bleu", False),
-                score_nli=self.config.eval.metrics.self_retrieval.get("run_purity_nli", False),
-                score_tfidf=self.config.eval.metrics.self_retrieval.get("run_purity_tfidf", True),
+                score_bleu=self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_bleu", False),
+                score_nli=self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_nli", False),
+                score_tfidf=self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_tfidf", True),
             )
             logger.info("...done")
 
-        if self.config.eval.metrics.self_retrieval.get("run_specialisation", False):
+        if self.config.eval.metrics.opsumm_cluster_aug.get("run_specialisation", False):
             logger.info("Running specialisation eval")
-            self.scores["self_retrieval_specialisation"] = SelfRetrievalMetricHook.eval_specialisation(
+            self.scores["osca_specialisation"] = OpSummClusterAugMetricHook.eval_specialisation(
                 self.config,
                 agent,
                 test=use_test,
@@ -220,9 +220,9 @@ class SelfRetrievalMetricHook(MetricHook):
             cfg_dict = copy.deepcopy(config.data)
 
             dataset = (
-                config.eval.metrics.self_retrieval.dataset_eval
+                config.eval.metrics.opsumm_cluster_aug.dataset_eval
                 if use_eval
-                else config.eval.metrics.self_retrieval.dataset_all
+                else config.eval.metrics.opsumm_cluster_aug.dataset_all
             )
 
             if use_eval:
@@ -327,7 +327,7 @@ class SelfRetrievalMetricHook(MetricHook):
         # cfg_dict = config_nli.data
 
         cfg_dict["json_dataset"] = {
-            "path": config.eval.metrics.self_retrieval.dataset_all,
+            "path": config.eval.metrics.opsumm_cluster_aug.dataset_all,
             "filename": "reviews.{split}",
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
@@ -349,7 +349,7 @@ class SelfRetrievalMetricHook(MetricHook):
         config_forced = copy.deepcopy(config_nli.data)
         config_forced["dataset"] = "json"
         config_forced["json_dataset"] = {
-            "path": config.eval.metrics.self_retrieval.dataset_all,
+            "path": config.eval.metrics.opsumm_cluster_aug.dataset_all,
             "filename": "reviews.{split}",
             "field_map": [
                 {"type": "copy", "from": "sentence", "to": "target"},
@@ -491,7 +491,7 @@ class SelfRetrievalMetricHook(MetricHook):
     @abstractmethod
     def eval_tsne(config, agent, test=False, show_plot=False):
         logger.info("Loading data")
-        sents_by_code, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, test)
+        sents_by_code, outputs_with_codes = OpSummClusterAugMetricHook.codes_from_cache(config, agent, test)
 
         split = "test" if test else "dev"
 
@@ -554,11 +554,11 @@ class SelfRetrievalMetricHook(MetricHook):
         full_embeddings = torch.sum(embedded_codes, dim=1)
 
         with jsonlines.open(
-            agent.data_path + "/" + config.eval.metrics.self_retrieval.dataset_all + f"/reviews.{split}.jsonl"
+            agent.data_path + "/" + config.eval.metrics.opsumm_cluster_aug.dataset_all + f"/reviews.{split}.jsonl"
         ) as f:
             entity_ids = [x["entity_id"] for x in f][:LIMIT]
         with jsonlines.open(
-            agent.data_path + "/" + config.eval.metrics.self_retrieval.dataset_all + f"/reviews.{split}.jsonl"
+            agent.data_path + "/" + config.eval.metrics.opsumm_cluster_aug.dataset_all + f"/reviews.{split}.jsonl"
         ) as f:
             review_ids = [x["review_id"] for x in f][:LIMIT]
 
@@ -1111,7 +1111,7 @@ class SelfRetrievalMetricHook(MetricHook):
     agent       -- A trained summarisation model
     test        -- Use test split?
     eval_data   -- [{'entity_id': 0, 'reviews': [{'review_id': 12345, 'sentences': ['Review sentences go here']}]}
-                    or set to None to load from config.eval.metrics.self_retrieval.dataset_eval
+                    or set to None to load from config.eval.metrics.opsumm_cluster_aug.dataset_eval
     """
 
     @abstractmethod
@@ -1119,7 +1119,7 @@ class SelfRetrievalMetricHook(MetricHook):
         split = "test" if test else "dev"
 
         if eval_data is None:
-            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            dataset_eval = config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
             with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"{split}.jsonl")) as reader:
                 eval_data = [x for x in reader]
 
@@ -1253,23 +1253,24 @@ class SelfRetrievalMetricHook(MetricHook):
             for rev_id, review in enumerate(row["reviews"])
             for sentence in (
                 review["sentences"][:-1]
-                if config.eval.metrics.self_retrieval.get("summary_skip_last", False)
+                if config.eval.metrics.opsumm_cluster_aug.get("summary_skip_last", False)
                 else review["sentences"]
             )
             if prefilter_condition(
                 sentence,
-                hotel_aspect_filter=config.eval.metrics.self_retrieval.get("summary_hotel_aspect_filter", True),
-                amazon_filter=config.eval.metrics.self_retrieval.get("summary_amazon_filter", False),
-                max_length=config.eval.metrics.self_retrieval.get("summary_max_sentence_length", 25),
-                min_length=config.eval.metrics.self_retrieval.get("summary_min_sentence_length", 0),
+                hotel_aspect_filter=config.eval.metrics.opsumm_cluster_aug.get("summary_hotel_aspect_filter", True),
+                amazon_filter=config.eval.metrics.opsumm_cluster_aug.get("summary_amazon_filter", False),
+                max_length=config.eval.metrics.opsumm_cluster_aug.get("summary_max_sentence_length", 25),
+                min_length=config.eval.metrics.opsumm_cluster_aug.get("summary_min_sentence_length", 0),
             )
             and (
                 sentence not in [sent for rev in row["reviews"][:rev_id] for sent in rev["sentences"]]
-                or not config.eval.metrics.self_retrieval.get("summary_dedupe_sentences", False)
+                or not config.eval.metrics.opsumm_cluster_aug.get("summary_dedupe_sentences", False)
             )
-            and len(review["sentences"]) >= config.eval.metrics.self_retrieval.get("summary_min_review_sentences", 0)
             and len(review["sentences"])
-            <= config.eval.metrics.self_retrieval.get("summary_max_review_sentences", 1000)
+            >= config.eval.metrics.opsumm_cluster_aug.get("summary_min_review_sentences", 0)
+            and len(review["sentences"])
+            <= config.eval.metrics.opsumm_cluster_aug.get("summary_max_review_sentences", 1000)
         ]
 
         # eval_sentences = []
@@ -1309,7 +1310,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
         all_codes = memory["vq_codes"].tolist()
 
-        # _, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, use_eval=True)
+        # _, outputs_with_codes = OpSummClusterAugMetricHook.codes_from_cache(config, agent, use_eval=True)
         # all_codes = outputs_with_codes['codes']
 
         # Organise paths by entity/review, then get summary paths
@@ -1317,46 +1318,49 @@ class SelfRetrievalMetricHook(MetricHook):
         for row, codes in zip(eval_sentences, all_codes):
             paths_by_review_by_entity[row["entity_id"]][row["review_id"]].append(codes)
 
-        if config.eval.metrics.self_retrieval.get("summary_smart_heuristic", False):
+        if config.eval.metrics.opsumm_cluster_aug.get("summary_smart_heuristic", False):
             # Get some generic, some specific
             logger.info("Selecting specific terms...")
             (
                 summary_paths_specific,
                 summary_path_weights_specific,
-            ) = SelfRetrievalMetricHook.select_entity_summary_paths(
+            ) = OpSummClusterAugMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 3),
-                max_path_depth=config.eval.metrics.self_retrieval.get("summary_smart_maxdepth", 8),
-                path_limit=config.eval.metrics.self_retrieval.get("summary_smart_num_specific", 4),
+                max_path_depth=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_maxdepth", 8),
+                path_limit=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_num_specific", 4),
                 truncation_length=None,
                 prune_min_weight=None,
                 prune_max_paths=None,
                 use_tfidf=True,
-                tfidf_weighting_scheme=config.eval.metrics.self_retrieval.get(
+                tfidf_weighting_scheme=config.eval.metrics.opsumm_cluster_aug.get(
                     "summary_smart_specific_weight_scheme", 2
                 ),
                 silent=agent.silent,
-                allow_wildcards=config.eval.metrics.self_retrieval.get("summary_allow_wildcards", False),
+                allow_wildcards=config.eval.metrics.opsumm_cluster_aug.get("summary_allow_wildcards", False),
                 term_score_weights=term_score_weights,
             )
             logger.info("Selecting generic terms...")
-            summary_paths_generic, summary_path_weights_generic = SelfRetrievalMetricHook.select_entity_summary_paths(
+            (
+                summary_paths_generic,
+                summary_path_weights_generic,
+            ) = OpSummClusterAugMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 2),
-                max_path_depth=config.eval.metrics.self_retrieval.get("summary_smart_maxdepth", 8),
-                path_limit=config.eval.metrics.self_retrieval.get("summary_smart_num_generic", 4),
+                max_path_depth=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_maxdepth", 8),
+                path_limit=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_num_generic", 4),
                 truncation_length=None,
-                prune_min_weight=config.eval.metrics.self_retrieval.get("summary_smart_generic_min_weight", 0.01),
+                prune_min_weight=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_generic_min_weight", 0.01),
                 prune_max_paths=None,
                 use_tfidf=True
-                if config.eval.metrics.self_retrieval.get("summary_smart_generic_weight_scheme", None) is not None
+                if config.eval.metrics.opsumm_cluster_aug.get("summary_smart_generic_weight_scheme", None) is not None
                 else False,
-                tfidf_weighting_scheme=config.eval.metrics.self_retrieval.get(
+                tfidf_weighting_scheme=config.eval.metrics.opsumm_cluster_aug.get(
                     "summary_smart_generic_weight_scheme", 5
                 ),
                 # block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
                 block_paths={k: v for k, v in summary_paths_specific.items()},
-                allow_wildcards=config.eval.metrics.self_retrieval.get("summary_allow_wildcards", False),
+                allow_wildcards=config.eval.metrics.opsumm_cluster_aug.get("summary_allow_wildcards", False),
                 silent=agent.silent,
                 term_score_weights=term_score_weights,
             )
@@ -1369,27 +1373,27 @@ class SelfRetrievalMetricHook(MetricHook):
                 )
         else:
             logger.info("Selecting summary terms...")
-            summary_paths, summary_path_weights = SelfRetrievalMetricHook.select_entity_summary_paths(
+            summary_paths, summary_path_weights = OpSummClusterAugMetricHook.select_entity_summary_paths(
                 paths_by_review_by_entity,
                 # ceil(num_heads // 4),
-                max_path_depth=config.eval.metrics.self_retrieval.get("summary_maxdepth", 8),
-                min_path_depth=config.eval.metrics.self_retrieval.get("summary_mindepth", 1),
-                path_limit=config.eval.metrics.self_retrieval.get("summary_path_limit", 6),
-                truncation_length=config.eval.metrics.self_retrieval.get("summary_truncation_length", None),
-                prune_min_weight=config.eval.metrics.self_retrieval.get("summary_prune_min_weight", 0.01),
-                prune_max_paths=config.eval.metrics.self_retrieval.get("summary_prune_max", None),
-                use_tfidf=config.eval.metrics.self_retrieval.get("summary_use_tfidf", False),
-                tfidf_weighting_scheme=config.eval.metrics.self_retrieval.get("summary_tfidf_weight_scheme", 5),
+                max_path_depth=config.eval.metrics.opsumm_cluster_aug.get("summary_maxdepth", 8),
+                min_path_depth=config.eval.metrics.opsumm_cluster_aug.get("summary_mindepth", 1),
+                path_limit=config.eval.metrics.opsumm_cluster_aug.get("summary_path_limit", 6),
+                truncation_length=config.eval.metrics.opsumm_cluster_aug.get("summary_truncation_length", None),
+                prune_min_weight=config.eval.metrics.opsumm_cluster_aug.get("summary_prune_min_weight", 0.01),
+                prune_max_paths=config.eval.metrics.opsumm_cluster_aug.get("summary_prune_max", None),
+                use_tfidf=config.eval.metrics.opsumm_cluster_aug.get("summary_use_tfidf", False),
+                tfidf_weighting_scheme=config.eval.metrics.opsumm_cluster_aug.get("summary_tfidf_weight_scheme", 5),
                 silent=agent.silent,
                 term_score_weights=term_score_weights,
-                idf_smoothing_alpha=config.eval.metrics.self_retrieval.get("summary_idf_smoothing_alpha", 0),
-                idf_log=config.eval.metrics.self_retrieval.get("summary_idf_log", True),
-                ibf_normalise=config.eval.metrics.self_retrieval.get("summary_ibf_normalise", False),
-                use_review_tf=config.eval.metrics.self_retrieval.get("summary_use_review_tf", False),
-                use_review_ibf=config.eval.metrics.self_retrieval.get("summary_use_review_ibf", False),
-                block_used_paths=config.eval.metrics.self_retrieval.get("summary_block_used_paths", True),
-                block_used_paths_d2=config.eval.metrics.self_retrieval.get("summary_block_used_paths_d2", True),
-                allow_wildcards=config.eval.metrics.self_retrieval.get("summary_allow_wildcards", False),
+                idf_smoothing_alpha=config.eval.metrics.opsumm_cluster_aug.get("summary_idf_smoothing_alpha", 0),
+                idf_log=config.eval.metrics.opsumm_cluster_aug.get("summary_idf_log", True),
+                ibf_normalise=config.eval.metrics.opsumm_cluster_aug.get("summary_ibf_normalise", False),
+                use_review_tf=config.eval.metrics.opsumm_cluster_aug.get("summary_use_review_tf", False),
+                use_review_ibf=config.eval.metrics.opsumm_cluster_aug.get("summary_use_review_ibf", False),
+                block_used_paths=config.eval.metrics.opsumm_cluster_aug.get("summary_block_used_paths", True),
+                block_used_paths_d2=config.eval.metrics.opsumm_cluster_aug.get("summary_block_used_paths_d2", True),
+                allow_wildcards=config.eval.metrics.opsumm_cluster_aug.get("summary_allow_wildcards", False),
             )
 
         filtered_examples = []
@@ -1419,16 +1423,16 @@ class SelfRetrievalMetricHook(MetricHook):
             sentences_by_path[row["entity_id"]][tuple(codes)].append(row["sentence"])
 
         nli_model = None
-        if config.eval.metrics.self_retrieval.get(
+        if config.eval.metrics.opsumm_cluster_aug.get(
             "summary_centroid_method", "rouge"
-        ) == "nli" or config.eval.metrics.self_retrieval.get("cluster_filter_trivial", False):
+        ) == "nli" or config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial", False):
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
-        # elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
+        # elif config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "tfidf":
 
         # We may need the tfidf encoding for merging - so build it anyway
-        dataset_path = config.eval.metrics.self_retrieval.dataset_all
+        dataset_path = config.eval.metrics.opsumm_cluster_aug.dataset_all
         with jsonlines.open(os.path.join(agent.data_path, dataset_path, "reviews.train.jsonl")) as reader:
             train_data = list(reader)
         all_sents = [row["sentence"] for row in train_data]
@@ -1448,7 +1452,7 @@ class SelfRetrievalMetricHook(MetricHook):
             for row in tqdm(
                 eval_data,
                 desc="Selecting centroids (using {:})".format(
-                    config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge")
+                    config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge")
                 ),
                 disable=agent.silent,
             ):
@@ -1483,12 +1487,12 @@ class SelfRetrievalMetricHook(MetricHook):
 
                     scores = []
 
-                    min_r2_overlap = config.eval.metrics.self_retrieval.get("cluster_min_r2_overlap", None)
+                    min_r2_overlap = config.eval.metrics.opsumm_cluster_aug.get("cluster_min_r2_overlap", None)
 
                     r2_scores = []
                     if (
                         min_r2_overlap is not None
-                        or config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge"
+                        or config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "rouge"
                     ):
                         pairs = [(x, y) for x in path_evidence for y in path_evidence]
                         r2_scores_flat = pool.map(pairwise_r2, pairs)
@@ -1513,7 +1517,7 @@ class SelfRetrievalMetricHook(MetricHook):
                             #         path_evidence, r2_scores, path
                             #     )
                             # )
-                            if config.eval.metrics.self_retrieval.get("cluster_min_r2_overlap_exclude", False):
+                            if config.eval.metrics.opsumm_cluster_aug.get("cluster_min_r2_overlap_exclude", False):
                                 path_evidence = [""]
                                 path_evidence_paths = [(None,)]
                                 r2_scores = [[0]]
@@ -1529,15 +1533,15 @@ class SelfRetrievalMetricHook(MetricHook):
                             path_evidence_paths = filtered_paths
                             r2_scores = filtered_scores
 
-                    if config.eval.metrics.self_retrieval.get("clusters_sort", False):
+                    if config.eval.metrics.opsumm_cluster_aug.get("clusters_sort", False):
                         indices = np.argsort(np.mean(r2_scores, axis=1))[::-1]
                         path_evidence = [path_evidence[ix] for ix in indices]
                         path_evidence_paths = [path_evidence_paths[ix] for ix in indices]
                         r2_scores = [r2_scores[ix] for ix in indices]
 
-                    if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
+                    if config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "rouge":
                         scores = np.mean(r2_scores, axis=1)
-                    elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
+                    elif config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "nli":
                         hyps_flat = [x for x in path_evidence for y in path_evidence]
                         prems_flat = [y for x in path_evidence for y in path_evidence]
                         scores_flat = nli_model.get_scores(premises=prems_flat, hypotheses=hyps_flat, bsz=64)
@@ -1549,7 +1553,7 @@ class SelfRetrievalMetricHook(MetricHook):
                                 curr_scores.append(scores_flat[i])
                                 i += 1
                             scores.append(np.mean(curr_scores))
-                    elif config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "tfidf":
+                    elif config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "tfidf":
                         similarities = cosine_similarity(
                             tfidf_vectorizer.transform(path_evidence), tfidf_vectorizer.transform(path_evidence)
                         )
@@ -1560,7 +1564,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     summary_evidence.append(path_evidence)
                     summary_evidence_paths.append(path_evidence_paths)
 
-                if config.eval.metrics.self_retrieval.get("cluster_filter_trivial", False):
+                if config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial", False):
                     # from torchseq.pretrained.nli import PretrainedNliModel
 
                     # nli_model = PretrainedNliModel()
@@ -1598,7 +1602,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     summary_evidence_paths = summary_evidence_paths_filtered
 
                 # Combine related clusters
-                if config.eval.metrics.self_retrieval.get("summary_combine_clusters_threshold", None) is not None:
+                if config.eval.metrics.opsumm_cluster_aug.get("summary_combine_clusters_threshold", None) is not None:
                     # r2_scores_flat = [pairwise_r2((x,y)) for x in summary_sentences for y in summary_sentences]
                     pairs = [(x, y) for x in summary_sentences for y in summary_sentences]
                     r2_scores_flat = pool.map(pairwise_r2, pairs)
@@ -1610,7 +1614,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     ixs_to_merge = defaultdict(list)
                     for srcix, scores in enumerate(r2_scores):
                         for tgtix in range(srcix, len(scores)):
-                            if scores[tgtix] > config.eval.metrics.self_retrieval.get(
+                            if scores[tgtix] > config.eval.metrics.opsumm_cluster_aug.get(
                                 "summary_combine_clusters_threshold", None
                             ):
                                 ixs_to_merge[srcix].append(tgtix)
@@ -1641,7 +1645,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     summary_evidence_paths = summary_evidence_paths_merged
 
                     # Re-sort
-                    if config.eval.metrics.self_retrieval.get("clusters_sort", False):
+                    if config.eval.metrics.opsumm_cluster_aug.get("clusters_sort", False):
                         summary_sentences_merged = []
                         summary_evidence_merged = []
                         summary_evidence_paths_merged = []
@@ -1655,7 +1659,10 @@ class SelfRetrievalMetricHook(MetricHook):
                             r2_scores = np.array(r2_scores_flat).reshape(len(path_evidence), len(path_evidence))
 
                             # Also re-select the extractive centroid
-                            if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "rouge":
+                            if (
+                                config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge")
+                                == "rouge"
+                            ):
                                 max_ix = np.argmax(r2_scores.mean(-1))
                                 summary_sentences_merged.append(path_evidence[max_ix])
                             else:
@@ -1669,8 +1676,8 @@ class SelfRetrievalMetricHook(MetricHook):
                         summary_evidence = summary_evidence_merged
                         summary_evidence_paths = summary_evidence_paths_merged
 
-                if config.eval.metrics.self_retrieval.get("summary_cluster_limit", None) is not None:
-                    max_clusters = config.eval.metrics.self_retrieval.get("summary_cluster_limit", None)
+                if config.eval.metrics.opsumm_cluster_aug.get("summary_cluster_limit", None) is not None:
+                    max_clusters = config.eval.metrics.opsumm_cluster_aug.get("summary_cluster_limit", None)
                     summary_sentences = summary_sentences[:max_clusters]
                     summary_evidence = summary_evidence[:max_clusters]
                     summary_evidence_paths = summary_evidence_paths[:max_clusters]
@@ -1681,7 +1688,7 @@ class SelfRetrievalMetricHook(MetricHook):
                     for sent in summary_sentences
                 ]
 
-                if config.eval.metrics.self_retrieval.get("summary_dedupe_output", False):
+                if config.eval.metrics.opsumm_cluster_aug.get("summary_dedupe_output", False):
                     summary_sentences = list(set(summary_sentences))
 
                 extractive_summs.append(" ".join(summary_sentences))
@@ -1695,7 +1702,7 @@ class SelfRetrievalMetricHook(MetricHook):
         # pred_summs = [
         #     " ".join(
         #         list(set(sentences_by_entity[ent["entity_id"]]))
-        #         if config.eval.metrics.self_retrieval.get("summary_dedupe_output", False)
+        #         if config.eval.metrics.opsumm_cluster_aug.get("summary_dedupe_output", False)
         #         else sentences_by_entity[ent["entity_id"]]
         #     )
         #     for ent in eval_data
@@ -1706,9 +1713,9 @@ class SelfRetrievalMetricHook(MetricHook):
         extractive_scores = {k: v for k, v in get_jackknife_rouge(extractive_summs, gold_summs).items()}
 
         if (
-            config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False)
-            or config.eval.metrics.self_retrieval.get("calc_summac_cluster", False)
-            or config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False)
+            config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_inputs", False)
+            or config.eval.metrics.opsumm_cluster_aug.get("calc_summac_cluster", False)
+            or config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_refs", False)
         ):
             if not agent.silent:
                 logger.info("Loading SummaC")
@@ -1724,7 +1731,7 @@ class SelfRetrievalMetricHook(MetricHook):
                 agg="mean",
             )
 
-        if config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False):
+        if config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_inputs", False):
             if not agent.silent:
                 logger.info("Calcing SC_ins")
             docs = [
@@ -1734,7 +1741,7 @@ class SelfRetrievalMetricHook(MetricHook):
             res = model_conv.score(docs, extractive_summs)
             extractive_scores["sc_ins"] = np.mean(res["scores"]) * 100
 
-        if config.eval.metrics.self_retrieval.get("calc_summac_clusters", False):
+        if config.eval.metrics.opsumm_cluster_aug.get("calc_summac_clusters", False):
             if not agent.silent:
                 logger.info("Calcing SC_clusters")
             docs = [
@@ -1745,7 +1752,7 @@ class SelfRetrievalMetricHook(MetricHook):
             res = model_conv.score(docs, clusters_flattened)
             extractive_scores["sc_clusters"] = np.mean(res["scores"]) * 100
 
-        if config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False):
+        if config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_refs", False):
             if not agent.silent:
                 logger.info("Calcing SC_refs")
             docs = [" ".join(summs) for summs in gold_summs]
@@ -1753,7 +1760,7 @@ class SelfRetrievalMetricHook(MetricHook):
             res = model_conv.score(docs, extractive_summs)
             extractive_scores["sc_refs"] = np.mean(res["scores"]) * 100
 
-        if config.eval.metrics.self_retrieval.get("calc_extractive_prevalence", True):
+        if config.eval.metrics.opsumm_cluster_aug.get("calc_extractive_prevalence", True):
             if not agent.silent:
                 logger.info("Calcing Prevalence")
 
@@ -1782,9 +1789,9 @@ class SelfRetrievalMetricHook(MetricHook):
 
         # Clean up
         if (
-            config.eval.metrics.self_retrieval.get("calc_summac_vs_inputs", False)
-            or config.eval.metrics.self_retrieval.get("calc_summac_cluster", False)
-            or config.eval.metrics.self_retrieval.get("calc_summac_vs_refs", False)
+            config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_inputs", False)
+            or config.eval.metrics.opsumm_cluster_aug.get("calc_summac_cluster", False)
+            or config.eval.metrics.opsumm_cluster_aug.get("calc_summac_vs_refs", False)
         ):
             del model_conv
 
@@ -1810,7 +1817,7 @@ class SelfRetrievalMetricHook(MetricHook):
     def eval_compare_selected_clusters_to_oracle(config, data_path, evidence, eval_data=None, test=False):
         if eval_data is None:
             split = "test" if test else "dev"
-            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            dataset_eval = config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
             with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
                 eval_data = [x for x in reader]
 
@@ -1886,7 +1893,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
         if eval_data is None:
             split = "test" if test else "dev"
-            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            dataset_eval = config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
             with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
                 eval_data = [x for x in reader]
 
@@ -1922,7 +1929,7 @@ class SelfRetrievalMetricHook(MetricHook):
     def eval_cluster_purity(
         config, agent, test=False, use_eval=False, score_bleu=True, score_nli=False, score_tfidf=True, nli_bsz=256
     ):
-        sents_by_code, _ = SelfRetrievalMetricHook.codes_from_cache(
+        sents_by_code, _ = OpSummClusterAugMetricHook.codes_from_cache(
             config, agent, test=test, use_eval=use_eval, save_to_cache=False
         )
 
@@ -1946,7 +1953,7 @@ class SelfRetrievalMetricHook(MetricHook):
             scores["tfidf"] = {}
 
             # Build tfidf mapper
-            dataset_eval = config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+            dataset_eval = config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
             with jsonlines.open(os.path.join(agent.data_path, dataset_eval, f"dev.jsonl")) as reader:
                 eval_data = [x for x in reader]
             vectorizer = TfidfVectorizer(
@@ -2119,7 +2126,7 @@ class SelfRetrievalMetricHook(MetricHook):
 
     @abstractmethod
     def eval_specialisation(config, agent, test=False):
-        _, outputs_with_codes = SelfRetrievalMetricHook.codes_from_cache(config, agent, test)
+        _, outputs_with_codes = OpSummClusterAugMetricHook.codes_from_cache(config, agent, test)
         split = "test" if test else "dev"
 
         codes = [tuple(x) for x in outputs_with_codes["codes"]]
@@ -2128,7 +2135,7 @@ class SelfRetrievalMetricHook(MetricHook):
         codebook_size = config.bottleneck.modules[0].quantizer.codebook_size
 
         with jsonlines.open(
-            agent.data_path + "/" + config.eval.metrics.self_retrieval.dataset_all + f"/reviews.{split}.jsonl"
+            agent.data_path + "/" + config.eval.metrics.opsumm_cluster_aug.dataset_all + f"/reviews.{split}.jsonl"
         ) as f:
             rows = [x for x in f]
 
@@ -2222,17 +2229,17 @@ class SelfRetrievalMetricHook(MetricHook):
             "entropy_uniform_codes": uniform_by_depth,
             "entropy_codes_from_entities": entropies_entity_by_head,
             "entropy_codes_from_reviews": entropies_review_by_head,
-            "entropy_aspects_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+            "entropy_aspects_from_codes": OpSummClusterAugMetricHook.get_feature_entropies(
                 codes,
                 [list(x)[0] for x in aspect_labels],
                 num_heads,
             ),
-            "entropy_ratings_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+            "entropy_ratings_from_codes": OpSummClusterAugMetricHook.get_feature_entropies(
                 codes,
                 ratings,
                 num_heads,
             ),
-            "entropy_positions_from_codes": SelfRetrievalMetricHook.get_feature_entropies(
+            "entropy_positions_from_codes": OpSummClusterAugMetricHook.get_feature_entropies(
                 codes,
                 sentence_pos_buckets,
                 num_heads,

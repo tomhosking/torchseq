@@ -19,7 +19,7 @@ class Recipe(EvalRecipe):
     ) -> dict[str, Any]:
         result = {}
 
-        variant = "piecewise"
+        variant = "oneshot"
 
         print("Variant: ", variant)
 
@@ -52,7 +52,7 @@ class Recipe(EvalRecipe):
             print("Using external summaries passed to eval recipe")
 
         # Load the references
-        dataset_eval = self.config.eval.metrics.self_retrieval.get("dataset_eval", "opagg/space-eval")
+        dataset_eval = self.config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
         with jsonlines.open(os.path.join(self.data_path, dataset_eval, f"{self.split_str}.jsonl")) as reader:
             eval_data = [x for x in reader]
 

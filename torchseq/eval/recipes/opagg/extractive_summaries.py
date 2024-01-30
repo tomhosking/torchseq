@@ -1,6 +1,6 @@
 from torchseq.eval.recipes import EvalRecipe
 from torchseq.utils.model_loader import model_from_path
-from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
+from torchseq.metric_hooks.opsumm_cluster_aug import OpSummClusterAugMetricHook
 from torchseq.utils.timer import Timer
 
 
@@ -13,7 +13,7 @@ class Recipe(EvalRecipe):
         instance = model_from_path(self.model_path, use_cuda=(not self.cpu))
 
         with Timer(template="\tTime: {:.3f} seconds", show_readout=False) as t:
-            scores, res = SelfRetrievalMetricHook.eval_extract_summaries_and_score(
+            scores, res = OpSummClusterAugMetricHook.eval_extract_summaries_and_score(
                 self.config, instance, test=self.test
             )
         print("\tExtractive R2 = {:0.2f}".format(scores["extractive"]["rouge2"]))
@@ -22,7 +22,7 @@ class Recipe(EvalRecipe):
         clustering_time = t.time
 
         with Timer(template="\tTime: {:.3f} seconds", show_readout=False) as t:
-            score = SelfRetrievalMetricHook.eval_compare_selected_clusters_to_oracle(
+            score = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
                 self.config, instance, res["evidence"], test=self.test
             )
         print(
@@ -33,7 +33,7 @@ class Recipe(EvalRecipe):
         ari_time = t.time
 
         with Timer(template="\tTime: {:.3f} seconds", show_readout=False) as t:
-            prev_scores = SelfRetrievalMetricHook.eval_cluster_prevalence(
+            prev_scores = OpSummClusterAugMetricHook.eval_cluster_prevalence(
                 self.config, instance, res["evidence"], test=self.test
             )
         print("\tPrev: ", prev_scores)

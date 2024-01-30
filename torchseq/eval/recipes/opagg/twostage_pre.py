@@ -2,7 +2,7 @@ import os, json, jsonlines
 
 from torchseq.eval.recipes import EvalRecipe
 from torchseq.utils.model_loader import model_from_path
-from torchseq.metric_hooks.self_retrieval import SelfRetrievalMetricHook
+from torchseq.metric_hooks.opsumm_cluster_aug import OpSummClusterAugMetricHook
 
 PROMPT_TEMPLATE_PIECEWISE = """Here is a list of sentences taken from reviews of a single hotel:
 
@@ -33,7 +33,7 @@ class Recipe(EvalRecipe):
             # Load the model and build the clusters now
             instance = model_from_path(self.model_path, use_cuda=(not self.cpu))
 
-            _, summaries = SelfRetrievalMetricHook.eval_extract_summaries_and_score(
+            _, summaries = OpSummClusterAugMetricHook.eval_extract_summaries_and_score(
                 self.config, instance, test=self.test
             )
 

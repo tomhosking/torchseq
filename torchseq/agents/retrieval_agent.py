@@ -62,7 +62,7 @@ class RetrievalAgent(ModelAgent):
                 # Load training sentences to construct tfidf dict
                 # dataset_path = config.json_dataset.path
                 # TODO: This cross-reference to a metric config is a Bad Idea - find it a proper home
-                dataset_path = config.eval.metrics.self_retrieval.dataset_all
+                dataset_path = config.eval.metrics.opsumm_cluster_aug.dataset_all
                 with jsonlines.open(os.path.join(self.data_path, dataset_path, "reviews.train.jsonl")) as reader:
                     train_data = list(reader)
                 all_sents = [row["sentence"] for row in train_data]

@@ -32,7 +32,6 @@ class PrevalenceMetric:
         if self.use_cache:
             self.model.imager.cache_folder = os.path.expanduser("~/.summac_cache/")
             os.makedirs(self.model.imager.cache_folder, exist_ok=True)
-            cache_file = self.model.imager.get_cache_file()
             self.model.imager.load_cache()
 
     def get_prevalence(
