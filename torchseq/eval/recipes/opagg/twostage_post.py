@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Literal
 
 import jsonlines, os, json
 
@@ -12,7 +12,11 @@ from torchseq.utils.rouge import get_jackknife_rouge
 class Recipe(EvalRecipe):
     name: str = "opagg.twostage_post"
 
-    def run(self, predicted_summaries: Optional[list[str]] = None) -> dict[str, Any]:
+    def run(
+        self,
+        predicted_summaries: Optional[list[str]] = None,
+        prev_model: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "vitc",
+    ) -> dict[str, Any]:
         result = {}
 
         variant = "piecewise"
@@ -54,6 +58,7 @@ class Recipe(EvalRecipe):
 
         if "space" in dataset_eval:
             trivial_template = "I stayed at {:}."
+            # trivial_template = "I stayed at this hotel."
         else:
             trivial_template = "I bought {:}."
 
@@ -89,14 +94,20 @@ class Recipe(EvalRecipe):
         print("Evaling prevalence")
         from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
 
-        prevmet = PrevalenceMetric(model_name="vitc")
-        (prevs, reds, trivs), _ = prevmet.get_prevalence(
+        prevmet = PrevalenceMetric(model_name=prev_model)
+        adjusted_prevalence, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
             [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
             predicted_summaries,
             pbar=False,
             product_names=[row["entity_name"] for row in eval_data],
             trivial_template=trivial_template,
+            include_generics=True,
         )
-        result["prevalence"] = (np.mean(prevs) * 100, np.mean(reds) * 100, np.mean(trivs) * 100)
+        result["prevalence"] = adjusted_prevalence * 100, (
+            np.mean(prevs) * 100,
+            np.mean(reds) * 100,
+            np.mean(trivs) * 100,
+            np.mean(gens) * 100,
+        )
 
         return result

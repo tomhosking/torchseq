@@ -1419,7 +1419,9 @@ class SelfRetrievalMetricHook(MetricHook):
             sentences_by_path[row["entity_id"]][tuple(codes)].append(row["sentence"])
 
         nli_model = None
-        if config.eval.metrics.self_retrieval.get("summary_centroid_method", "rouge") == "nli":
+        if config.eval.metrics.self_retrieval.get(
+            "summary_centroid_method", "rouge"
+        ) == "nli" or config.eval.metrics.self_retrieval.get("cluster_filter_trivial", False):
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
@@ -1515,11 +1517,12 @@ class SelfRetrievalMetricHook(MetricHook):
                                 path_evidence = [""]
                                 path_evidence_paths = [(None,)]
                                 r2_scores = [[0]]
-                                logger.warn("Ended up with a 0-length evidence set after filtering! Discarding")
-                            else:
-                                logger.warn(
-                                    "Ended up with a 0-length evidence set after filtering! Using full set instead"
-                                )
+                                # logger.warn("Ended up with a 0-length evidence set after filtering! Discarding")
+                            # else:
+                            # Leave it as it was
+                            #     logger.warn(
+                            #         "Ended up with a 0-length evidence set after filtering! Using full set instead"
+                            #     )
 
                         else:
                             path_evidence = filtered
@@ -1556,6 +1559,43 @@ class SelfRetrievalMetricHook(MetricHook):
                     summary_sentences.append(path_evidence[max_ix])
                     summary_evidence.append(path_evidence)
                     summary_evidence_paths.append(path_evidence_paths)
+
+                if config.eval.metrics.self_retrieval.get("cluster_filter_trivial", False):
+                    # from torchseq.pretrained.nli import PretrainedNliModel
+
+                    # nli_model = PretrainedNliModel()
+
+                    if "amasum" in dataset_eval:
+                        trivial_template = "I bought a {:}."
+                    else:
+                        trivial_template = "I stayed at {:}."
+
+                    # product_names = [row["entity_name"] for row in eval_data]
+
+                    trivial_scores = nli_model.get_scores(
+                        summary_sentences,
+                        hypotheses=[trivial_template.format(row["entity_name"])] * len(summary_sentences),
+                    )
+
+                    summary_sentences_filtered = []
+                    summary_evidence_filtered = []
+                    summary_evidence_paths_filtered = []
+
+                    # print(list(zip(summary_sentences,trivial_scores)))
+
+                    for score, sent, path_evidence, path_evidence_paths in zip(
+                        trivial_scores, summary_sentences, summary_evidence, summary_evidence_paths
+                    ):
+                        if score < 0.10:
+                            summary_sentences_filtered.append(sent)
+                            summary_evidence_filtered.append(path_evidence)
+                            summary_evidence_paths_filtered.append(path_evidence_paths)
+                        # else:
+                        #     logger.warn("Filtering out trivial sentence: {:}".format(sent))
+
+                    summary_sentences = summary_sentences_filtered
+                    summary_evidence = summary_evidence_filtered
+                    summary_evidence_paths = summary_evidence_paths_filtered
 
                 # Combine related clusters
                 if config.eval.metrics.self_retrieval.get("summary_combine_clusters_threshold", None) is not None:
@@ -1628,6 +1668,12 @@ class SelfRetrievalMetricHook(MetricHook):
                         summary_sentences = summary_sentences_merged
                         summary_evidence = summary_evidence_merged
                         summary_evidence_paths = summary_evidence_paths_merged
+
+                if config.eval.metrics.self_retrieval.get("summary_cluster_limit", None) is not None:
+                    max_clusters = config.eval.metrics.self_retrieval.get("summary_cluster_limit", None)
+                    summary_sentences = summary_sentences[:max_clusters]
+                    summary_evidence = summary_evidence[:max_clusters]
+                    summary_evidence_paths = summary_evidence_paths[:max_clusters]
 
                 # post process the extractive summaries
                 summary_sentences = [
@@ -1719,17 +1765,19 @@ class SelfRetrievalMetricHook(MetricHook):
                 trivial_template = "I stayed at {:}."
 
             prevmet = PrevalenceMetric(model_name="vitc")
-            (prevs, reds, trivs), _ = prevmet.get_prevalence(
+            adjusted_prev, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
                 [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
                 extractive_summs,
                 pbar=False,
                 product_names=[row["entity_name"] for row in eval_data],
                 trivial_template=trivial_template,
+                include_generics=True,
             )
-            extractive_scores["prevalence_summaries"] = (
+            extractive_scores["prevalence_summaries"] = adjusted_prev * 100, (
                 np.mean(prevs) * 100,
                 np.mean(reds) * 100,
                 np.mean(trivs) * 100,
+                np.mean(gens) * 100,
             )
 
         # Clean up
@@ -1754,6 +1802,8 @@ class SelfRetrievalMetricHook(MetricHook):
             "inputs": eval_sentences,
             "all_codes": all_codes,
             "refs": gold_summs,
+            "entity_ids": [row["entity_id"] for row in eval_data],  # include these to enable alignment downstream
+            "entity_names": [row["entity_name"] for row in eval_data],  # include these to enable alignment downstream
         }
 
     @abstractmethod
@@ -1848,7 +1898,7 @@ class SelfRetrievalMetricHook(MetricHook):
         reviews = [[" ".join(rev["sentences"]) for rev in row["reviews"][:max_reviews]] for row in eval_data]
         evidence_flat = [[sent for cluster in clusters for sent in cluster[:max_sents]] for clusters in evidence]
 
-        scores, raw = metric.get_prevalence(
+        _, scores, raw = metric.get_prevalence(
             reviews,
             evidence_flat,
             summaries_are_sentences=True,
@@ -1857,12 +1907,15 @@ class SelfRetrievalMetricHook(MetricHook):
             pbar=False,
             batch_size=32,
             ignore_redundancy=True,
+            include_generics=False,
         )
 
         return {
+            # "adjusted_prevalence": adjusted_prev_score * 100,
             "prevalence": np.mean(scores[0]) * 100,
             "redundant": np.mean(scores[1]) * 100,
             "trivial": np.mean(scores[2]) * 100,
+            "generic": np.mean(scores[3]) * 100,
         }, raw
 
     @abstractmethod
