@@ -16,12 +16,13 @@ class Recipe(EvalRecipe):
         self,
         predicted_summaries: Optional[list[str]] = None,
         prev_model: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "vitc",
+        variant: Literal["oneshot", "sentencewise", "extractive"] = "extractive",
+        silent: bool = False,
     ) -> dict[str, Any]:
         result = {}
 
-        variant = "oneshot"
-
-        print("Variant: ", variant)
+        if not silent:
+            print("Variant: ", variant)
 
         if predicted_summaries is None:
             # Load the input clusters
@@ -36,7 +37,7 @@ class Recipe(EvalRecipe):
 
             # Clean and combine into summaries
             # TODO: label each output with its origin so that we don't have to do this
-            if variant == "piecewise":
+            if variant == "sentencewise":
                 i = 0
                 predicted_summaries = []
                 for clusters in extractive_summaries["evidence"]:
@@ -45,11 +46,14 @@ class Recipe(EvalRecipe):
                         curr_summ.append(llm_outputs[i]["response"].strip())
                         i += 1
                     predicted_summaries.append(" ".join(curr_summ))
-            else:
+            elif variant == "oneshot":
                 predicted_summaries = [resp["response"] for resp in llm_outputs]
+            elif variant == "extractive":
+                predicted_summaries = extractive_summaries["extractive_summaries"]
         else:
             # Allow this recipe to be used for external systems (ie baselines)
-            print("Using external summaries passed to eval recipe")
+            if not silent:
+                print("Using external summaries passed to eval recipe")
 
         # Load the references
         dataset_eval = self.config.eval.metrics.opsumm_cluster_aug.get("dataset_eval", "opagg/space-eval")
@@ -91,12 +95,15 @@ class Recipe(EvalRecipe):
         # result["sc_refs"] = np.mean(res["scores"]) * 100
 
         # # Prevalence
-        print("Evaling prevalence")
+        if not silent:
+            print("Evaling prevalence")
         from torchseq.metric_hooks.prevalence_metric import PrevalenceMetric
+
+        review_limit = 500
 
         prevmet = PrevalenceMetric(model_name=prev_model)
         adjusted_prevalence, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
-            [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
+            [[" ".join(rev["sentences"]) for rev in row["reviews"][-review_limit:]] for row in eval_data],
             predicted_summaries,
             pbar=False,
             product_names=[row["entity_name"] for row in eval_data],

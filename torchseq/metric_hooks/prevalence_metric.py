@@ -57,7 +57,10 @@ class PrevalenceMetric:
         generics = []
 
         for ix, (curr_reviews, summ, product_name) in tqdm(
-            enumerate(zip(reviews, generated_summaries, product_names)), disable=(not pbar), total=len(reviews)
+            enumerate(zip(reviews, generated_summaries, product_names)),
+            disable=(not pbar),
+            total=len(reviews),
+            desc="Calculating Prevalence",
         ):
             if not summaries_are_sentences:
                 sents = nltk.tokenize.sent_tokenize(summ)
@@ -108,7 +111,7 @@ class PrevalenceMetric:
             trivial_mask = np.array(trivial_scores) > self.threshold
 
             # Calculate which sentences are redundant (wrt previous sentences)
-            if not ignore_redundancy:
+            if not ignore_redundancy and len(sents) > 1:
                 redundant_scores = all_scores[trivial_offset:redundant_offset]
                 redundant_mask_flat = np.array(redundant_scores) > self.threshold
                 redundant_mask_list = []
@@ -120,7 +123,13 @@ class PrevalenceMetric:
                         k += 1
                     redundant_mask_list.append(np.array(row).any())
 
-                redundant_mask = np.array(redundant_mask_list)
+                redundant_mask = np.array(redundant_mask_list).astype(bool)
+                if redundant_mask.dtype != np.logical_not(trivial_mask).dtype:
+                    print(redundant_mask)
+                    print(trivial_mask)
+                    print("dtype mismatch:")
+                    print(redundant_mask.dtype, ", ", np.logical_not(trivial_mask).dtype)
+
                 redundant_mask = redundant_mask & np.logical_not(trivial_mask)  # Ignore if already marked as trivial
             else:
                 redundant_mask = np.zeros_like(trivial_mask)

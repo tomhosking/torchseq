@@ -39,7 +39,7 @@ import matplotlib.colors as mcolors
 import logging
 from truecase import get_true_case
 
-logger = logging.getLogger("SelfRetMetric")
+logger = logging.getLogger("OSCAMetric")
 
 
 # Check for equivalence of paths, allowing for wildcard values
@@ -104,7 +104,7 @@ class OpSummClusterAugMetricHook(MetricHook):
 
     def on_end_epoch(self, agent, use_test=False):
         # Populate caches
-        logger.info("Populating SelfRet caches - this may take a while!")
+        logger.info("Populating OSCA caches - this may take a while!")
         _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
         # _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
         logger.info("...done")
@@ -144,6 +144,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             logger.info("...done")
 
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_oracle_comparison", False):
+                logger.info("Running cluster vs oracle comparison...")
                 self.scores[
                     "osca_selection_vs_oracle"
                 ] = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
@@ -156,7 +157,9 @@ class OpSummClusterAugMetricHook(MetricHook):
                     # },
                     test=use_test,
                 )
+                logger.info("...done!")
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_prevalence", False):
+                logger.info("Running cluster prevalence eval...")
                 (
                     self.scores["osca_selection_prevalence"],
                     _,
@@ -166,6 +169,7 @@ class OpSummClusterAugMetricHook(MetricHook):
                     generated_summaries["evidence"],
                     test=use_test,
                 )
+                logger.info("...done!")
 
         if self.config.eval.metrics.opsumm_cluster_aug.get(
             "run_purity_bleu", False
@@ -1423,9 +1427,11 @@ class OpSummClusterAugMetricHook(MetricHook):
             sentences_by_path[row["entity_id"]][tuple(codes)].append(row["sentence"])
 
         nli_model = None
-        if config.eval.metrics.opsumm_cluster_aug.get(
-            "summary_centroid_method", "rouge"
-        ) == "nli" or config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial", False):
+        if (
+            config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge") == "nli"
+            or config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial", False)
+            or config.eval.metrics.opsumm_cluster_aug.get("summary_combine_clusters_nli_threshold", None) is not None
+        ):
             from torchseq.pretrained.nli import PretrainedNliModel
 
             nli_model = PretrainedNliModel()
@@ -1448,7 +1454,7 @@ class OpSummClusterAugMetricHook(MetricHook):
         all_evidence = []
         all_evidence_paths = []
 
-        with Pool(4) as pool:
+        with Pool(8) as pool:
             for row in tqdm(
                 eval_data,
                 desc="Selecting centroids (using {:})".format(
@@ -1576,10 +1582,16 @@ class OpSummClusterAugMetricHook(MetricHook):
 
                     # product_names = [row["entity_name"] for row in eval_data]
 
-                    trivial_scores = nli_model.get_scores(
-                        summary_sentences,
-                        hypotheses=[trivial_template.format(row["entity_name"])] * len(summary_sentences),
-                    )
+                    if config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial_flip", False):
+                        trivial_scores = nli_model.get_scores(
+                            premises=[trivial_template.format(row["entity_name"])] * len(summary_sentences),
+                            hypotheses=summary_sentences,
+                        )
+                    else:
+                        trivial_scores = nli_model.get_scores(
+                            summary_sentences,
+                            hypotheses=[trivial_template.format(row["entity_name"])] * len(summary_sentences),
+                        )
 
                     summary_sentences_filtered = []
                     summary_evidence_filtered = []
@@ -1602,21 +1614,46 @@ class OpSummClusterAugMetricHook(MetricHook):
                     summary_evidence_paths = summary_evidence_paths_filtered
 
                 # Combine related clusters
-                if config.eval.metrics.opsumm_cluster_aug.get("summary_combine_clusters_threshold", None) is not None:
-                    # r2_scores_flat = [pairwise_r2((x,y)) for x in summary_sentences for y in summary_sentences]
-                    pairs = [(x, y) for x in summary_sentences for y in summary_sentences]
-                    r2_scores_flat = pool.map(pairwise_r2, pairs)
-                    r2_scores = np.array(r2_scores_flat).reshape(len(summary_sentences), len(summary_sentences))
+                merge_method = None
+                if (
+                    config.eval.metrics.opsumm_cluster_aug.get("summary_combine_clusters_r2_threshold", None)
+                    is not None
+                ):
+                    merge_method = "r2"
+                    merge_threshold = config.eval.metrics.opsumm_cluster_aug.get(
+                        "summary_combine_clusters_r2_threshold", None
+                    )
+                elif (
+                    config.eval.metrics.opsumm_cluster_aug.get("summary_combine_clusters_nli_threshold", None)
+                    is not None
+                ):
+                    merge_method = "nli"
+                    merge_threshold = config.eval.metrics.opsumm_cluster_aug.get(
+                        "summary_combine_clusters_nli_threshold", None
+                    )
 
-                    # Use tfidf similarity between all cluster members to work out overlap
-                    # cluster_embedded = tfidf_vectorizer.transform(path_evidence)
+                if merge_method is not None:
+                    if merge_method == "r2":
+                        # r2_scores_flat = [pairwise_r2((x,y)) for x in summary_sentences for y in summary_sentences]
+                        pairs = [(x, y) for x in summary_sentences for y in summary_sentences]
+                        r2_scores_flat = pool.map(pairwise_r2, pairs)
+                        merge_scores = np.array(r2_scores_flat).reshape(len(summary_sentences), len(summary_sentences))
+
+                        # Use tfidf similarity between all cluster members to work out overlap
+                        # cluster_embedded = tfidf_vectorizer.transform(path_evidence)
+                    elif merge_method == "nli":
+                        pairs = [(x, y) for x in summary_sentences for y in summary_sentences]
+                        prems, hyps = zip(*pairs)
+
+                        nli_scores_flat = nli_model.get_scores(prems, hyps)
+                        merge_scores = (
+                            np.array(nli_scores_flat).reshape(len(summary_sentences), len(summary_sentences)) * 100
+                        )
 
                     ixs_to_merge = defaultdict(list)
-                    for srcix, scores in enumerate(r2_scores):
-                        for tgtix in range(srcix, len(scores)):
-                            if scores[tgtix] > config.eval.metrics.opsumm_cluster_aug.get(
-                                "summary_combine_clusters_threshold", None
-                            ):
+                    for srcix, scores in enumerate(merge_scores):
+                        for tgtix in range(srcix + 1, len(scores)):
+                            if scores[tgtix] > merge_threshold:
                                 ixs_to_merge[srcix].append(tgtix)
 
                     # print(ixs_to_merge)
@@ -1771,14 +1808,19 @@ class OpSummClusterAugMetricHook(MetricHook):
             else:
                 trivial_template = "I stayed at {:}."
 
+            review_limit = config.eval.metrics.opsumm_cluster_aug.get("calc_extractive_prevalence_review_limit", 10000)
+            if review_limit < 10000:
+                print("Limiting review count to {:}".format(review_limit))
+
             prevmet = PrevalenceMetric(model_name="vitc")
             adjusted_prev, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
-                [[" ".join(rev["sentences"]) for rev in row["reviews"]] for row in eval_data],
+                [[" ".join(rev["sentences"]) for rev in row["reviews"][:review_limit]] for row in eval_data],
                 extractive_summs,
-                pbar=False,
+                pbar=True,  # not agent.silent,
                 product_names=[row["entity_name"] for row in eval_data],
                 trivial_template=trivial_template,
                 include_generics=True,
+                batch_size=32,
             )
             extractive_scores["prevalence_summaries"] = adjusted_prev * 100, (
                 np.mean(prevs) * 100,
