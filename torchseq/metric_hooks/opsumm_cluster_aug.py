@@ -39,7 +39,7 @@ import matplotlib.colors as mcolors
 import logging
 from truecase import get_true_case
 
-logger = logging.getLogger("OSCAMetric")
+logger = logging.getLogger("HEROMetric")
 
 
 # Check for equivalence of paths, allowing for wildcard values
@@ -104,14 +104,14 @@ class OpSummClusterAugMetricHook(MetricHook):
 
     def on_end_epoch(self, agent, use_test=False):
         # Populate caches
-        logger.info("Populating OSCA caches - this may take a while!")
+        logger.info("Populating HERO caches - this may take a while!")
         _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
         # _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
         logger.info("...done")
 
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_nli", False):
             logger.info("Running NLI eval")
-            self.scores["osca_nli"], _, _ = OpSummClusterAugMetricHook.eval_nli(
+            self.scores["hero_nli"], _, _ = OpSummClusterAugMetricHook.eval_nli(
                 self.config,
                 agent,
                 test=use_test,
@@ -130,7 +130,7 @@ class OpSummClusterAugMetricHook(MetricHook):
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_extract_summaries", False):
             logger.info("Running generation using HRQ paths")
             (
-                self.scores["osca_generation"],
+                self.scores["hero_generation"],
                 generated_summaries,
             ) = OpSummClusterAugMetricHook.eval_extract_summaries_and_score(
                 self.config,
@@ -146,7 +146,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_oracle_comparison", False):
                 logger.info("Running cluster vs oracle comparison...")
                 self.scores[
-                    "osca_selection_vs_oracle"
+                    "hero_selection_vs_oracle"
                 ] = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
                     self.config,
                     agent.data_path,
@@ -161,7 +161,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_prevalence", False):
                 logger.info("Running cluster prevalence eval...")
                 (
-                    self.scores["osca_selection_prevalence"],
+                    self.scores["hero_selection_prevalence"],
                     _,
                 ) = OpSummClusterAugMetricHook.eval_cluster_prevalence(
                     self.config,
@@ -175,7 +175,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             "run_purity_bleu", False
         ) or self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_nli", False):
             logger.info("Running cluster purity eval")
-            self.scores["osca_purity"] = OpSummClusterAugMetricHook.eval_cluster_purity(
+            self.scores["hero_purity"] = OpSummClusterAugMetricHook.eval_cluster_purity(
                 self.config,
                 agent,
                 test=use_test,
@@ -187,7 +187,7 @@ class OpSummClusterAugMetricHook(MetricHook):
 
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_specialisation", False):
             logger.info("Running specialisation eval")
-            self.scores["osca_specialisation"] = OpSummClusterAugMetricHook.eval_specialisation(
+            self.scores["hero_specialisation"] = OpSummClusterAugMetricHook.eval_specialisation(
                 self.config,
                 agent,
                 test=use_test,
@@ -1609,9 +1609,10 @@ class OpSummClusterAugMetricHook(MetricHook):
                         # else:
                         #     logger.warn("Filtering out trivial sentence: {:}".format(sent))
 
-                    summary_sentences = summary_sentences_filtered
-                    summary_evidence = summary_evidence_filtered
-                    summary_evidence_paths = summary_evidence_paths_filtered
+                    if len(summary_sentences_filtered) > 0:
+                        summary_sentences = summary_sentences_filtered
+                        summary_evidence = summary_evidence_filtered
+                        summary_evidence_paths = summary_evidence_paths_filtered
 
                 # Combine related clusters
                 merge_method = None
@@ -1816,7 +1817,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             adjusted_prev, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
                 [[" ".join(rev["sentences"]) for rev in row["reviews"][:review_limit]] for row in eval_data],
                 extractive_summs,
-                pbar=True,  # not agent.silent,
+                pbar=not agent.silent,
                 product_names=[row["entity_name"] for row in eval_data],
                 trivial_template=trivial_template,
                 include_generics=True,

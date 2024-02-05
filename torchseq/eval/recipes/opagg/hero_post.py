@@ -29,27 +29,28 @@ class Recipe(EvalRecipe):
             with open(os.path.join(self.model_path, "eval", f"summaries_{self.split_str}.json")) as f:
                 extractive_summaries = json.load(f)
 
-            # Load the LLM outputs
-            with jsonlines.open(
-                os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}.jsonl")
-            ) as reader:
-                llm_outputs = list(reader)
-
             # Clean and combine into summaries
             # TODO: label each output with its origin so that we don't have to do this
-            if variant == "sentencewise":
-                i = 0
-                predicted_summaries = []
-                for clusters in extractive_summaries["evidence"]:
-                    curr_summ = []
-                    for cluster in clusters:
-                        curr_summ.append(llm_outputs[i]["response"].strip())
-                        i += 1
-                    predicted_summaries.append(" ".join(curr_summ))
-            elif variant == "oneshot":
-                predicted_summaries = [resp["response"] for resp in llm_outputs]
-            elif variant == "extractive":
+            if variant == "extractive":
                 predicted_summaries = extractive_summaries["extractive_summaries"]
+            else:
+                # Load the LLM outputs
+                with jsonlines.open(
+                    os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}.jsonl")
+                ) as reader:
+                    llm_outputs = list(reader)
+
+                if variant == "oneshot":
+                    predicted_summaries = [resp["response"] for resp in llm_outputs]
+                elif variant == "sentencewise":
+                    i = 0
+                    predicted_summaries = []
+                    for clusters in extractive_summaries["evidence"]:
+                        curr_summ = []
+                        for cluster in clusters:
+                            curr_summ.append(llm_outputs[i]["response"].strip())
+                            i += 1
+                        predicted_summaries.append(" ".join(curr_summ))
         else:
             # Allow this recipe to be used for external systems (ie baselines)
             if not silent:
@@ -105,7 +106,7 @@ class Recipe(EvalRecipe):
         adjusted_prevalence, (prevs, reds, trivs, gens), _ = prevmet.get_prevalence(
             [[" ".join(rev["sentences"]) for rev in row["reviews"][-review_limit:]] for row in eval_data],
             predicted_summaries,
-            pbar=False,
+            pbar=not silent,
             product_names=[row["entity_name"] for row in eval_data],
             trivial_template=trivial_template,
             include_generics=True,
