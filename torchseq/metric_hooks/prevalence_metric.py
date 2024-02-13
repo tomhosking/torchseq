@@ -20,6 +20,7 @@ class PrevalenceMetric:
         model_name: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "mnli",
         threshold: float = 0.04,
         use_cache: bool = True,
+        cache_name: str = "",
     ):
         # Default model was originally mnli - changed to vitc
         self.model = SummaCZS(
@@ -30,7 +31,7 @@ class PrevalenceMetric:
         self.use_cache = use_cache
 
         if self.use_cache:
-            self.model.imager.cache_folder = os.path.expanduser("~/.summac_cache/")
+            self.model.imager.cache_folder = os.path.expanduser(f"~/.summac_cache/{cache_name}")
             os.makedirs(self.model.imager.cache_folder, exist_ok=True)
             self.model.imager.load_cache()
 

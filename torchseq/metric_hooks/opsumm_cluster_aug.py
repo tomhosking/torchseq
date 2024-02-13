@@ -1453,14 +1453,17 @@ class OpSummClusterAugMetricHook(MetricHook):
 
         all_evidence = []
         all_evidence_paths = []
+        all_merges = []
 
-        with Pool(8) as pool:
-            for row in tqdm(
-                eval_data,
-                desc="Selecting centroids (using {:})".format(
-                    config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge")
-                ),
-                disable=agent.silent,
+        with Pool(4) as pool:
+            for row_ix, row in enumerate(
+                tqdm(
+                    eval_data,
+                    desc="Selecting centroids (using {:})".format(
+                        config.eval.metrics.opsumm_cluster_aug.get("summary_centroid_method", "rouge")
+                    ),
+                    disable=agent.silent,
+                )
             ):
                 summary_sentences = []
                 summary_evidence = []
@@ -1678,6 +1681,14 @@ class OpSummClusterAugMetricHook(MetricHook):
                                 summary_evidence_merged[-1].extend(summary_evidence[tgtix])
                                 summary_evidence_paths_merged[-1].extend(summary_evidence_paths[tgtix])
 
+                    # if row_ix == 0:
+                    #     print('Merges:')
+                    #     print(summary_sentences)
+                    #     print(summary_sentences_merged)
+                    #     print(ixs_to_merge)
+
+                    all_merges.append(ixs_to_merge)
+
                     summary_sentences = summary_sentences_merged
                     summary_evidence = summary_evidence_merged
                     summary_evidence_paths = summary_evidence_paths_merged
@@ -1854,6 +1865,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             "refs": gold_summs,
             "entity_ids": [row["entity_id"] for row in eval_data],  # include these to enable alignment downstream
             "entity_names": [row["entity_name"] for row in eval_data],  # include these to enable alignment downstream
+            "merges": all_merges,
         }
 
     @abstractmethod
