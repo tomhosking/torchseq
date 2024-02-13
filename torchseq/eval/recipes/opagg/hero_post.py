@@ -22,7 +22,7 @@ class Recipe(EvalRecipe):
         llm_name: str = "llama7b",
         silent: bool = False,
     ) -> dict[str, Any]:
-        result = {}
+        result: dict[str, Any] = {}
 
         if not silent:
             print("Variant: ", variant)
@@ -154,11 +154,14 @@ class Recipe(EvalRecipe):
             trivial_template=trivial_template,
             include_generics=True,
         )
-        result["prevalence"] = adjusted_prevalence * 100, (
-            np.mean(prevs) * 100,
-            np.mean(reds) * 100,
-            np.mean(trivs) * 100,
-            np.mean(gens) * 100,
+        result["prevalence"] = (
+            adjusted_prevalence * 100,
+            (
+                np.mean(prevs) * 100,
+                np.mean(reds) * 100,
+                np.mean(trivs) * 100,
+                np.mean(gens) * 100,
+            ),
         )
 
         return result
