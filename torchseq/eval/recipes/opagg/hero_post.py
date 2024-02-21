@@ -86,6 +86,8 @@ class Recipe(EvalRecipe):
         # Rouge
         result["rouge"] = get_jackknife_rouge(predicted_summaries, [row["summaries"] for row in eval_data])
 
+        # return result
+
         # SummaC
         # from summac.model_summac import SummaCConv
 
@@ -167,13 +169,17 @@ class Recipe(EvalRecipe):
         return result
 
     def cleanup_llm_output(self, text):
-        # Cleanup whitespace
-        sents = sent_tokenize(text.replace("\n", " ").strip())
-        # Strip "helpful" LLM padding
+        # Cleanup whitespace, split by colon (Llama likes to make lists)
+        sents = [subsent for sent in sent_tokenize(text.replace("\n", " ").strip()) for subsent in sent.split(": ")]
+
+        # Strip "helpful" LLM padding and number bullets
         sents = [
             sent.strip()
             for sent in sents
-            if sent.lower()[:4] != "sure" and sent.lower()[:9] != "here is a" and sent.lower()[:8] != "here are"
+            if sent.lower()[:4] != "sure"
+            and sent.lower()[:9] != "here is a"
+            and sent.lower()[:8] != "here are"
+            and not sent.replace(".", "").isnumeric()
         ]
         sents = [
             sent[1:-1].strip() if sent[0] == '"' and sent[-1] == '"' else sent for sent in sents

@@ -4,10 +4,28 @@
 
 import os
 import nltk.tokenize
-from summac.model_summac import SummaCZS
+from summac.model_summac import SummaCZS, SummaCImager
 from tqdm import tqdm
 import numpy as np
 from typing import List, Union, Optional, Literal, Sequence
+import compress_json, json
+
+
+# Compress cache functions
+def sc_save_cache(self):
+    cache_cp = {"[///]".join(k): v.tolist() for k, v in self.cache.items()}
+    compress_json.dump(cache_cp, self.get_cache_file() + ".gz")
+
+
+def sc_load_cache(self):
+    cache_file = self.get_cache_file()
+    if os.path.isfile(cache_file + ".gz"):
+        cache_cp = compress_json.load(cache_file + ".gz")
+        self.cache = {tuple(k.split("[///]")): np.array(v) for k, v in cache_cp.items()}
+    elif os.path.isfile(cache_file):
+        with open(cache_file, "r") as f:
+            cache_cp = json.load(f)
+            self.cache = {tuple(k.split("[///]")): np.array(v) for k, v in cache_cp.items()}
 
 
 class PrevalenceMetric:
@@ -31,6 +49,10 @@ class PrevalenceMetric:
         self.use_cache = use_cache
 
         if self.use_cache:
+            # Monkey patch the cache fns
+            SummaCImager.load_cache = sc_load_cache
+            SummaCImager.save_cache = sc_save_cache
+
             self.model.imager.cache_folder = os.path.expanduser(f"~/.summac_cache/{cache_name}")
             os.makedirs(self.model.imager.cache_folder, exist_ok=True)
             self.model.imager.load_cache()

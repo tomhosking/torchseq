@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.special import binom
+from sklearn.metrics import adjusted_rand_score
 
 
 def C2(x):
@@ -23,5 +24,8 @@ def get_cluster_ari(predictions, references):
         numerator = C2(nij).sum() - (C2(ai).sum() * C2(bj).sum()) / C2(n)
 
         denominator = 0.5 * (C2(ai).sum() + C2(bj).sum()) - (C2(ai).sum() * C2(bj).sum()) / C2(n)
-        scores.append(numerator / denominator)
-    return np.mean(scores)
+        if numerator > 0:
+            scores.append(numerator / denominator)
+        else:
+            scores.append(0)
+    return np.mean(scores) * 100

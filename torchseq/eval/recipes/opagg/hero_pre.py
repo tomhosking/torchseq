@@ -7,18 +7,25 @@ from torchseq.metric_hooks.opsumm_cluster_aug import OpSummClusterAugMetricHook
 from nltk.tokenize import word_tokenize
 import numpy as np
 
-PROMPT_TEMPLATE_SENTENCEWISE = """Here is a list of sentences taken from reviews of a single {:}:
+PROMPT_TEMPLATE_SENTENCEWISE = """Here is a list of sentences taken from reviews of the {:}:
 
 {:}
 
-In no more than 15 words, write a single short sentence using very simple language that includes the main point:
+In no more than 10 words, write a single concise sentence that includes the main point:
 """
 
-PROMPT_TEMPLATE_ONESHOT = """Here is a list of sentences taken from reviews of a single {:}:
+# PROMPT_TEMPLATE_ONESHOT = """Here is a list of sentences taken from reviews of the {:}:
+
+# {:}
+
+# In no more than 60 words, write a concise and informative summary that includes the main points:
+# """
+
+PROMPT_TEMPLATE_ONESHOT = """Here is a list of sentences taken from reviews of the {:}:
 
 {:}
 
-In no more than 70 words, write a brief summary using very simple language that includes the main points:
+In no more than 60 words, write a concise summary that includes the main points:
 """
 
 
@@ -47,13 +54,14 @@ class Recipe(EvalRecipe):
         entity_ids = summaries["entity_ids"]
 
         product_type = "hotel" if "space" in self.model_path else "product"
+        entity_names = summaries["entity_names"]
 
         prompts_flat_sentencewise = [
             {
                 "entity_id": ent_id,
-                "prompt": PROMPT_TEMPLATE_SENTENCEWISE.format(product_type, "\n".join(cluster[: self.cluster_limit])),
+                "prompt": PROMPT_TEMPLATE_SENTENCEWISE.format(entity_name, "\n".join(cluster[: self.cluster_limit])),
             }
-            for clusters, ent_id in zip(clusters_per_entity, entity_ids)
+            for clusters, ent_id, entity_name in zip(clusters_per_entity, entity_ids, entity_names)
             for cluster in clusters
         ]
 
@@ -70,10 +78,10 @@ class Recipe(EvalRecipe):
             {
                 "entity_id": ent_id,
                 "prompt": PROMPT_TEMPLATE_ONESHOT.format(
-                    product_type, "\n".join([sent for cluster in clusters for sent in cluster[: self.cluster_limit]])
+                    entity_name, "\n".join([sent for cluster in clusters for sent in cluster[: self.cluster_limit]])
                 ),
             }
-            for clusters, ent_id in zip(clusters_per_entity, entity_ids)
+            for clusters, ent_id, entity_name in zip(clusters_per_entity, entity_ids, entity_names)
         ]
 
         result["prompts_oneshot"] = max([len(word_tokenize(prompt["prompt"])) for prompt in prompts_flat_oneshot])

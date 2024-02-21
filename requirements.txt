@@ -17,6 +17,8 @@ pydantic==1.9.1
 truecase==0.0.14
 # summac
 
+compress_json==1.0.10
+
 matplotlib
 
 wandb==0.15.12

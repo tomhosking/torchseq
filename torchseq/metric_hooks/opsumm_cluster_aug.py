@@ -1570,7 +1570,11 @@ class OpSummClusterAugMetricHook(MetricHook):
 
                     max_ix = np.argmax(scores)
                     summary_sentences.append(path_evidence[max_ix])
-                    summary_evidence.append(path_evidence)
+                    summary_evidence.append(
+                        list(set(path_evidence))
+                        if config.eval.metrics.opsumm_cluster_aug.get("summary_dedupe_clusters", False)
+                        else path_evidence
+                    )
                     summary_evidence_paths.append(path_evidence_paths)
 
                 if config.eval.metrics.opsumm_cluster_aug.get("cluster_filter_trivial", False):
@@ -1876,8 +1880,8 @@ class OpSummClusterAugMetricHook(MetricHook):
             with jsonlines.open(os.path.join(data_path, dataset_eval, f"{split}.jsonl")) as reader:
                 eval_data = [x for x in reader]
 
-            oracle_centroids = []
-            oracle_clusters = []
+        oracle_centroids = []
+        oracle_clusters = []
 
         # First, identify which sentences are the centroids (and clusters)
         for row in eval_data:
@@ -1900,7 +1904,7 @@ class OpSummClusterAugMetricHook(MetricHook):
                         score = get_pairwise_rouge(sent, tgt_sent)["rouge2"]
                         scores[sent] = score
                 topk = sorted(scores.items(), key=lambda x: x[1], reverse=True)
-                curr_clusters.append([x[0] for x in topk if x[1] > 15])
+                curr_clusters.append([x[0] for x in topk if x[1] > 10])
             oracle_clusters.append(curr_clusters)
 
         oracle_mean_sizes = []
