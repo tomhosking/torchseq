@@ -11,7 +11,7 @@ from typing import List, Union, Optional, Literal, Sequence
 import compress_json, json
 
 
-# Compress cache functions
+# Compressed cache functions
 def sc_save_cache(self):
     cache_cp = {"[///]".join(k): v.tolist() for k, v in self.cache.items()}
     compress_json.dump(cache_cp, self.get_cache_file() + ".gz")
@@ -22,10 +22,6 @@ def sc_load_cache(self):
     if os.path.isfile(cache_file + ".gz"):
         cache_cp = compress_json.load(cache_file + ".gz")
         self.cache = {tuple(k.split("[///]")): np.array(v) for k, v in cache_cp.items()}
-    elif os.path.isfile(cache_file):
-        with open(cache_file, "r") as f:
-            cache_cp = json.load(f)
-            self.cache = {tuple(k.split("[///]")): np.array(v) for k, v in cache_cp.items()}
 
 
 class PrevalenceMetric:
