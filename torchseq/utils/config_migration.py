@@ -49,7 +49,7 @@ def migrate_23_to_24_encdec(cfg_dict, check_only=False):
     return False if check_only else cfg_dict
 
 
-def migrate_selfret_to_hero(cfg_dict, check_only=False):
+def migrate_selfret_to_hiro(cfg_dict, check_only=False):
     if "self_retrieval" in cfg_dict["eval"]["metrics"]:
         if check_only:
             return True
@@ -58,7 +58,7 @@ def migrate_selfret_to_hero(cfg_dict, check_only=False):
     return False if check_only else cfg_dict
 
 
-all_migrations = [migrate_optimizers_23, migrate_23_to_24_encdec, migrate_selfret_to_hero]
+all_migrations = [migrate_optimizers_23, migrate_23_to_24_encdec, migrate_selfret_to_hiro]
 
 
 def check_config(config):

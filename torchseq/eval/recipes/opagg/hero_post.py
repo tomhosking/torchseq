@@ -60,7 +60,7 @@ class Recipe(EvalRecipe):
                             i += 1
                         predicted_summaries.append(" ".join(curr_summ))
 
-            with open(os.path.join(self.model_path, "eval", f"hero_{output_name}.txt"), "w") as f:
+            with open(os.path.join(self.model_path, "eval", f"hiro_{output_name}.txt"), "w") as f:
                 f.writelines([summ + "\n" for summ in predicted_summaries])
         else:
             # Allow this recipe to be used for external systems (ie baselines)

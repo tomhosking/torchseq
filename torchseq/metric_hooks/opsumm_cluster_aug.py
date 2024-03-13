@@ -39,7 +39,7 @@ import matplotlib.colors as mcolors
 import logging
 from truecase import get_true_case
 
-logger = logging.getLogger("HEROMetric")
+logger = logging.getLogger("HIROMetric")
 
 
 # Check for equivalence of paths, allowing for wildcard values
@@ -104,14 +104,14 @@ class OpSummClusterAugMetricHook(MetricHook):
 
     def on_end_epoch(self, agent, use_test=False):
         # Populate caches
-        logger.info("Populating HERO caches - this may take a while!")
+        logger.info("Populating HIRO caches - this may take a while!")
         _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=False)
         # _, _ = OpSummClusterAugMetricHook.codes_from_cache(self.config, agent, test=False, train=True)
         logger.info("...done")
 
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_nli", False):
             logger.info("Running NLI eval")
-            self.scores["hero_nli"], _, _ = OpSummClusterAugMetricHook.eval_nli(
+            self.scores["hiro_nli"], _, _ = OpSummClusterAugMetricHook.eval_nli(
                 self.config,
                 agent,
                 test=use_test,
@@ -130,7 +130,7 @@ class OpSummClusterAugMetricHook(MetricHook):
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_extract_summaries", False):
             logger.info("Running generation using HRQ paths")
             (
-                self.scores["hero_generation"],
+                self.scores["hiro_generation"],
                 generated_summaries,
             ) = OpSummClusterAugMetricHook.eval_extract_summaries_and_score(
                 self.config,
@@ -146,7 +146,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_oracle_comparison", False):
                 logger.info("Running cluster vs oracle comparison...")
                 self.scores[
-                    "hero_selection_vs_oracle"
+                    "hiro_selection_vs_oracle"
                 ] = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
                     self.config,
                     agent.data_path,
@@ -161,7 +161,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_prevalence", False):
                 logger.info("Running cluster prevalence eval...")
                 (
-                    self.scores["hero_selection_prevalence"],
+                    self.scores["hiro_selection_prevalence"],
                     _,
                 ) = OpSummClusterAugMetricHook.eval_cluster_prevalence(
                     self.config,
@@ -175,7 +175,7 @@ class OpSummClusterAugMetricHook(MetricHook):
             "run_purity_bleu", False
         ) or self.config.eval.metrics.opsumm_cluster_aug.get("run_purity_nli", False):
             logger.info("Running cluster purity eval")
-            self.scores["hero_purity"] = OpSummClusterAugMetricHook.eval_cluster_purity(
+            self.scores["hiro_purity"] = OpSummClusterAugMetricHook.eval_cluster_purity(
                 self.config,
                 agent,
                 test=use_test,
@@ -187,7 +187,7 @@ class OpSummClusterAugMetricHook(MetricHook):
 
         if self.config.eval.metrics.opsumm_cluster_aug.get("run_specialisation", False):
             logger.info("Running specialisation eval")
-            self.scores["hero_specialisation"] = OpSummClusterAugMetricHook.eval_specialisation(
+            self.scores["hiro_specialisation"] = OpSummClusterAugMetricHook.eval_specialisation(
                 self.config,
                 agent,
                 test=use_test,
