@@ -28,7 +28,7 @@ pytest>=6.2
 pytest-cov>=2.12
 codecov>=2.1
 flake8==6.0.0
-black==23.3.0
+black==24.3.0
 mypy==1.2.0
 
 sphinx>=3.3
