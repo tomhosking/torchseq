@@ -20,12 +20,10 @@ class PretrainedNliModel:
     model: AutoModelForSequenceClassification
     pipe: pipeline
 
-    def __init__(self):
-        self.tokenizer = AutoTokenizer.from_pretrained("tomhosking/deberta-v3-base-debiased-nli")
+    def __init__(self, model_id: str = "tomhosking/deberta-v3-base-debiased-nli"):
+        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-        self.model = AutoModelForSequenceClassification.from_pretrained(
-            "tomhosking/deberta-v3-base-debiased-nli"
-        ).cuda()
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_id).cuda()
 
         self.ENTAILMENT_LABEL = (
             self.model.config.label2id["ENTAILMENT"]
