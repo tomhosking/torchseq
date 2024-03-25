@@ -32,9 +32,11 @@ class JsonDataLoader:
             config=config,
             input_tokenizer=self.input_tokenizer,
             output_tokenizer=self.output_tokenizer,
-            path=os.path.join(data_path, self.config.json_dataset.path)
-            if self.config.json_dataset.path is not None
-            else None,
+            path=(
+                os.path.join(data_path, self.config.json_dataset.path)
+                if self.config.json_dataset.path is not None
+                else None
+            ),
             samples=train_samples,
             dev=False,
             test=False,
@@ -46,9 +48,11 @@ class JsonDataLoader:
             config=config,
             input_tokenizer=self.input_tokenizer,
             output_tokenizer=self.output_tokenizer,
-            path=os.path.join(data_path, self.config.json_dataset.path)
-            if self.config.json_dataset.path is not None
-            else None,
+            path=(
+                os.path.join(data_path, self.config.json_dataset.path)
+                if self.config.json_dataset.path is not None
+                else None
+            ),
             samples=dev_samples,
             dev=True,
             test=False,
@@ -59,9 +63,11 @@ class JsonDataLoader:
             config=config,
             input_tokenizer=self.input_tokenizer,
             output_tokenizer=self.output_tokenizer,
-            path=os.path.join(data_path, self.config.json_dataset.path)
-            if self.config.json_dataset.path is not None
-            else None,
+            path=(
+                os.path.join(data_path, self.config.json_dataset.path)
+                if self.config.json_dataset.path is not None
+                else None
+            ),
             samples=test_samples,
             dev=False,
             test=True,

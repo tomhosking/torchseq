@@ -157,9 +157,11 @@ class VectorQuantizerMultiHead(nn.Module):
                     [nn.Parameter(torch.Tensor(num_embeddings, self._embedding_dim)) for _ in range(num_heads)]
                 )
         for hix, embedding in enumerate(self._embedding):
-            torch.nn.init.xavier_uniform_(
-                embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix
-            ) if init_embeds_xavier else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
+            (
+                torch.nn.init.xavier_uniform_(embedding.weight.data, gain=6.0 * init_scale * init_decay_weight**hix)
+                if init_embeds_xavier
+                else embedding.weight.data.normal_(std=init_scale * init_decay_weight**hix)
+            )
             if init_sphere:
                 embedding.weight.data = (
                     embedding.weight.data

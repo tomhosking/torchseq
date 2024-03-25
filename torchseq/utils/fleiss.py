@@ -7,6 +7,7 @@ and
   Cardillo G. (2007) Fleisses kappa: compute the Fleiss'es kappa for multiple raters.
   http://www.mathworks.com/matlabcentral/fileexchange/15426
 """
+
 import numpy
 
 # from scipy.special import erfc

@@ -53,14 +53,16 @@ class ExemplarGuidedAutoencoderModel(nn.Module):
             self.seq_encoder_2 = SequenceEncoder(
                 global_config=config,
                 encoder_config=config.get_first(["template_encoder", "encoder"]),
-                tokenizer=self.output_tokenizer
-                if self.config.bottleneck.get("template_tokenizer", "input") == "output"
-                else self.input_tokenizer,
-                freeze_embeddings=config.template_encoder.get(
-                    "freeze_embeddings", config.get("freeze_embeddings", False)
-                )
-                if "template_encoder" in config.data
-                else config.freeze_embeddings,
+                tokenizer=(
+                    self.output_tokenizer
+                    if self.config.bottleneck.get("template_tokenizer", "input") == "output"
+                    else self.input_tokenizer
+                ),
+                freeze_embeddings=(
+                    config.template_encoder.get("freeze_embeddings", config.get("freeze_embeddings", False))
+                    if "template_encoder" in config.data
+                    else config.freeze_embeddings
+                ),
             )
             # self.bottleneck_2 = PoolingBottleneck(config)
 
@@ -245,16 +247,20 @@ class ExemplarGuidedAutoencoderModel(nn.Module):
 
                     if self.config.bottleneck.code_predictor.get("sem_only", False):
                         codepred_input = self.reduce_fn(
-                            sem_encoding_pooled[:, :, : self.sep_splice_ix]
-                            if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
-                            else prebn_sem_encoding_pooled[:, :, : self.sep_splice_ix],
+                            (
+                                sem_encoding_pooled[:, :, : self.sep_splice_ix]
+                                if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                                else prebn_sem_encoding_pooled[:, :, : self.sep_splice_ix]
+                            ),
                             mask=memory["encoding_mask"],
                         )
                     else:
                         codepred_input = self.reduce_fn(
-                            sem_encoding_pooled
-                            if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
-                            else prebn_sem_encoding_pooled,
+                            (
+                                sem_encoding_pooled
+                                if self.config.bottleneck.code_predictor.get("post_bottleneck", False)
+                                else prebn_sem_encoding_pooled
+                            ),
                             mask=memory["encoding_mask"],
                         )
 

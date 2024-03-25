@@ -25,9 +25,11 @@ class QADataLoader:
         self.logger = logging.getLogger("DataLoader")
 
         train = QADataset(
-            path=os.path.join(data_path, config.training.dataset) + "/"
-            if self.config.training.dataset is not None
-            else None,
+            path=(
+                os.path.join(data_path, config.training.dataset) + "/"
+                if self.config.training.dataset is not None
+                else None
+            ),
             samples=train_samples,
             config=config,
             tokenizer=self.tokenizer,
@@ -36,9 +38,11 @@ class QADataLoader:
             length_limit=self.config.training.get("truncate_dataset", None),
         )
         valid = QADataset(
-            path=os.path.join(data_path, self.config.training.dataset) + "/"
-            if self.config.training.dataset is not None
-            else None,
+            path=(
+                os.path.join(data_path, self.config.training.dataset) + "/"
+                if self.config.training.dataset is not None
+                else None
+            ),
             samples=dev_samples,
             config=config,
             tokenizer=self.tokenizer,
@@ -47,9 +51,11 @@ class QADataLoader:
             length_limit=self.config.eval.get("truncate_dataset", None),
         )
         test = QADataset(
-            path=os.path.join(data_path, self.config.training.dataset) + "/"
-            if self.config.training.dataset is not None
-            else None,
+            path=(
+                os.path.join(data_path, self.config.training.dataset) + "/"
+                if self.config.training.dataset is not None
+                else None
+            ),
             samples=test_samples,
             config=config,
             tokenizer=self.tokenizer,

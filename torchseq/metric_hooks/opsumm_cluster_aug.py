@@ -145,17 +145,17 @@ class OpSummClusterAugMetricHook(MetricHook):
 
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_oracle_comparison", False):
                 logger.info("Running cluster vs oracle comparison...")
-                self.scores[
-                    "hiro_selection_vs_oracle"
-                ] = OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
-                    self.config,
-                    agent.data_path,
-                    generated_summaries["paths"],
-                    # {
-                    #     sent: code
-                    #     for sent, code in zip(generated_summaries["inputs"], generated_summaries["all_codes"])
-                    # },
-                    test=use_test,
+                self.scores["hiro_selection_vs_oracle"] = (
+                    OpSummClusterAugMetricHook.eval_compare_selected_clusters_to_oracle(
+                        self.config,
+                        agent.data_path,
+                        generated_summaries["paths"],
+                        # {
+                        #     sent: code
+                        #     for sent, code in zip(generated_summaries["inputs"], generated_summaries["all_codes"])
+                        # },
+                        test=use_test,
+                    )
                 )
                 logger.info("...done!")
             if self.config.eval.metrics.opsumm_cluster_aug.get("run_selection_prevalence", False):
@@ -1356,9 +1356,12 @@ class OpSummClusterAugMetricHook(MetricHook):
                 truncation_length=None,
                 prune_min_weight=config.eval.metrics.opsumm_cluster_aug.get("summary_smart_generic_min_weight", 0.01),
                 prune_max_paths=None,
-                use_tfidf=True
-                if config.eval.metrics.opsumm_cluster_aug.get("summary_smart_generic_weight_scheme", None) is not None
-                else False,
+                use_tfidf=(
+                    True
+                    if config.eval.metrics.opsumm_cluster_aug.get("summary_smart_generic_weight_scheme", None)
+                    is not None
+                    else False
+                ),
                 tfidf_weighting_scheme=config.eval.metrics.opsumm_cluster_aug.get(
                     "summary_smart_generic_weight_scheme", 5
                 ),

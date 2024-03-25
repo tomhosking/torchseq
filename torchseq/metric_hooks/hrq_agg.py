@@ -1297,9 +1297,11 @@ class HRQAggregationMetricHook(MetricHook):
                 truncation_length=None,
                 prune_min_weight=0.01,
                 prune_max_paths=None,
-                use_tfidf=True
-                if config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", None) is not None
-                else False,
+                use_tfidf=(
+                    True
+                    if config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", None) is not None
+                    else False
+                ),
                 tfidf_weighting_scheme=config.eval.metrics.hrq_agg.get("summary_smart_generic_weight_scheme", 5),
                 # block_paths={k: [p[:1] for p in v] for k, v in summary_paths_specific.items()},
                 block_paths={k: v for k, v in summary_paths_specific.items()},
