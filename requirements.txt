@@ -1,12 +1,12 @@
 tensorboard==2.15.0
-torch==2.1.2
+torch==2.2.2
 tqdm>=4.62
 scipy>=1.5
 lightning==2.1.0
 
 nltk>=3.6.7
-transformers==4.37.2
-tokenizers==0.15.0
+transformers==4.39.2
+tokenizers==0.15.2
 jsonlines>=2
 sacrebleu>=2.0
 py-rouge
