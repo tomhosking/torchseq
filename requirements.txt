@@ -13,7 +13,7 @@ py-rouge
 rouge-score
 opentsne
 sentencepiece==0.1.95
-pydantic==1.9.1
+pydantic==1.10.13
 truecase==0.0.14
 # summac
 
