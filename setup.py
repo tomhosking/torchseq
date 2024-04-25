@@ -41,7 +41,7 @@ setuptools.setup(
         'opentsne',
         'sentencepiece==0.1.95',
         'protobuf<4',
-        'pydantic==1.9.1',
+        'pydantic==1.10.13',
         'truecase==0.0.14',
         'lightning==2.1.0',
         # 'summac',
