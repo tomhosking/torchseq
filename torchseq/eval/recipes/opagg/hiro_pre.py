@@ -28,6 +28,13 @@ PROMPT_TEMPLATE_ONESHOT = """Here is a list of sentences taken from reviews of t
 In no more than 60 words, write a concise summary that includes the main points:
 """
 
+PROMPT_TEMPLATE_ONESHOT_CITATIONS = """Here are some groups of sentences taken from reviews of the {:}:
+
+{:}
+
+In no more than 60 words, write a concise summary that includes the main points, citing which group contains the relevant information:
+"""
+
 
 class Recipe(EvalRecipe):
     name: str = "opagg.twostage_pre"
@@ -56,6 +63,7 @@ class Recipe(EvalRecipe):
         product_type = "hotel" if "space" in self.model_path else "product"
         entity_names = summaries["entity_names"]
 
+        # Sentence-wise generation
         prompts_flat_sentencewise = [
             {
                 "entity_id": ent_id,
@@ -74,6 +82,8 @@ class Recipe(EvalRecipe):
         ) as writer:
             writer.write_all(prompts_flat_sentencewise)
 
+
+        # Document-level generation
         prompts_flat_oneshot = [
             {
                 "entity_id": ent_id,
@@ -90,5 +100,24 @@ class Recipe(EvalRecipe):
             os.path.join(self.model_path, "eval", f"llm_inputs_oneshot_{self.split_str}.jsonl"), "w"
         ) as writer:
             writer.write_all(prompts_flat_oneshot)
+
+
+        # Doc-level, with citations
+        prompts_flat_oneshot_citations = [
+            {
+                "entity_id": ent_id,
+                "prompt": PROMPT_TEMPLATE_ONESHOT_CITATIONS.format(
+                    entity_name, "\n\n".join(["[{:}]\n".format(cid+1) + "\n".join([sent  for sent in cluster[: self.cluster_limit]]) for cid, cluster in enumerate(clusters)])
+                ),
+            }
+            for clusters, ent_id, entity_name in zip(clusters_per_entity, entity_ids, entity_names)
+        ]
+
+        result["prompts_oneshot_citations"] = max([len(word_tokenize(prompt["prompt"])) for prompt in prompts_flat_oneshot_citations])
+
+        with jsonlines.open(
+            os.path.join(self.model_path, "eval", f"llm_inputs_oneshot_citations_{self.split_str}.jsonl"), "w"
+        ) as writer:
+            writer.write_all(prompts_flat_oneshot_citations)
 
         return result

@@ -17,8 +17,10 @@ class Recipe(EvalRecipe):
     def run(
         self,
         predicted_summaries: Optional[list[str]] = None,
+        clusters_file: Optional[str] = None,
+        llm_output_file: Optional[str] = None,
         prev_model: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "vitc",
-        variant: Literal["oneshot", "piecewise", "extractive"] = "extractive",
+        variant: Literal["oneshot", "piecewise", "extractive","oneshot_citations"] = "extractive",
         llm_name: str = "llama7b",
         silent: bool = False,
     ) -> dict[str, Any]:
@@ -29,7 +31,10 @@ class Recipe(EvalRecipe):
 
         if predicted_summaries is None:
             # Load the input clusters
-            with open(os.path.join(self.model_path, "eval", f"summaries_{self.split_str}.json")) as f:
+            if clusters_file is  None:
+                clusters_file = os.path.join(self.model_path, "eval", f"summaries_{self.split_str}.json")
+            
+            with open(clusters_file) as f:
                 extractive_summaries = json.load(f)
 
             # Clean and combine into summaries
@@ -39,14 +44,19 @@ class Recipe(EvalRecipe):
                 output_name = f"extractive_{self.split_str}"
             else:
                 # Load the LLM outputs
+                if llm_output_file is  None:
+                    llm_output_file = os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}_{llm_name}.jsonl")
+            
+
+
                 with jsonlines.open(
-                    os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}_{llm_name}.jsonl")
+                    llm_output_file
                 ) as reader:
                     llm_outputs = list(reader)
 
                 output_name = f"{variant}_{self.split_str}_{llm_name}"
 
-                if variant == "oneshot":
+                if variant in ["oneshot", "oneshot_citations"]:
                     predicted_summaries = [self.cleanup_llm_output(resp["response"]) for resp in llm_outputs]
 
                 elif variant == "piecewise":
@@ -89,32 +99,34 @@ class Recipe(EvalRecipe):
         # return result
 
         # SummaC
-        # from summac.model_summac import SummaCConv
+        from summac.model_summac import SummaCConv
 
-        # model_conv = SummaCConv(
-        #     models=["vitc"],
-        #     bins="percentile",
-        #     granularity="sentence",
-        #     nli_labels="e",
-        #     device="cuda",
-        #     start_file="default",
-        #     agg="mean",
-        # )
+        model_conv = SummaCConv(
+            models=["vitc"],
+            bins="percentile",
+            granularity="sentence",
+            nli_labels="e",
+            device="cuda",
+            start_file="default",
+            agg="mean",
+        )
 
-        # for imager in model_conv.imagers:
-        #     imager.cache_folder = os.path.expanduser("~/.summac_cache/")
-        #     os.makedirs(imager.cache_folder, exist_ok=True)
-        #     imager.load_cache()
+        for imager in model_conv.imagers:
+            imager.cache_folder = os.path.expanduser("~/.summac_cache/")
+            os.makedirs(imager.cache_folder, exist_ok=True)
+            imager.load_cache()
 
-        # print("Evaling SC_ins")
-        # docs = [" ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data]
-        # res = model_conv.score(docs, predicted_summaries)
-        # result["sc_ins"] = np.mean(res["scores"]) * 100
+        if not silent:
+            print("Evaling SC_ins")
+        docs = [" ".join([" ".join(sent for sent in rev["sentences"]) for rev in ent["reviews"]]) for ent in eval_data]
+        res = model_conv.score(docs, predicted_summaries)
+        result["sc_ins"] = np.mean(res["scores"]) * 100
 
-        # print("Evaling SC_refs")
-        # docs = [" ".join(row["summaries"]) for row in eval_data]
-        # res = model_conv.score(docs, predicted_summaries)
-        # result["sc_refs"] = np.mean(res["scores"]) * 100
+        if not silent:
+            print("Evaling SC_refs")
+        docs = [" ".join(row["summaries"]) for row in eval_data]
+        res = model_conv.score(docs, predicted_summaries)
+        result["sc_refs"] = np.mean(res["scores"]) * 100
 
         # if variant == 'piecewise':
         #     if not silent:
@@ -135,8 +147,8 @@ class Recipe(EvalRecipe):
         # else:
         #     result['sc_attr'] = None
 
-        # for imager in model_conv.imagers:
-        #     imager.save_cache()
+        for imager in model_conv.imagers:
+            imager.save_cache()
 
         # # Prevalence
         if not silent:
