@@ -20,7 +20,7 @@ class Recipe(EvalRecipe):
         clusters_file: Optional[str] = None,
         llm_output_file: Optional[str] = None,
         prev_model: Literal["vitc", "vitc-base", "mnli", "mnli-base"] = "vitc",
-        variant: Literal["oneshot", "piecewise", "extractive","oneshot_citations"] = "extractive",
+        variant: Literal["oneshot", "piecewise", "extractive", "oneshot_citations"] = "extractive",
         llm_name: str = "llama7b",
         silent: bool = False,
     ) -> dict[str, Any]:
@@ -31,9 +31,9 @@ class Recipe(EvalRecipe):
 
         if predicted_summaries is None:
             # Load the input clusters
-            if clusters_file is  None:
+            if clusters_file is None:
                 clusters_file = os.path.join(self.model_path, "eval", f"summaries_{self.split_str}.json")
-            
+
             with open(clusters_file) as f:
                 extractive_summaries = json.load(f)
 
@@ -44,14 +44,12 @@ class Recipe(EvalRecipe):
                 output_name = f"extractive_{self.split_str}"
             else:
                 # Load the LLM outputs
-                if llm_output_file is  None:
-                    llm_output_file = os.path.join(self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}_{llm_name}.jsonl")
-            
+                if llm_output_file is None:
+                    llm_output_file = os.path.join(
+                        self.model_path, "eval", f"llm_outputs_{variant}_{self.split_str}_{llm_name}.jsonl"
+                    )
 
-
-                with jsonlines.open(
-                    llm_output_file
-                ) as reader:
+                with jsonlines.open(llm_output_file) as reader:
                     llm_outputs = list(reader)
 
                 output_name = f"{variant}_{self.split_str}_{llm_name}"
