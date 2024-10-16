@@ -43,7 +43,7 @@ setuptools.setup(
         'protobuf<4',
         'pydantic==1.10.13',
         'truecase==0.0.14',
-        'lightning==2.1.0',
+        'lightning==2.3.3',
         # 'summac',
         'compress_json==1.0.10',
     ],

@@ -2,7 +2,7 @@ tensorboard==2.15.0
 torch==2.2.2
 tqdm>=4.62
 scipy>=1.5
-lightning==2.1.0
+lightning==2.3.3
 
 nltk>=3.6.7
 transformers==4.39.2
