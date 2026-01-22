@@ -39,7 +39,7 @@ setuptools.setup(
         'wandb==0.15.12',
         'matplotlib',
         'opentsne',
-        'sentencepiece==0.1.95',
+        'sentencepiece==0.2.1',
         'protobuf<4',
         'pydantic==1.10.13',
         'truecase==0.0.14',

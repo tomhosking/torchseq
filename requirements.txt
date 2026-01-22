@@ -12,7 +12,7 @@ sacrebleu>=2.0
 py-rouge
 rouge-score
 opentsne
-sentencepiece==0.1.95
+sentencepiece==0.2.1
 pydantic==1.10.13
 truecase==0.0.14
 # summac
